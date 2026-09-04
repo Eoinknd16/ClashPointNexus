@@ -89,10 +89,14 @@ export function BrowseScreen(): JSX.Element {
 
   // Right stick moves the virtual cursor and drives synthetic mouse events
   // into the webview — only while actually interacting with the page, not
-  // while the toolbar is focused.
+  // while the toolbar is focused. Deliberately never calls webview.focus():
+  // the Gamepad API only delivers data to whichever document currently has
+  // focus, and this app's whole controller nav system (including the Back
+  // action that gets you out of this screen) lives in the host document, not
+  // the guest page — focusing the webview would cut off controller input
+  // app-wide, not just here.
   useEffect(() => {
     if (zone !== 'page') return
-    webviewRef.current?.focus() // sendInputEvent needs the guest to be focused
     let rafId: number
 
     const tick = (): void => {

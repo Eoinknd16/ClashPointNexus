@@ -50,13 +50,38 @@ const EDGE_BUTTONS: Array<[number, NavAction]> = [
 export function useGamepadNav(): void {
   useEffect(() => {
     let rafId: number
-    const pressed = new Set<number>()
-    const lastPressAt = new Map<number, number>()
+    let pressed = new Set<number>()
+    let lastPressAt = new Map<number, number>()
     let stickEngaged = false
     let heldDirection: NavAction | null = null
     let nextRepeatAt = 0
     let lastDirectionEmitAt = -Infinity
     const seenGamepads = new Set<number>()
+
+    // A controller connected mid-session (not present at boot) doesn't show up
+    // in getGamepads() until Chromium actually registers it — which on some
+    // setups only happens after the OS has finished enumerating it, not the
+    // instant it's plugged in. These events fire the moment Chromium *does*
+    // notice it, and disconnect resets all per-controller state so a later
+    // reconnect (same or different pad) starts clean instead of carrying over
+    // stale press/timing state from before it was unplugged.
+    const handleConnect = (event: GamepadEvent): void => {
+      // eslint-disable-next-line no-console
+      console.log('[gamepad] connected:', event.gamepad.id, '| index:', event.gamepad.index)
+    }
+    const handleDisconnect = (event: GamepadEvent): void => {
+      // eslint-disable-next-line no-console
+      console.log('[gamepad] disconnected:', event.gamepad.id, '| index:', event.gamepad.index)
+      pressed = new Set()
+      lastPressAt = new Map()
+      stickEngaged = false
+      heldDirection = null
+      nextRepeatAt = 0
+      lastDirectionEmitAt = -Infinity
+      seenGamepads.delete(event.gamepad.index)
+    }
+    window.addEventListener('gamepadconnected', handleConnect)
+    window.addEventListener('gamepaddisconnected', handleDisconnect)
 
     const fireOnce = (buttonIndex: number, action: NavAction, isPressed: boolean, time: number): void => {
       const wasPressed = pressed.has(buttonIndex)
@@ -156,6 +181,10 @@ export function useGamepadNav(): void {
     }
 
     rafId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafId)
+    return () => {
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('gamepadconnected', handleConnect)
+      window.removeEventListener('gamepaddisconnected', handleDisconnect)
+    }
   }, [])
 }
