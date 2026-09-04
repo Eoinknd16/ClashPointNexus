@@ -36,11 +36,15 @@ function normalizeAddons(raw: unknown): AddonSummary[] {
         return { name: deriveNameFromUrl(entry), url: entry, resources: ['stream'] }
       }
       if (entry && typeof entry === 'object' && 'url' in entry) {
-        const obj = entry as { name?: string; url: string; resources?: string[] }
+        const obj = entry as Pick<AddonSummary, 'name' | 'url' | 'resources' | 'catalogs'> & {
+          name?: string
+          resources?: string[]
+        }
         return {
           name: obj.name ?? deriveNameFromUrl(obj.url),
           url: obj.url,
-          resources: obj.resources ?? ['stream']
+          resources: obj.resources ?? ['stream'],
+          catalogs: obj.catalogs
         }
       }
       return null

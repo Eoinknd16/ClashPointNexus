@@ -6,8 +6,9 @@ import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
 import { useThemeStore } from '../state/themeStore'
 import type { AddonSummary } from '@shared/stremioTypes'
+import type { UpdateStatus } from '@shared/updateTypes'
 
-type RowKind = 'field' | 'action' | 'addon' | 'info' | 'theme'
+type RowKind = 'header' | 'field' | 'action' | 'addon' | 'info' | 'theme'
 
 interface SettingsRow {
   id: string
@@ -40,6 +41,32 @@ function describeCapabilities(resources: string[]): string {
   return resources.map((r) => CAPABILITY_LABELS[r] ?? r).join(', ')
 }
 
+function header(id: string, label: string): SettingsRow {
+  return { id, kind: 'header', label }
+}
+
+function updateActionLabel(status: UpdateStatus | null): string {
+  if (!status) return 'Check for Updates'
+  switch (status.state) {
+    case 'checking':
+      return 'Checking for updates...'
+    case 'not-available':
+      return '✓ Up to date'
+    case 'downloading':
+      return status.progressPercent != null
+        ? `Downloading update... ${status.progressPercent}%`
+        : 'Downloading update...'
+    case 'downloaded':
+      return `Restart to Install v${status.version}`
+    case 'error':
+      return 'Update check failed — tap to retry'
+    case 'unsupported':
+      return 'Updates unavailable in this build'
+    default:
+      return 'Check for Updates'
+  }
+}
+
 export function SettingsScreen(): JSX.Element {
   const [steamApiKey, setSteamApiKey] = useState('')
   const [steamId64, setSteamId64] = useState('')
@@ -47,6 +74,8 @@ export function SettingsScreen(): JSX.Element {
   const [stremioPassword, setStremioPassword] = useState('')
   const [loggedIn, setLoggedIn] = useState(false)
   const [addons, setAddons] = useState<AddonSummary[]>([])
+  const [appVersion, setAppVersion] = useState('')
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
 
   const [zone, setZone] = useState<'menu' | 'keyboard'>('menu')
   const [menuIndex, setMenuIndex] = useState(0)
@@ -74,9 +103,13 @@ export function SettingsScreen(): JSX.Element {
       setLoggedIn(Boolean(s.authKey))
       setStremioEmail(s.email ?? '')
     })
+    window.api.updater.getVersion().then(setAppVersion)
+    window.api.updater.getStatus().then(setUpdateStatus)
+    return window.api.updater.onStatus(setUpdateStatus)
   }, [])
 
   const rows: SettingsRow[] = [
+    header('appearance', 'Appearance'),
     ...allThemes.map(
       (theme): SettingsRow => ({
         id: `theme-${theme.id}`,
@@ -86,8 +119,16 @@ export function SettingsScreen(): JSX.Element {
         active: theme.id === themeId
       })
     ),
+
+    header('app', 'App'),
+    { id: 'appVersion', kind: 'info', label: `Version ${appVersion}` },
+    { id: 'checkForUpdates', kind: 'action', label: updateActionLabel(updateStatus) },
+
+    header('steam', 'Steam'),
     { id: 'steamApiKey', kind: 'field', label: 'Steam API Key', value: steamApiKey, masked: true },
     { id: 'steamId64', kind: 'field', label: 'Steam ID64', value: steamId64 },
+
+    header('stremioAccount', 'Stremio Account'),
     {
       id: 'stremioStatus',
       kind: 'info',
@@ -100,6 +141,17 @@ export function SettingsScreen(): JSX.Element {
       kind: 'action',
       label: loggedIn ? 'Re-sync Addons From Stremio Account' : 'Log In & Sync Addons'
     },
+    ...(loggedIn
+      ? [
+          {
+            id: 'importHistory',
+            kind: 'action' as const,
+            label: 'Import Watch History & Library From Stremio'
+          }
+        ]
+      : []),
+
+    header('stremioAddons', 'Stremio Addons'),
     ...addons.map(
       (addon, i): SettingsRow => ({
         id: `addon-${i}`,
@@ -111,7 +163,14 @@ export function SettingsScreen(): JSX.Element {
     { id: 'addAddon', kind: 'action', label: '+ Add Addon URL' }
   ]
 
-  const activeIndex = Math.min(menuIndex, rows.length - 1)
+  // Headers are visual dividers, not stops — menuIndex indexes into this
+  // filtered list of the rows that can actually be focused.
+  const selectableIndices = rows.reduce<number[]>((acc, row, i) => {
+    if (row.kind !== 'header') acc.push(i)
+    return acc
+  }, [])
+  const clampedMenuIndex = Math.min(menuIndex, Math.max(0, selectableIndices.length - 1))
+  const activeIndex = selectableIndices[clampedMenuIndex] ?? 0
 
   useEffect(() => {
     if (zone !== 'menu') return
@@ -129,13 +188,17 @@ export function SettingsScreen(): JSX.Element {
 
   function commitField(field: string | null, value: string): void {
     if (!field) return
+    // Trimmed defensively — a pasted key/id with a stray trailing newline or
+    // space silently fails Steam's Web API with a 401, which is hard to spot.
     if (field === 'steamApiKey') {
-      setSteamApiKey(value)
-      window.api.settings.setSteam({ apiKey: value, steamId64 })
+      const trimmed = value.trim()
+      setSteamApiKey(trimmed)
+      window.api.settings.setSteam({ apiKey: trimmed, steamId64 })
       setMessage('Steam API key saved')
     } else if (field === 'steamId64') {
-      setSteamId64(value)
-      window.api.settings.setSteam({ apiKey: steamApiKey, steamId64: value })
+      const trimmed = value.trim()
+      setSteamId64(trimmed)
+      window.api.settings.setSteam({ apiKey: steamApiKey, steamId64: trimmed })
       setMessage('Steam ID64 saved')
     } else if (field === 'stremioEmail') {
       setStremioEmail(value)
@@ -182,8 +245,45 @@ export function SettingsScreen(): JSX.Element {
     }
   }
 
+  // Stremio keeps Continue Watching and the Library page in one account-wide
+  // collection — split here across our own separate progress/library stores.
+  async function doImportHistory(): Promise<void> {
+    setMessage('Importing watch history and library from Stremio...')
+    const result = await window.api.settings.importStremioHistory()
+    if (result.success) {
+      setMessage(
+        `Imported ${result.progressImported} in-progress title(s) and ${result.libraryImported} library title(s)`
+      )
+    } else {
+      setMessage(`Import failed: ${result.error}`)
+    }
+  }
+
+  // Uses the already-stored auth key — no need to retype the password just to
+  // pick up newly-added addons or (e.g.) their catalog lists.
+  async function doResync(): Promise<void> {
+    setMessage('Re-syncing addons...')
+    const result = await window.api.settings.resyncStremioAddons()
+    if (result.success) {
+      setMessage(`Re-synced ${result.addonsSynced} addon(s)`)
+      const updated = await window.api.settings.getStremio()
+      setAddons(updated.addons)
+    } else {
+      setMessage(`Re-sync failed: ${result.error}`)
+    }
+  }
+
+  function doCheckForUpdates(): void {
+    if (updateStatus?.state === 'downloaded') {
+      void window.api.updater.quitAndInstall()
+      return
+    }
+    if (updateStatus?.state === 'checking' || updateStatus?.state === 'downloading') return
+    void window.api.updater.check()
+  }
+
   function activateRow(row: SettingsRow): void {
-    if (row.kind === 'info') {
+    if (row.kind === 'header' || row.kind === 'info') {
       return
     } else if (row.kind === 'theme') {
       const id = row.id.replace('theme-', '')
@@ -200,7 +300,12 @@ export function SettingsScreen(): JSX.Element {
     } else if (row.id === 'addAddon') {
       openKeyboard('newAddon', '')
     } else if (row.id === 'stremioLogin') {
-      void doLogin()
+      if (loggedIn) void doResync()
+      else void doLogin()
+    } else if (row.id === 'importHistory') {
+      void doImportHistory()
+    } else if (row.id === 'checkForUpdates') {
+      doCheckForUpdates()
     }
   }
 
@@ -243,7 +348,7 @@ export function SettingsScreen(): JSX.Element {
         setMenuIndex((i) => Math.max(0, i - 1))
         return
       case 'down':
-        setMenuIndex((i) => Math.min(rows.length - 1, i + 1))
+        setMenuIndex((i) => Math.min(selectableIndices.length - 1, i + 1))
         return
       case 'confirm': {
         const row = rows[activeIndex]
@@ -257,7 +362,7 @@ export function SettingsScreen(): JSX.Element {
       default:
         return
     }
-  })
+  }, 'settings')
 
   return (
     <div className="flex h-screen flex-col gap-6 bg-bg px-10 py-8">
@@ -265,50 +370,62 @@ export function SettingsScreen(): JSX.Element {
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
       </header>
 
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
-        {rows.map((row, i) => (
-          <div
-            key={row.id}
-            ref={(el) => (rowRefs.current[i] = el)}
-            onClick={() => {
-              setZone('menu')
-              setMenuIndex(i)
-              activateRow(row)
-            }}
-            className={`flex items-center justify-between rounded-xl px-5 py-4 transition-colors ${
-              row.kind === 'info' ? '' : 'cursor-pointer'
-            } ${
-              row.kind === 'info'
-                ? loggedIn
-                  ? 'bg-accent/20 text-accent'
-                  : 'bg-surface text-muted'
-                : zone === 'menu' && activeIndex === i
-                  ? 'bg-surface-hi shadow-focus'
-                  : 'bg-surface'
-            }`}
-          >
-            <span className="flex items-center gap-3 font-medium">
-              {row.kind === 'theme' && row.swatch && (
-                <span
-                  className="h-4 w-4 shrink-0 rounded-full ring-1 ring-white/20"
-                  style={{ backgroundColor: `rgb(${row.swatch})` }}
-                />
-              )}
-              {row.label}
-              {row.kind === 'theme' && row.active && <span className="text-accent">✓</span>}
-            </span>
-            {row.kind === 'field' && (
-              <span className="text-muted">
-                {row.value
-                  ? row.masked
-                    ? '•'.repeat(Math.min(row.value.length, 12))
-                    : row.value
-                  : 'Not set'}
+      <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
+        {rows.map((row, i) => {
+          if (row.kind === 'header') {
+            return (
+              <h2
+                key={row.id}
+                className="mb-1 mt-4 px-1 text-xs font-bold uppercase tracking-wider text-muted first:mt-0"
+              >
+                {row.label}
+              </h2>
+            )
+          }
+          return (
+            <div
+              key={row.id}
+              ref={(el) => (rowRefs.current[i] = el)}
+              onClick={() => {
+                setZone('menu')
+                setMenuIndex(selectableIndices.indexOf(i))
+                activateRow(row)
+              }}
+              className={`mb-2 flex items-center justify-between rounded-xl px-5 py-4 transition-colors ${
+                row.kind === 'info' ? '' : 'cursor-pointer'
+              } ${
+                row.kind === 'info'
+                  ? loggedIn && row.id === 'stremioStatus'
+                    ? 'bg-accent/20 text-accent'
+                    : 'bg-surface text-muted'
+                  : zone === 'menu' && activeIndex === i
+                    ? 'bg-surface-hi shadow-focus'
+                    : 'bg-surface'
+              }`}
+            >
+              <span className="flex items-center gap-3 font-medium">
+                {row.kind === 'theme' && row.swatch && (
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full ring-1 ring-white/20"
+                    style={{ backgroundColor: `rgb(${row.swatch})` }}
+                  />
+                )}
+                {row.label}
+                {row.kind === 'theme' && row.active && <span className="text-accent">✓</span>}
               </span>
-            )}
-            {row.kind === 'addon' && <span className="pl-4 text-xs text-muted">{row.value}</span>}
-          </div>
-        ))}
+              {row.kind === 'field' && (
+                <span className="text-muted">
+                  {row.value
+                    ? row.masked
+                      ? '•'.repeat(Math.min(row.value.length, 12))
+                      : row.value
+                    : 'Not set'}
+                </span>
+              )}
+              {row.kind === 'addon' && <span className="pl-4 text-xs text-muted">{row.value}</span>}
+            </div>
+          )
+        })}
       </div>
 
       <footer className="text-sm text-muted">{message}</footer>

@@ -15,8 +15,8 @@
   --gradient-app-glow: radial-gradient(ellipse 80% 60% at 15% -10%, rgba(91, 140, 255, 0.16), transparent 60%),
     radial-gradient(ellipse 70% 50% at 100% 10%, rgba(160, 107, 255, 0.12), transparent 60%);
   --gradient-accent: linear-gradient(135deg, rgb(91, 140, 255) 0%, rgb(160, 107, 255) 100%);
-  --shadow-focus: 0 0 0 3px rgba(91, 140, 255, 0.6), 0 0 40px rgba(91, 140, 255, 0.25),
-    0 20px 40px rgba(0, 0, 0, 0.5);
+  --shadow-focus: 0 0 0 3px rgba(91, 140, 255, 0.6), 0 0 18px rgba(91, 140, 255, 0.22),
+    0 8px 20px rgba(0, 0, 0, 0.45);
   --shadow-panel: -24px 0 60px rgba(0, 0, 0, 0.5);
 }
 

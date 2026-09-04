@@ -19,7 +19,7 @@ export const BUILT_IN_THEMES: ThemeDefinition[] = [
         'radial-gradient(ellipse 80% 60% at 15% -10%, rgba(91,140,255,0.16), transparent 60%), radial-gradient(ellipse 70% 50% at 100% 10%, rgba(160,107,255,0.12), transparent 60%)',
       '--gradient-accent': 'linear-gradient(135deg, rgb(91,140,255) 0%, rgb(160,107,255) 100%)',
       '--shadow-focus':
-        '0 0 0 3px rgba(91,140,255,0.6), 0 0 40px rgba(91,140,255,0.25), 0 20px 40px rgba(0,0,0,0.5)',
+        '0 0 0 3px rgba(91,140,255,0.6), 0 0 18px rgba(91,140,255,0.22), 0 8px 20px rgba(0,0,0,0.45)',
       '--shadow-panel': '-24px 0 60px rgba(0,0,0,0.5)'
     }
   },
@@ -38,7 +38,7 @@ export const BUILT_IN_THEMES: ThemeDefinition[] = [
         'radial-gradient(ellipse 80% 60% at 15% -10%, rgba(255,71,87,0.18), transparent 60%), radial-gradient(ellipse 70% 50% at 100% 10%, rgba(255,145,71,0.12), transparent 60%)',
       '--gradient-accent': 'linear-gradient(135deg, rgb(255,71,87) 0%, rgb(255,145,71) 100%)',
       '--shadow-focus':
-        '0 0 0 3px rgba(255,71,87,0.6), 0 0 40px rgba(255,71,87,0.25), 0 20px 40px rgba(0,0,0,0.5)',
+        '0 0 0 3px rgba(255,71,87,0.6), 0 0 18px rgba(255,71,87,0.22), 0 8px 20px rgba(0,0,0,0.45)',
       '--shadow-panel': '-24px 0 60px rgba(0,0,0,0.5)'
     }
   },
@@ -57,7 +57,7 @@ export const BUILT_IN_THEMES: ThemeDefinition[] = [
         'radial-gradient(ellipse 80% 60% at 15% -10%, rgba(46,214,161,0.16), transparent 60%), radial-gradient(ellipse 70% 50% at 100% 10%, rgba(71,191,255,0.12), transparent 60%)',
       '--gradient-accent': 'linear-gradient(135deg, rgb(46,214,161) 0%, rgb(71,191,255) 100%)',
       '--shadow-focus':
-        '0 0 0 3px rgba(46,214,161,0.6), 0 0 40px rgba(46,214,161,0.25), 0 20px 40px rgba(0,0,0,0.5)',
+        '0 0 0 3px rgba(46,214,161,0.6), 0 0 18px rgba(46,214,161,0.22), 0 8px 20px rgba(0,0,0,0.45)',
       '--shadow-panel': '-24px 0 60px rgba(0,0,0,0.5)'
     }
   },
@@ -76,7 +76,7 @@ export const BUILT_IN_THEMES: ThemeDefinition[] = [
         'radial-gradient(ellipse 80% 60% at 15% -10%, rgba(255,148,71,0.18), transparent 60%), radial-gradient(ellipse 70% 50% at 100% 10%, rgba(255,92,148,0.14), transparent 60%)',
       '--gradient-accent': 'linear-gradient(135deg, rgb(255,148,71) 0%, rgb(255,92,148) 100%)',
       '--shadow-focus':
-        '0 0 0 3px rgba(255,148,71,0.6), 0 0 40px rgba(255,148,71,0.25), 0 20px 40px rgba(0,0,0,0.5)',
+        '0 0 0 3px rgba(255,148,71,0.6), 0 0 18px rgba(255,148,71,0.22), 0 8px 20px rgba(0,0,0,0.45)',
       '--shadow-panel': '-24px 0 60px rgba(0,0,0,0.5)'
     }
   }

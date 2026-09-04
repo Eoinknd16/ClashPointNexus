@@ -8,7 +8,7 @@ import { HomeMenu } from './screens/HomeMenu'
 import { GamesScreen } from './screens/GamesScreen'
 import { TvScreen } from './screens/TvScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
-import { PlaceholderScreen } from './screens/PlaceholderScreen'
+import { BrowseScreen } from './screens/BrowseScreen'
 
 function renderScreen(screen: ScreenId): JSX.Element {
   switch (screen) {
@@ -19,12 +19,7 @@ function renderScreen(screen: ScreenId): JSX.Element {
     case 'settings':
       return <SettingsScreen />
     case 'browse':
-      return (
-        <PlaceholderScreen
-          title="Browse"
-          subtitle="A controller-friendly web browser lands here in a later phase."
-        />
-      )
+      return <BrowseScreen />
     default:
       return <HomeMenu />
   }

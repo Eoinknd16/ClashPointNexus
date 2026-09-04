@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CategoryRow } from '../components/CategoryRow'
 import type { CardItem } from '../components/FocusableCard'
+import { FocusableCard } from '../components/FocusableCard'
+import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
+import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
@@ -9,10 +12,66 @@ import { subtitleTrackUrl, transcodedStreamUrl } from '@shared/playerConstants'
 import { buildMseCodecString } from '../player/codecStrings'
 import { startMsePlayback } from '../player/msePlayer'
 import type { SubtitleTrack } from '@shared/api'
-import type { CatalogItem, CatalogType, StreamOption } from '@shared/stremioTypes'
+import type { LibraryEntry } from '@shared/libraryTypes'
+import type { WatchProgress } from '@shared/progressTypes'
+import { seasonSortKey } from '@shared/stremioTypes'
+import type { AddonCatalogRow, CatalogItem, CatalogType, EpisodeItem, StreamOption } from '@shared/stremioTypes'
 
-const FILTERS: CatalogType[] = ['movie', 'series']
-type Zone = 'filters' | 'rows' | 'detail' | 'sources' | 'player'
+type BrowseTab = 'movie' | 'series' | 'library'
+type Zone = 'filters' | 'rows' | 'detail' | 'episodes' | 'expanded' | 'sources' | 'player' | 'keyboard'
+type EpisodeSubZone = 'seasons' | 'list'
+
+const TABS: BrowseTab[] = ['movie', 'series', 'library']
+const EXPANDED_COLUMNS = 6
+const EXPANDED_SKIP_CAP = 950
+// A row only ever shows a handful of cards on screen at once — rendering a
+// full ~50-item catalog page into the DOM for every one of the ~25 rows on a
+// tab adds up fast. "See All" still paginates the true underlying catalog;
+// this only caps what the inline row itself mounts.
+const ROW_PREVIEW_CAP = 20
+const CURRENT_YEAR = String(new Date().getFullYear())
+
+// Straight from Cinemeta's own manifest.json (its "top" catalog's declared
+// genre list) — matching the real Stremio app's board, which shows one row
+// per genre off the same Popular catalog. Series adds three TV-only genres.
+const MOVIE_GENRES = [
+  'Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary',
+  'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Mystery', 'Romance', 'Sci-Fi',
+  'Sport', 'Thriller', 'War', 'Western'
+]
+const SERIES_GENRES = [...MOVIE_GENRES, 'Reality-TV', 'Talk-Show', 'Game-Show']
+
+interface RowSource {
+  catalogId: 'top' | 'year' | 'imdbRating'
+  genre?: string
+}
+
+interface RowDef {
+  key: string
+  label: string
+  items: CatalogItem[]
+  /** Cinemeta catalog + genre for further pagination in the expanded grid —
+   * null for locally-sourced rows (Continue Watching, My Library, addon rows)
+   * that don't paginate. */
+  source: RowSource | null
+}
+
+type ActivePlayback =
+  | { kind: 'movie'; id: string }
+  | {
+      kind: 'series'
+      seriesId: string
+      seriesTitle: string
+      season: number
+      episode: number
+      episodeId: string
+    }
+
+function tabLabel(tab: BrowseTab): string {
+  if (tab === 'movie') return 'Movies'
+  if (tab === 'series') return 'Series'
+  return 'My Library'
+}
 
 function toCardItem(item: CatalogItem): CardItem {
   return {
@@ -20,6 +79,19 @@ function toCardItem(item: CatalogItem): CardItem {
     title: item.name,
     subtitle: item.year ?? undefined,
     imageUrl: item.poster ?? undefined
+  }
+}
+
+function libraryEntryToCatalogItem(entry: LibraryEntry): CatalogItem {
+  return {
+    id: entry.id,
+    type: entry.type,
+    name: entry.name,
+    poster: entry.poster,
+    description: null,
+    year: null,
+    released: null,
+    genres: []
   }
 }
 
@@ -46,14 +118,67 @@ function formatReleaseDate(iso: string | null): string | null {
   }
 }
 
+/** Resumable = meaningfully into it, and not already essentially finished. */
+function isResumable(progress: WatchProgress | null | undefined): progress is WatchProgress {
+  return (
+    !!progress &&
+    progress.positionSeconds > 5 &&
+    (!progress.durationSeconds || progress.positionSeconds < progress.durationSeconds * 0.95)
+  )
+}
+
+function sortEpisodes(episodes: EpisodeItem[]): EpisodeItem[] {
+  return [...episodes].sort(
+    (a, b) => seasonSortKey(a.season) - seasonSortKey(b.season) || a.episode - b.episode
+  )
+}
+
 export function TvScreen(): JSX.Element {
   const [movieCatalog, setMovieCatalog] = useState<CatalogItem[]>([])
   const [seriesCatalog, setSeriesCatalog] = useState<CatalogItem[]>([])
-  const [type, setType] = useState<CatalogType>('movie')
+  const [newMovies, setNewMovies] = useState<CatalogItem[]>([])
+  const [newSeries, setNewSeries] = useState<CatalogItem[]>([])
+  const [featuredMovies, setFeaturedMovies] = useState<CatalogItem[]>([])
+  const [featuredSeries, setFeaturedSeries] = useState<CatalogItem[]>([])
+  // Keyed by "movie:Action" etc. — populated progressively per genre, only for
+  // whichever tab is/has been active, so switching tabs doesn't refetch.
+  const [genreRows, setGenreRows] = useState<Record<string, CatalogItem[]>>({})
+  const requestedGenresRef = useRef<Set<string>>(new Set())
+  const [continueWatching, setContinueWatching] = useState<CatalogItem[]>([])
+  // Keyed by tab, same caching approach as genreRows — avoids both a refetch
+  // and a flash of the previous tab's addon rows every time you switch tabs.
+  const [addonRowsByTab, setAddonRowsByTab] = useState<Partial<Record<BrowseTab, AddonCatalogRow[]>>>({})
+  const requestedAddonTabsRef = useRef<Set<BrowseTab>>(new Set())
+  const [libraryItems, setLibraryItems] = useState<LibraryEntry[]>([])
+  const [isSelectedInLibrary, setIsSelectedInLibrary] = useState(false)
+
+  const [tab, setTab] = useState<BrowseTab>('movie')
   const [zone, setZone] = useState<Zone>('filters')
-  const [filterIndex, setFilterIndex] = useState(0)
+  const [tabIndex, setTabIndex] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [kbRow, setKbRow] = useState(0)
+  const [kbCol, setKbCol] = useState(0)
+  const [kbValue, setKbValue] = useState('')
+  const [kbShift, setKbShift] = useState(false)
+  const [rowIndex, setRowIndex] = useState(0)
   const [colIndex, setColIndex] = useState(0)
+  const [detailReturnZone, setDetailReturnZone] = useState<'rows' | 'expanded'>('rows')
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null)
+  const [detailFocusIndex, setDetailFocusIndex] = useState(0)
+  const [progress, setProgress] = useState<WatchProgress | null | undefined>(undefined)
+  const [episodes, setEpisodes] = useState<EpisodeItem[]>([])
+  const [episodeSubZone, setEpisodeSubZone] = useState<EpisodeSubZone>('seasons')
+  const [seasonIndex, setSeasonIndex] = useState(0)
+  const [episodeIndex, setEpisodeIndex] = useState(0)
+  const [activePlayback, setActivePlayback] = useState<ActivePlayback | null>(null)
+  const [resumeOffset, setResumeOffset] = useState(0)
+
+  const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null)
+  const [expandedItems, setExpandedItems] = useState<CatalogItem[]>([])
+  const [expandedIndex, setExpandedIndex] = useState(0)
+  const [expandedSkip, setExpandedSkip] = useState(0)
+  const [expandedHasMore, setExpandedHasMore] = useState(false)
+  const [expandedLoading, setExpandedLoading] = useState(false)
 
   const [streams, setStreams] = useState<StreamOption[]>([])
   const [sourceIndex, setSourceIndex] = useState(0)
@@ -67,19 +192,138 @@ export function TvScreen(): JSX.Element {
   const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([])
   const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null)
   const [subtitlesOn, setSubtitlesOn] = useState(false)
+  const [controlsVisible, setControlsVisible] = useState(true)
+  const [isPaused, setIsPaused] = useState(false)
 
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
   const goHome = useNavigationStore((s) => s.goHome)
   const sourceRefs = useRef<Array<HTMLDivElement | null>>([])
+  const episodeRefs = useRef<Array<HTMLDivElement | null>>([])
+  const expandedRefs = useRef<Array<HTMLDivElement | null>>([])
+  const rowRefs = useRef<Array<HTMLDivElement | null>>([])
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const trackRef = useRef<HTMLTrackElement | null>(null)
   const mseStopRef = useRef<(() => void) | null>(null)
+  const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastProgressSaveRef = useRef(0)
+  // Synchronous lock for loadMoreExpanded — expandedLoading (React state) can
+  // still read stale across two nav presses that land in the same tick, since
+  // its update isn't applied until the next render; a ref updates immediately.
+  const loadingMoreRef = useRef(false)
+
+  const rows: RowDef[] = (() => {
+    if (tab === 'library') {
+      return [
+        {
+          key: 'library',
+          label: 'My Library',
+          items: libraryItems.map(libraryEntryToCatalogItem),
+          source: null
+        }
+      ]
+    }
+    // Addon-provided catalogs don't paginate further in the expanded grid (most
+    // addons only ever have the one page they already returned) — source null
+    // marks that the same way Continue Watching/My Library already do.
+    const addonRowDefs: RowDef[] = (addonRowsByTab[tab] ?? []).map((r) => ({
+      key: r.key,
+      label: r.label,
+      items: r.items,
+      source: null
+    }))
+
+    const genres = tab === 'movie' ? MOVIE_GENRES : SERIES_GENRES
+    const genreRowDefs: RowDef[] = genres
+      .map((genre): RowDef | null => {
+        const items = genreRows[`${tab}:${genre}`]
+        if (!items || items.length === 0) return null
+        return { key: `genre:${tab}:${genre}`, label: genre, items, source: { catalogId: 'top', genre } }
+      })
+      .filter((r): r is RowDef => r !== null)
+
+    if (tab === 'movie') {
+      return [
+        { key: 'popular-movie', label: 'Popular Movies', items: movieCatalog, source: { catalogId: 'top' } },
+        {
+          key: 'new-movie',
+          label: 'New Movies',
+          items: newMovies,
+          source: { catalogId: 'year', genre: CURRENT_YEAR }
+        },
+        {
+          key: 'featured-movie',
+          label: 'Featured Movies',
+          items: featuredMovies,
+          source: { catalogId: 'imdbRating' }
+        },
+        ...genreRowDefs,
+        ...addonRowDefs
+      ]
+    }
+    const seriesRows: RowDef[] = []
+    if (continueWatching.length > 0) {
+      seriesRows.push({ key: 'continue', label: 'Continue Watching', items: continueWatching, source: null })
+    }
+    seriesRows.push(
+      { key: 'popular-series', label: 'Popular Series', items: seriesCatalog, source: { catalogId: 'top' } },
+      {
+        key: 'new-series',
+        label: 'New Series',
+        items: newSeries,
+        source: { catalogId: 'year', genre: CURRENT_YEAR }
+      },
+      {
+        key: 'featured-series',
+        label: 'Featured Series',
+        items: featuredSeries,
+        source: { catalogId: 'imdbRating' }
+      },
+      ...genreRowDefs,
+      ...addonRowDefs
+    )
+    return seriesRows
+  })()
+
+  const inEpisodesView = zone === 'episodes'
+  const inPlayerView = zone === 'player' || (zone === 'sources' && sourcesReturnZone === 'player')
 
   useEffect(() => {
     if (zone !== 'sources') return
     sourceRefs.current[sourceIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [zone, sourceIndex])
+
+  useEffect(() => {
+    if (zone !== 'episodes' || episodeSubZone !== 'list') return
+    episodeRefs.current[episodeIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, episodeSubZone, episodeIndex])
+
+  useEffect(() => {
+    if (zone !== 'expanded') return
+    expandedRefs.current[expandedIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, expandedIndex])
+
+  useEffect(() => {
+    if (zone !== 'rows') return
+    rowRefs.current[rowIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, rowIndex])
+
+  // Any activity (nav input, mouse move, pausing) shows the control bar and
+  // resets the auto-hide clock; it only counts down while actually playing.
+  const wakeControls = useCallback((autoHide: boolean) => {
+    setControlsVisible(true)
+    if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current)
+    hideControlsTimerRef.current = autoHide ? setTimeout(() => setControlsVisible(false), 3500) : null
+  }, [])
+
+  useEffect(() => {
+    if (!inPlayerView) return
+    wakeControls(!isPaused)
+    return () => {
+      if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inPlayerView])
 
   // <track> elements added after the video already started playing don't always
   // get picked up from the `default` attribute alone — set mode explicitly.
@@ -106,34 +350,350 @@ export function TvScreen(): JSX.Element {
         if (!cancelled) setSeriesCatalog(items)
       })
       .catch(() => {})
+    // "New" isn't its own catalog id in Cinemeta's current manifest — it's the
+    // "year" catalog (genre is required there) filtered to the current year.
+    window.api.stremio
+      .getCatalog('movie', 'year', 0, CURRENT_YEAR)
+      .then((items) => {
+        if (!cancelled) setNewMovies(items)
+      })
+      .catch(() => {})
+    window.api.stremio
+      .getCatalog('series', 'year', 0, CURRENT_YEAR)
+      .then((items) => {
+        if (!cancelled) setNewSeries(items)
+      })
+      .catch(() => {})
+    window.api.stremio
+      .getCatalog('movie', 'imdbRating')
+      .then((items) => {
+        if (!cancelled) setFeaturedMovies(items)
+      })
+      .catch(() => {})
+    window.api.stremio
+      .getCatalog('series', 'imdbRating')
+      .then((items) => {
+        if (!cancelled) setFeaturedSeries(items)
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
   }, [setMessage])
 
-  const activeCatalog = type === 'movie' ? movieCatalog : seriesCatalog
-
-  // Catalog listings don't carry a full release date — fetch it once a title is opened.
+  // One row per genre, same as the real Stremio board — fetched lazily per tab
+  // (not all ~20 up front for both types) and only once each, ever, per session.
   useEffect(() => {
-    if (!selectedItem || selectedItem.released) return
+    if (tab !== 'movie' && tab !== 'series') return
+    const genres = tab === 'movie' ? MOVIE_GENRES : SERIES_GENRES
     let cancelled = false
-    window.api.stremio.getReleaseDate(selectedItem.type, selectedItem.id).then((released) => {
-      if (cancelled || !released) return
-      setSelectedItem((current) =>
-        current && current.id === selectedItem.id ? { ...current, released } : current
-      )
+    for (const genre of genres) {
+      const key = `${tab}:${genre}`
+      if (requestedGenresRef.current.has(key)) continue
+      requestedGenresRef.current.add(key)
+      window.api.stremio
+        .getCatalog(tab, 'top', 0, genre)
+        .then((items) => {
+          if (cancelled || items.length === 0) return
+          setGenreRows((prev) => ({ ...prev, [key]: items }))
+        })
+        .catch(() => {})
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [tab])
+
+  // Refreshed every time we're back at browse level — picks up anything that
+  // just changed (an episode finished, a title was added/removed from the library).
+  useEffect(() => {
+    if (zone !== 'filters' && zone !== 'rows') return
+    window.api.library.list().then(setLibraryItems)
+    window.api.stremio.getContinueWatching('series').then(setContinueWatching)
+  }, [zone])
+
+  // Pulls a row per movie/series catalog declared by the user's own configured
+  // Stremio addons — not just Cinemeta's Popular/New defaults. Fetched once per
+  // tab, ever, per session — same caching approach as the genre rows below.
+  useEffect(() => {
+    if (tab !== 'movie' && tab !== 'series') return
+    if (requestedAddonTabsRef.current.has(tab)) return
+    requestedAddonTabsRef.current.add(tab)
+    let cancelled = false
+    window.api.stremio.getAddonCatalogs(tab).then((rows) => {
+      if (!cancelled) setAddonRowsByTab((prev) => ({ ...prev, [tab]: rows }))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [tab])
+
+  useEffect(() => {
+    if (!selectedItem) {
+      setIsSelectedInLibrary(false)
+      return
+    }
+    let cancelled = false
+    window.api.library.has(selectedItem.type, selectedItem.id).then((has) => {
+      if (!cancelled) setIsSelectedInLibrary(has)
     })
     return () => {
       cancelled = true
     }
   }, [selectedItem])
 
-  function switchFilter(direction: 1 | -1): void {
-    const currentIndex = FILTERS.indexOf(type)
-    const next = Math.max(0, Math.min(FILTERS.length - 1, currentIndex + direction))
-    setFilterIndex(next)
-    setType(FILTERS[next])
+  // Fresh detail panel always starts focused on Play, not whatever button was
+  // last focused on a previously-viewed title.
+  useEffect(() => {
+    setDetailFocusIndex(0)
+  }, [selectedItem?.id])
+
+  // Opening a title fetches its saved watch progress plus, for a series, its
+  // full episode list — one combined effect so there's no race between the
+  // two requests when picking the initial season/episode to focus.
+  useEffect(() => {
+    if (!selectedItem) {
+      setProgress(null)
+      setEpisodes([])
+      setSeasonIndex(0)
+      setEpisodeIndex(0)
+      return
+    }
+
+    let cancelled = false
+    setProgress(undefined)
+    setEpisodes([])
+
+    async function load(item: CatalogItem): Promise<void> {
+      const progressPromise = window.api.progress.get(item.type, item.id)
+
+      if (item.type === 'series') {
+        const [savedProgress, meta] = await Promise.all([
+          progressPromise,
+          window.api.stremio.getSeriesMeta(item.id)
+        ])
+        if (cancelled) return
+        setProgress(savedProgress)
+        setEpisodes(meta.episodes)
+        if (meta.released && !item.released) {
+          setSelectedItem((current) =>
+            current && current.id === item.id ? { ...current, released: meta.released } : current
+          )
+        }
+
+        const seasons = Array.from(new Set(meta.episodes.map((e) => e.season))).sort(
+          (a, b) => seasonSortKey(a) - seasonSortKey(b)
+        )
+        let sIdx = 0
+        let eIdx = 0
+        if (savedProgress?.season != null && savedProgress.episode != null) {
+          const foundSeason = seasons.indexOf(savedProgress.season)
+          if (foundSeason >= 0) {
+            sIdx = foundSeason
+            const epsForSeason = meta.episodes.filter((e) => e.season === savedProgress.season)
+            const foundEpisode = epsForSeason.findIndex((e) => e.episode === savedProgress.episode)
+            if (foundEpisode >= 0) eIdx = foundEpisode
+          }
+        }
+        setSeasonIndex(sIdx)
+        setEpisodeIndex(eIdx)
+        return
+      }
+
+      const savedProgress = await progressPromise
+      if (cancelled) return
+      setProgress(savedProgress)
+
+      if (!item.released) {
+        const released = await window.api.stremio.getReleaseDate(item.type, item.id)
+        if (!cancelled && released) {
+          setSelectedItem((current) =>
+            current && current.id === item.id ? { ...current, released } : current
+          )
+        }
+      }
+    }
+
+    void load(selectedItem)
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItem?.id])
+
+  const seasonsList = Array.from(new Set(episodes.map((e) => e.season))).sort(
+    (a, b) => seasonSortKey(a) - seasonSortKey(b)
+  )
+  const activeSeason = seasonsList[seasonIndex] ?? 0
+  const episodesForSeason = episodes.filter((e) => e.season === activeSeason)
+
+  function switchTab(direction: 1 | -1): void {
+    const next = Math.max(0, Math.min(TABS.length - 1, tabIndex + direction))
+    setTabIndex(next)
+    setTab(TABS[next])
+    setRowIndex(0)
     setColIndex(0)
+  }
+
+  function switchSeason(direction: 1 | -1): void {
+    const next = Math.max(0, Math.min(seasonsList.length - 1, seasonIndex + direction))
+    setSeasonIndex(next)
+    setEpisodeIndex(0)
+  }
+
+  function findNextEpisode(season: number, episode: number): EpisodeItem | null {
+    const sorted = sortEpisodes(episodes)
+    const idx = sorted.findIndex((e) => e.season === season && e.episode === episode)
+    if (idx === -1) return null
+    return sorted[idx + 1] ?? null
+  }
+
+  function toggleLibrary(): void {
+    if (!selectedItem) return
+    if (isSelectedInLibrary) {
+      void window.api.library.remove(selectedItem.type, selectedItem.id)
+      setIsSelectedInLibrary(false)
+    } else {
+      void window.api.library.add({
+        type: selectedItem.type,
+        id: selectedItem.id,
+        name: selectedItem.name,
+        poster: selectedItem.poster
+      })
+      setIsSelectedInLibrary(true)
+    }
+  }
+
+  function openExpanded(row: RowDef): void {
+    setExpandedRowKey(row.key)
+    setExpandedItems(row.items)
+    setExpandedIndex(0)
+    setExpandedSkip(row.items.length)
+    setExpandedHasMore(row.source !== null)
+    setZone('expanded')
+  }
+
+  // Search reuses the same expanded-grid view as "See All" — result sets are
+  // small enough (Cinemeta's search isn't paginated) that expandedHasMore just
+  // stays false, and "search" isn't a real key in `rows` so loadMoreExpanded's
+  // row lookup naturally no-ops for it.
+  function showSearchResults(items: CatalogItem[]): void {
+    setExpandedRowKey('search')
+    setExpandedItems(items)
+    setExpandedIndex(0)
+    setExpandedSkip(items.length)
+    setExpandedHasMore(false)
+    setZone('expanded')
+  }
+
+  function openKeyboard(initialValue: string): void {
+    setKbValue(initialValue)
+    setKbShift(false)
+    setKbRow(0)
+    setKbCol(0)
+    setZone('keyboard')
+  }
+
+  async function submitSearch(query: string): Promise<void> {
+    const trimmed = query.trim()
+    setSearchQuery(trimmed)
+    if (!trimmed) {
+      setZone('filters')
+      return
+    }
+
+    if (tab === 'library') {
+      const results = libraryItems
+        .filter((e) => e.name.toLowerCase().includes(trimmed.toLowerCase()))
+        .map(libraryEntryToCatalogItem)
+      showSearchResults(results)
+      return
+    }
+
+    setZone('filters')
+    setMessage(`Searching for "${trimmed}"...`)
+    try {
+      const results = await window.api.stremio.search(tab, trimmed)
+      showSearchResults(results)
+      setMessage(results.length > 0 ? 'Ready' : `No results for "${trimmed}"`)
+    } catch (error) {
+      setMessage(`Search failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  function submitKeyboard(finalValue: string): void {
+    void submitSearch(finalValue)
+  }
+
+  function cancelKeyboard(): void {
+    setZone('filters')
+  }
+
+  function pressVirtualKey(key: string): void {
+    const result = applyKey(key, kbValue, kbShift)
+    setKbValue(result.value)
+    setKbShift(result.shift)
+    if (result.done) submitKeyboard(result.value)
+  }
+
+  async function loadMoreExpanded(): Promise<void> {
+    const row = rows.find((r) => r.key === expandedRowKey)
+    if (!row?.source || loadingMoreRef.current || !expandedHasMore || expandedSkip > EXPANDED_SKIP_CAP) {
+      setExpandedHasMore(false)
+      return
+    }
+    loadingMoreRef.current = true
+    setExpandedLoading(true)
+    const catalogType: CatalogType = tab === 'series' ? 'series' : 'movie'
+    try {
+      const next = await window.api.stremio.getCatalog(
+        catalogType,
+        row.source.catalogId,
+        expandedSkip,
+        row.source.genre
+      )
+      if (next.length === 0) {
+        setExpandedHasMore(false)
+      } else {
+        setExpandedItems((prev) => [...prev, ...next])
+        setExpandedSkip((s) => s + next.length)
+      }
+    } finally {
+      loadingMoreRef.current = false
+      setExpandedLoading(false)
+    }
+  }
+
+  function persistProgress(finalize: boolean): void {
+    if (!activePlayback) return
+    const pos = baseOffset + (videoRef.current?.currentTime ?? 0)
+    const finished = duration != null && pos >= duration * 0.95
+
+    if (activePlayback.kind === 'movie') {
+      if (finished && finalize) {
+        void window.api.progress.clear('movie', activePlayback.id)
+        return
+      }
+      void window.api.progress.save({
+        type: 'movie',
+        id: activePlayback.id,
+        positionSeconds: pos,
+        durationSeconds: duration,
+        updatedAt: Date.now()
+      })
+      return
+    }
+
+    void window.api.progress.save({
+      type: 'series',
+      id: activePlayback.seriesId,
+      positionSeconds: pos,
+      durationSeconds: duration,
+      season: activePlayback.season,
+      episode: activePlayback.episode,
+      episodeId: activePlayback.episodeId,
+      updatedAt: Date.now()
+    })
   }
 
   async function startPlaybackAt(
@@ -199,6 +759,7 @@ export function TvScreen(): JSX.Element {
   }
 
   function stopPlayback(): void {
+    persistProgress(false)
     mseStopRef.current?.()
     mseStopRef.current = null
     videoRef.current?.pause()
@@ -208,6 +769,7 @@ export function TvScreen(): JSX.Element {
     setStreams([])
     setDuration(null)
     setAudioIndex(undefined)
+    setActivePlayback(null)
   }
 
   function selectSource(index: number): void {
@@ -217,7 +779,7 @@ export function TvScreen(): JSX.Element {
     setZone('player')
     setMessage(`Playing — ${stream.addonName} (${stream.resolution ?? 'unknown res'})`)
     setAudioIndex(undefined)
-    void startPlaybackAt(stream.playableUrl, 0)
+    void startPlaybackAt(stream.playableUrl, resumeOffset, undefined)
   }
 
   function seek(deltaSeconds: number): void {
@@ -252,13 +814,9 @@ export function TvScreen(): JSX.Element {
     setSubtitlesOn(true)
   }
 
-  async function resolveStreamsForItem(item: CatalogItem): Promise<void> {
-    if (item.type === 'series') {
-      setMessage('Series playback needs an episode picker — not built yet')
-      return
-    }
+  async function playMovie(item: CatalogItem, opts?: { auto?: boolean }): Promise<void> {
     setMessage(`Finding streams for ${item.name}...`)
-    const result = await window.api.stremio.getStreams(item.type, item.id)
+    const result = await window.api.stremio.getStreams('movie', item.id)
     if (!result.hasAddonsConfigured) {
       setMessage('Add a stream addon in Settings to enable playback')
       return
@@ -276,12 +834,121 @@ export function TvScreen(): JSX.Element {
     setStreams(playable)
     setSourceIndex(0)
     setSourcesReturnZone('detail')
-    setZone('sources')
+    setActivePlayback({ kind: 'movie', id: item.id })
+    const offset = progress?.type === 'movie' && isResumable(progress) ? progress.positionSeconds : 0
+    setResumeOffset(offset)
+    window.api.subtitles.getTracks('movie', item.id).then(setSubtitleTracks)
 
-    window.api.subtitles.getTracks(item.type, item.id).then(setSubtitleTracks)
+    // Play = auto-play the top-ranked stream; the Source button (auto:false)
+    // is the only path that still stops at the manual picker.
+    const first = playable[0]
+    if (opts?.auto && first?.playableUrl) {
+      setStreamIndex(0)
+      setZone('player')
+      setMessage(`Playing — ${first.addonName} (${first.resolution ?? 'unknown res'})`)
+      setAudioIndex(undefined)
+      void startPlaybackAt(first.playableUrl, offset, undefined)
+    } else {
+      setZone('sources')
+    }
+  }
+
+  async function playEpisode(ep: EpisodeItem): Promise<void> {
+    if (!selectedItem) return
+    setMessage(`Finding streams for ${selectedItem.name} S${ep.season}E${ep.episode}...`)
+    const result = await window.api.stremio.getStreams('series', ep.id)
+    if (!result.hasAddonsConfigured) {
+      setMessage('Add a stream addon in Settings to enable playback')
+      return
+    }
+    const playable = result.streams.filter((s) => s.playableUrl)
+    const first = playable[0]
+    if (!first?.playableUrl) {
+      setMessage(
+        result.serverAvailable
+          ? 'No playable streams found for this episode'
+          : "Couldn't start Stremio's streaming server"
+      )
+      return
+    }
+
+    setStreams(playable)
+    setSourceIndex(0)
+    setActivePlayback({
+      kind: 'series',
+      seriesId: selectedItem.id,
+      seriesTitle: selectedItem.name,
+      season: ep.season,
+      episode: ep.episode,
+      episodeId: ep.id
+    })
+    const sameEpisode =
+      progress?.type === 'series' && progress.season === ep.season && progress.episode === ep.episode
+    const offset = sameEpisode && isResumable(progress) ? progress.positionSeconds : 0
+    setResumeOffset(offset)
+    window.api.subtitles.getTracks('series', ep.id).then(setSubtitleTracks)
+
+    // Episodes always auto-play the top stream — bingeing shouldn't stop to ask
+    // which mirror to use. A bad stream can still be swapped mid-playback via
+    // the bumper-reselect shortcut in the player zone.
+    setStreamIndex(0)
+    setZone('player')
+    setMessage(`Playing — ${first.addonName} (${first.resolution ?? 'unknown res'})`)
+    setAudioIndex(undefined)
+    void startPlaybackAt(first.playableUrl, offset, undefined)
+  }
+
+  function playSeriesFromDetail(): void {
+    if (!selectedItem) return
+    if (episodes.length === 0) {
+      setEpisodeSubZone('seasons')
+      setZone('episodes')
+      return
+    }
+    if (isResumable(progress) && progress.season != null && progress.episode != null) {
+      const ep = episodes.find((e) => e.season === progress.season && e.episode === progress.episode)
+      if (ep) {
+        void playEpisode(ep)
+        return
+      }
+    }
+    const first = sortEpisodes(episodes)[0]
+    if (first) void playEpisode(first)
   }
 
   useNavListener((action) => {
+    if (zone === 'keyboard') {
+      switch (action) {
+        case 'up': {
+          const next = clampKeyboardFocus(kbRow - 1, kbCol)
+          setKbRow(next.row)
+          setKbCol(next.col)
+          return
+        }
+        case 'down': {
+          const next = clampKeyboardFocus(kbRow + 1, kbCol)
+          setKbRow(next.row)
+          setKbCol(next.col)
+          return
+        }
+        case 'left':
+          setKbCol((c) => Math.max(0, c - 1))
+          return
+        case 'right':
+          setKbCol((c) => clampKeyboardFocus(kbRow, c + 1).col)
+          return
+        case 'confirm':
+          pressVirtualKey(KEY_ROWS[kbRow][kbCol])
+          return
+        case 'back':
+        case 'menu':
+          cancelKeyboard()
+          return
+        default:
+          return
+      }
+    }
+
     if (zone === 'sources') {
       switch (action) {
         case 'up':
@@ -304,6 +971,7 @@ export function TvScreen(): JSX.Element {
 
     if (zone === 'player') {
       const video = videoRef.current
+      if (action !== 'back' && action !== 'menu') wakeControls(!isPaused)
       switch (action) {
         case 'confirm':
           if (video) {
@@ -319,6 +987,9 @@ export function TvScreen(): JSX.Element {
           return
         case 'prevStream':
         case 'nextStream':
+          // Carry the current position forward — reselecting a source mid-playback
+          // should pick up where you were, not restart the episode/movie from zero.
+          setResumeOffset(baseOffset + (videoRef.current?.currentTime ?? 0))
           setSourceIndex(streamIndex)
           setSourcesReturnZone('player')
           setZone('sources')
@@ -333,8 +1004,67 @@ export function TvScreen(): JSX.Element {
           toggleSubtitles()
           return
         case 'back':
-        case 'menu':
+        case 'menu': {
+          const wasSeries = activePlayback?.kind === 'series'
           stopPlayback()
+          setZone(wasSeries ? 'episodes' : 'detail')
+          return
+        }
+        default:
+          return
+      }
+    }
+
+    if (zone === 'episodes') {
+      if (episodeSubZone === 'seasons') {
+        switch (action) {
+          case 'left':
+            setSeasonIndex((i) => Math.max(0, i - 1))
+            return
+          case 'right':
+            setSeasonIndex((i) => Math.min(seasonsList.length - 1, i + 1))
+            return
+          case 'down':
+            setEpisodeSubZone('list')
+            setEpisodeIndex(0)
+            return
+          case 'prevStream':
+            switchSeason(-1)
+            return
+          case 'nextStream':
+            switchSeason(1)
+            return
+          case 'back':
+          case 'menu':
+            setZone('detail')
+            return
+          default:
+            return
+        }
+      }
+
+      // episodeSubZone === 'list'
+      switch (action) {
+        case 'up':
+          if (episodeIndex === 0) setEpisodeSubZone('seasons')
+          else setEpisodeIndex((i) => i - 1)
+          return
+        case 'down':
+          setEpisodeIndex((i) => Math.min(episodesForSeason.length - 1, i + 1))
+          return
+        case 'confirm': {
+          const ep = episodesForSeason[episodeIndex]
+          if (ep) void playEpisode(ep)
+          return
+        }
+        case 'prevStream':
+          switchSeason(-1)
+          return
+        case 'nextStream':
+          switchSeason(1)
+          return
+        case 'back':
+        case 'menu':
           setZone('detail')
           return
         default:
@@ -342,15 +1072,97 @@ export function TvScreen(): JSX.Element {
       }
     }
 
-    if (zone === 'detail') {
+    if (zone === 'expanded') {
       switch (action) {
+        case 'up':
+          setExpandedIndex((i) => Math.max(0, i - EXPANDED_COLUMNS))
+          return
+        case 'down':
+          setExpandedIndex((i) => {
+            const next = i + EXPANDED_COLUMNS < expandedItems.length ? i + EXPANDED_COLUMNS : i
+            if (next >= expandedItems.length - EXPANDED_COLUMNS * 2) void loadMoreExpanded()
+            return next
+          })
+          return
+        case 'left':
+          setExpandedIndex((i) => (i % EXPANDED_COLUMNS === 0 ? i : i - 1))
+          return
+        case 'right':
+          setExpandedIndex((i) => {
+            if (i % EXPANDED_COLUMNS === EXPANDED_COLUMNS - 1 || i === expandedItems.length - 1) return i
+            const next = i + 1
+            if (next >= expandedItems.length - EXPANDED_COLUMNS * 2) void loadMoreExpanded()
+            return next
+          })
+          return
+        case 'confirm': {
+          const item = expandedItems[expandedIndex]
+          if (!item) return
+          setDetailReturnZone('expanded')
+          setSelectedItem(item)
+          setZone('detail')
+          return
+        }
+        case 'back':
+        case 'menu':
+          setZone('rows')
+          return
+        default:
+          return
+      }
+    }
+
+    if (zone === 'detail') {
+      // Three focusable controls — 0: Play, 1: Source/Episodes, 2: Library —
+      // navigated with the d-pad/stick and Confirm like everything else in the
+      // app. The bumpers/Square shortcuts below still work too, but some
+      // controllers (seemingly more common over Bluetooth) report those at
+      // different button indices, so d-pad+Confirm is the one path guaranteed
+      // to reach all three regardless of controller quirks.
+      function activateDetailFocus(index: number): void {
+        if (!selectedItem) return
+        if (index === 0) {
+          if (selectedItem.type === 'series') playSeriesFromDetail()
+          else void playMovie(selectedItem, { auto: true })
+        } else if (index === 1) {
+          if (selectedItem.type === 'series') {
+            setEpisodeSubZone('seasons')
+            setZone('episodes')
+          } else {
+            void playMovie(selectedItem, { auto: false })
+          }
+        } else {
+          toggleLibrary()
+        }
+      }
+
+      switch (action) {
+        case 'up':
+          setDetailFocusIndex((i) => Math.max(0, i - 1))
+          return
+        case 'down':
+          setDetailFocusIndex((i) => Math.min(2, i + 1))
+          return
+        case 'left':
+          setDetailFocusIndex((i) => (i === 2 ? 1 : i))
+          return
+        case 'right':
+          setDetailFocusIndex((i) => (i === 1 ? 2 : i))
+          return
         case 'confirm':
-          if (selectedItem) void resolveStreamsForItem(selectedItem)
+          activateDetailFocus(detailFocusIndex)
+          return
+        case 'prevStream':
+        case 'nextStream':
+          activateDetailFocus(1)
+          return
+        case 'toggleSubtitles':
+          activateDetailFocus(2)
           return
         case 'back':
         case 'menu':
           setSelectedItem(null)
-          setZone('rows')
+          setZone(detailReturnZone)
           return
         default:
           return
@@ -360,24 +1172,30 @@ export function TvScreen(): JSX.Element {
     if (zone === 'filters') {
       switch (action) {
         case 'left':
-          setFilterIndex((i) => Math.max(0, i - 1))
+          setTabIndex((i) => Math.max(0, i - 1))
           return
         case 'right':
-          setFilterIndex((i) => Math.min(FILTERS.length - 1, i + 1))
+          setTabIndex((i) => Math.min(TABS.length, i + 1))
           return
         case 'down':
           setZone('rows')
+          setRowIndex(0)
           setColIndex(0)
           return
         case 'confirm':
-          setType(FILTERS[filterIndex])
-          setColIndex(0)
+          if (tabIndex === TABS.length) {
+            openKeyboard(searchQuery)
+          } else {
+            setTab(TABS[tabIndex])
+            setRowIndex(0)
+            setColIndex(0)
+          }
           return
         case 'prevStream':
-          switchFilter(-1)
+          switchTab(-1)
           return
         case 'nextStream':
-          switchFilter(1)
+          switchTab(1)
           return
         case 'back':
         case 'menu':
@@ -389,37 +1207,61 @@ export function TvScreen(): JSX.Element {
     }
 
     // zone === 'rows'
-    switch (action) {
-      case 'up':
-        setZone('filters')
-        return
-      case 'left':
-        setColIndex((c) => Math.max(0, c - 1))
-        return
-      case 'right':
-        setColIndex((c) => Math.min(Math.max(0, activeCatalog.length - 1), c + 1))
-        return
-      case 'prevStream':
-        switchFilter(-1)
-        return
-      case 'nextStream':
-        switchFilter(1)
-        return
-      case 'confirm': {
-        const item = activeCatalog[colIndex]
-        if (!item) return
-        setSelectedItem(item)
-        setZone('detail')
-        return
+    {
+      const row = rows[rowIndex]
+      // Must match how many cards the row actually renders (ROW_PREVIEW_CAP),
+      // not the full underlying catalog page, or focus can land on an index
+      // nothing in the DOM corresponds to.
+      const rowLen = row ? Math.min(row.items.length, ROW_PREVIEW_CAP) : 0
+      switch (action) {
+        case 'up':
+          if (rowIndex === 0) {
+            setZone('filters')
+          } else {
+            setRowIndex((r) => r - 1)
+            setColIndex(0)
+          }
+          return
+        case 'down':
+          if (rowIndex < rows.length - 1) {
+            setRowIndex(rowIndex + 1)
+            setColIndex(0)
+          }
+          return
+        case 'left':
+          setColIndex((c) => Math.max(0, c - 1))
+          return
+        case 'right':
+          setColIndex((c) => Math.min(rowLen, c + 1))
+          return
+        case 'prevStream':
+          switchTab(-1)
+          return
+        case 'nextStream':
+          switchTab(1)
+          return
+        case 'confirm': {
+          if (!row) return
+          if (colIndex >= rowLen) {
+            if (row.items.length > 0) openExpanded(row)
+            return
+          }
+          const item = row.items[colIndex]
+          if (!item) return
+          setDetailReturnZone('rows')
+          setSelectedItem(item)
+          setZone('detail')
+          return
+        }
+        case 'back':
+        case 'menu':
+          goHome()
+          return
+        default:
+          return
       }
-      case 'back':
-      case 'menu':
-        goHome()
-        return
-      default:
-        return
     }
-  })
+  }, 'tv')
 
   const sourcesOverlay = zone === 'sources' && (
     <div className="absolute inset-x-0 bottom-0 z-20 flex h-[45%] flex-col gap-3 overflow-hidden bg-surface/95 p-6 backdrop-blur">
@@ -448,10 +1290,15 @@ export function TvScreen(): JSX.Element {
     </div>
   )
 
-  if (zone === 'player' || (zone === 'sources' && sourcesReturnZone === 'player')) {
+  if (inPlayerView) {
     const progressPct = duration ? Math.min(100, (position / duration) * 100) : 0
+    const showBar = controlsVisible || zone === 'sources'
     return (
-      <div className="relative flex h-screen items-center justify-center bg-black">
+      <div
+        className="relative flex h-screen cursor-none items-center justify-center bg-black"
+        style={showBar ? { cursor: 'auto' } : undefined}
+        onMouseMove={() => wakeControls(!isPaused)}
+      >
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
           ref={videoRef}
@@ -464,14 +1311,53 @@ export function TvScreen(): JSX.Element {
             if (video.paused) void video.play()
             else video.pause()
           }}
-          onTimeUpdate={(event) => setPosition(baseOffset + event.currentTarget.currentTime)}
+          onPlay={() => {
+            setIsPaused(false)
+            wakeControls(true)
+          }}
+          onPause={() => {
+            setIsPaused(true)
+            wakeControls(false)
+            persistProgress(false)
+          }}
+          onEnded={() => {
+            if (activePlayback?.kind === 'movie') {
+              void window.api.progress.clear('movie', activePlayback.id)
+              stopPlayback()
+              setZone('detail')
+              return
+            }
+            if (activePlayback?.kind === 'series') {
+              const next = findNextEpisode(activePlayback.season, activePlayback.episode)
+              if (next) {
+                void playEpisode(next)
+                return
+              }
+              setMessage(`Finished ${activePlayback.seriesTitle}`)
+              stopPlayback()
+              setZone('episodes')
+            }
+          }}
+          onTimeUpdate={(event) => {
+            const pos = baseOffset + event.currentTarget.currentTime
+            setPosition(pos)
+            const now = Date.now()
+            if (now - lastProgressSaveRef.current > 5000) {
+              lastProgressSaveRef.current = now
+              persistProgress(false)
+            }
+          }}
         >
           {subtitleUrl && (
             <track ref={trackRef} kind="subtitles" src={subtitleUrl} default label="Subtitles" />
           )}
         </video>
 
-        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/90 to-transparent p-8">
+        <div
+          className={`absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/90 to-transparent p-8 transition-opacity duration-300 ${
+            showBar ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+        >
           <div className="flex items-center justify-between text-sm text-muted">
             <span>{selectedItem?.name}</span>
           </div>
@@ -494,50 +1380,190 @@ export function TvScreen(): JSX.Element {
     )
   }
 
+  if (zone === 'expanded') {
+    const row = rows.find((r) => r.key === expandedRowKey)
+    return (
+      <div className="relative flex h-screen flex-col gap-6 overflow-hidden bg-bg px-10 py-8">
+        <header>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {expandedRowKey === 'search' ? `Search: "${searchQuery}"` : (row?.label ?? 'Browse')}
+          </h1>
+        </header>
+
+        <div
+          className="grid flex-1 auto-rows-min grid-cols-6 gap-10 overflow-y-auto p-5"
+          onScroll={(event) => {
+            const el = event.currentTarget
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 800) void loadMoreExpanded()
+          }}
+        >
+          {expandedItems.map((item, i) => (
+            <div key={item.id} ref={(el) => (expandedRefs.current[i] = el)} className="scroll-m-10">
+              <FocusableCard
+                item={toCardItem(item)}
+                aspect="portrait"
+                focused={expandedIndex === i}
+                onClick={() => {
+                  setExpandedIndex(i)
+                  setDetailReturnZone('expanded')
+                  setSelectedItem(item)
+                  setZone('detail')
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {expandedLoading && <p className="text-center text-sm text-muted">Loading more...</p>}
+        <footer className="text-sm text-muted">{message}</footer>
+      </div>
+    )
+  }
+
   const selectedCard = selectedItem ? toCardItem(selectedItem) : null
   const releaseDate = selectedItem ? formatReleaseDate(selectedItem.released) : null
+
+  const playLabel = (() => {
+    if (!selectedItem) return '▶ Play'
+    if (selectedItem.type === 'movie') {
+      return isResumable(progress) ? `▶ Resume at ${formatTime(progress.positionSeconds)}` : '▶ Play'
+    }
+    if (isResumable(progress) && progress.season != null && progress.episode != null) {
+      return `▶ Resume S${progress.season}E${progress.episode}`
+    }
+    const first = episodes.length > 0 ? sortEpisodes(episodes)[0] : null
+    return first ? `▶ Play S${first.season}E${first.episode}` : '▶ Play'
+  })()
 
   return (
     <div className="relative flex h-screen bg-bg">
       <motion.div layout className="flex flex-1 flex-col gap-6 overflow-hidden px-10 py-8">
         <header>
-          <h1 className="text-3xl font-bold tracking-tight">TV</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {inEpisodesView && selectedItem ? selectedItem.name : 'TV'}
+          </h1>
         </header>
 
-        <div className="flex gap-3">
-          {FILTERS.map((f, i) => (
-            <div
-              key={f}
-              onClick={() => {
-                setZone('filters')
-                setFilterIndex(i)
-                setType(f)
-                setColIndex(0)
-              }}
-              className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-                type === f ? 'bg-accent text-white' : 'bg-surface text-muted'
-              } ${zone === 'filters' && filterIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
-            >
-              {f === 'movie' ? 'Movies' : 'Series'}
+        {inEpisodesView ? (
+          <>
+            <div className="flex gap-3">
+              {seasonsList.map((s, i) => (
+                <div
+                  key={s}
+                  onClick={() => {
+                    setEpisodeSubZone('seasons')
+                    setSeasonIndex(i)
+                    setEpisodeIndex(0)
+                  }}
+                  className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                    seasonIndex === i ? 'bg-accent text-white' : 'bg-surface text-muted'
+                  } ${
+                    episodeSubZone === 'seasons' && seasonIndex === i
+                      ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg'
+                      : ''
+                  }`}
+                >
+                  {s === 0 ? 'Specials' : `Season ${s}`}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <CategoryRow
-            label={type === 'movie' ? 'Popular Movies' : 'Popular Series'}
-            items={activeCatalog.map(toCardItem)}
-            focused={zone === 'rows'}
-            focusedIndex={colIndex}
-            aspect="portrait"
-            onSelect={(index) => {
-              setZone('rows')
-              setColIndex(index)
-              setSelectedItem(activeCatalog[index])
-              setZone('detail')
-            }}
-          />
-        </div>
+            <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+              {episodes.length === 0 && <span className="text-muted">Loading episodes...</span>}
+              {episodesForSeason.map((ep, i) => (
+                <div
+                  key={ep.id}
+                  ref={(el) => (episodeRefs.current[i] = el)}
+                  onClick={() => {
+                    setEpisodeSubZone('list')
+                    setEpisodeIndex(i)
+                    void playEpisode(ep)
+                  }}
+                  className={`scroll-m-8 flex cursor-pointer items-center gap-4 rounded-xl px-4 py-3 transition-colors ${
+                    episodeSubZone === 'list' && episodeIndex === i ? 'bg-surface-hi shadow-focus' : 'bg-surface'
+                  }`}
+                >
+                  <span className="w-12 shrink-0 text-sm font-semibold text-muted">
+                    {progress?.type === 'series' &&
+                    progress.season === ep.season &&
+                    progress.episode === ep.episode
+                      ? '▶ '
+                      : ''}
+                    E{ep.episode}
+                  </span>
+                  {ep.thumbnail && (
+                    <img src={ep.thumbnail} alt="" className="h-16 w-28 shrink-0 rounded-lg object-cover" />
+                  )}
+                  <div className="flex flex-1 flex-col overflow-hidden">
+                    <span className="truncate font-medium">{ep.name}</span>
+                    {ep.overview && <span className="line-clamp-2 text-xs text-muted">{ep.overview}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex gap-3">
+              {TABS.map((t, i) => (
+                <div
+                  key={t}
+                  onClick={() => {
+                    setZone('filters')
+                    setTabIndex(i)
+                    setTab(t)
+                    setRowIndex(0)
+                    setColIndex(0)
+                  }}
+                  className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                    tab === t ? 'bg-accent text-white' : 'bg-surface text-muted'
+                  } ${zone === 'filters' && tabIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
+                >
+                  {tabLabel(t)}
+                </div>
+              ))}
+              <div
+                onClick={() => {
+                  setZone('filters')
+                  setTabIndex(TABS.length)
+                  openKeyboard(searchQuery)
+                }}
+                className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                  searchQuery ? 'bg-accent text-white' : 'bg-surface text-muted'
+                } ${
+                  zone === 'filters' && tabIndex === TABS.length
+                    ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg'
+                    : ''
+                }`}
+              >
+                {searchQuery ? `🔍 "${searchQuery}"` : '🔍 Search'}
+              </div>
+            </div>
+
+            <div className="flex flex-1 flex-col gap-8 overflow-y-auto">
+              {rows.map((row, i) => (
+                <div key={row.key} ref={(el) => (rowRefs.current[i] = el)}>
+                  <CategoryRow
+                    label={row.label}
+                    items={row.items.slice(0, ROW_PREVIEW_CAP).map(toCardItem)}
+                    focused={zone === 'rows' && rowIndex === i}
+                    focusedIndex={colIndex}
+                    aspect="portrait"
+                    onSelect={(index) => {
+                      setZone('rows')
+                      setRowIndex(i)
+                      setColIndex(index)
+                      setDetailReturnZone('rows')
+                      setSelectedItem(row.items[index])
+                      setZone('detail')
+                    }}
+                    onSeeMore={() => openExpanded(row)}
+                  />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         <footer className="text-sm text-muted">{message}</footer>
       </motion.div>
@@ -570,17 +1596,68 @@ export function TvScreen(): JSX.Element {
               )}
             </div>
 
-            <button
-              onClick={() => void resolveStreamsForItem(selectedItem)}
-              className="mt-auto rounded-xl bg-accent-gradient px-6 py-4 text-lg font-semibold text-white shadow-focus"
-            >
-              ▶ Play
-            </button>
+            <div className="mt-auto flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  setDetailFocusIndex(0)
+                  if (selectedItem.type === 'series') playSeriesFromDetail()
+                  else void playMovie(selectedItem, { auto: true })
+                }}
+                className={`rounded-xl bg-accent-gradient px-6 py-4 text-lg font-semibold text-white shadow-focus transition-shadow ${
+                  detailFocusIndex === 0 ? 'ring-2 ring-white/50 ring-offset-2 ring-offset-bg' : ''
+                }`}
+              >
+                {playLabel}
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setDetailFocusIndex(1)
+                    if (selectedItem.type === 'series') {
+                      setEpisodeSubZone('seasons')
+                      setZone('episodes')
+                    } else {
+                      void playMovie(selectedItem, { auto: false })
+                    }
+                  }}
+                  className={`flex-1 rounded-xl bg-surface-hi px-5 py-3 text-sm font-semibold text-muted transition-colors hover:text-white ${
+                    detailFocusIndex === 1 ? 'text-white ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''
+                  }`}
+                >
+                  {selectedItem.type === 'series' ? 'Episodes' : 'Source'}
+                </button>
+                <button
+                  onClick={() => {
+                    setDetailFocusIndex(2)
+                    toggleLibrary()
+                  }}
+                  className={`flex-1 rounded-xl px-5 py-3 text-sm font-semibold transition-colors ${
+                    isSelectedInLibrary ? 'bg-accent/20 text-accent' : 'bg-surface-hi text-muted hover:text-white'
+                  } ${detailFocusIndex === 2 ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
+                >
+                  {isSelectedInLibrary ? '✓ In Library' : '+ Library'}
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {sourcesOverlay}
+
+      {zone === 'keyboard' && (
+        <OnScreenKeyboard
+          label={tab === 'library' ? 'Search My Library' : `Search ${tabLabel(tab)}`}
+          value={kbValue}
+          shift={kbShift}
+          focusedRow={kbRow}
+          focusedCol={kbCol}
+          onChange={setKbValue}
+          onSubmit={() => submitKeyboard(kbValue)}
+          onCancel={cancelKeyboard}
+          onKeyPress={pressVirtualKey}
+        />
+      )}
     </div>
   )
 }

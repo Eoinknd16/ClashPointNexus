@@ -1,4 +1,5 @@
 import type { CatalogType } from '@shared/stremioTypes'
+import { encodeStremioId } from '../stremio/streamId'
 
 const BASE = 'https://opensubtitles-v3.strem.io'
 
@@ -20,7 +21,7 @@ interface SubtitlesResponse {
 
 /** Stremio's own official subtitle addon — public, no auth, same tier as Cinemeta. */
 export async function fetchSubtitleTracks(type: CatalogType, id: string): Promise<SubtitleTrack[]> {
-  const response = await fetch(`${BASE}/subtitles/${type}/${encodeURIComponent(id)}.json`, {
+  const response = await fetch(`${BASE}/subtitles/${type}/${encodeStremioId(id)}.json`, {
     signal: AbortSignal.timeout(8000)
   })
   if (!response.ok) return []

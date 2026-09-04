@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { extname, join } from 'path'
 
 export interface NonSteamShortcut {
   name: string
   launchGameId: string
   lastPlayed: number
+  /** data: URI for locally-set custom artwork, if any — non-Steam games have no CDN box art. */
+  imageDataUrl?: string
 }
 
 type BinaryVdfValue = string | number | BinaryVdfObject
@@ -69,6 +71,32 @@ function shortcutLaunchGameId(storedAppId: number): string {
   return gameId.toString()
 }
 
+// Steam's "set custom artwork" feature (both Steam and non-Steam games) stores
+// files under userdata/<account>/config/grid/<gameid><suffix> — landscape
+// header art first (matches our card aspect), falling back to the portrait
+// grid capsule if that's all the user has set. Non-Steam games have no
+// official CDN art at all, so this is the only real image source for them.
+const GRID_IMAGE_SUFFIXES = ['_header.png', '_header.jpg', '.png', '.jpg']
+
+function mimeTypeForExt(ext: string): string {
+  return ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png'
+}
+
+function findGridImage(steamPath: string, accountId: string, gameId: string): string | undefined {
+  const gridDir = join(steamPath, 'userdata', accountId, 'config', 'grid')
+  for (const suffix of GRID_IMAGE_SUFFIXES) {
+    const path = join(gridDir, `${gameId}${suffix}`)
+    if (!existsSync(path)) continue
+    try {
+      const data = readFileSync(path).toString('base64')
+      return `data:${mimeTypeForExt(extname(path))};base64,${data}`
+    } catch {
+      continue
+    }
+  }
+  return undefined
+}
+
 function accountIdFromSteamId64(steamId64: string): string | null {
   try {
     const accountId = BigInt(steamId64) - 76561197960265728n
@@ -98,10 +126,12 @@ export function getNonSteamShortcuts(steamPath: string, steamId64: string): NonS
       const appName = entry['AppName']
       if (typeof appid !== 'number' || typeof appName !== 'string') continue
 
+      const launchGameId = shortcutLaunchGameId(appid)
       shortcuts.push({
         name: appName,
-        launchGameId: shortcutLaunchGameId(appid),
-        lastPlayed: typeof entry['LastPlayTime'] === 'number' ? entry['LastPlayTime'] : 0
+        launchGameId,
+        lastPlayed: typeof entry['LastPlayTime'] === 'number' ? entry['LastPlayTime'] : 0,
+        imageDataUrl: findGridImage(steamPath, accountId, launchGameId)
       })
     }
     return shortcuts

@@ -23,7 +23,7 @@ interface FocusableCardProps {
 // a fixed size overflows its cell (and overlaps neighbors) whenever the
 // container is narrower than columns * size, e.g. a smaller window or an
 // extra tile added to a fixed-count row.
-const ASPECT_CLASSES = {
+export const ASPECT_CLASSES = {
   landscape: 'aspect-[2/1]',
   portrait: 'aspect-[2/3]',
   large: 'aspect-[3/2]'
@@ -48,14 +48,14 @@ export function FocusableCard({
   return (
     <motion.div
       onClick={onClick}
-      animate={{ scale: focused ? 1.08 : 1, y: focused ? -6 : 0 }}
-      whileTap={{ scale: focused ? 1.03 : 0.97 }}
+      animate={{ scale: focused ? 1.05 : 1, y: focused ? -6 : 0 }}
+      whileTap={{ scale: focused ? 1.02 : 0.97 }}
       transition={{ type: 'spring', stiffness: 420, damping: 30 }}
       className={`relative flex w-full ${aspectClass} shrink-0 flex-col justify-end overflow-hidden rounded-2xl ring-1 transition-shadow duration-200 ${
         onClick ? 'cursor-pointer' : ''
-      } ${focused ? 'shadow-focus ring-white/10' : 'ring-white/5'} ${
-        showImage ? 'bg-surface' : focused ? 'bg-surface-hi' : 'bg-surface'
-      }`}
+      } ${
+        focused ? 'z-20 shadow-focus ring-white/10' : 'z-0 ring-white/5'
+      } ${showImage ? 'bg-surface' : focused ? 'bg-surface-hi' : 'bg-surface'}`}
     >
       {showImage && (
         <>

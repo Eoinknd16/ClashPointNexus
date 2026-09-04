@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { FocusableCard, type CardItem } from '../components/FocusableCard'
+import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
+import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
@@ -9,7 +11,10 @@ import type { GameEntry } from '@shared/steamTypes'
 const COLUMNS = 5
 const FILTERS = ['installed', 'all'] as const
 type Filter = (typeof FILTERS)[number]
-type Zone = 'filters' | 'grid' | 'detail'
+// filterIndex ranges 0..FILTERS.length inclusive — FILTERS.length itself is a
+// search bubble, reachable by d-pad but not by the bumpers (switchFilter stays
+// clamped to the real filters, so a quick bumper tap can't pop the keyboard).
+type Zone = 'filters' | 'grid' | 'detail' | 'keyboard'
 
 function steamHeaderUrl(appId: number): string {
   return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`
@@ -31,7 +36,7 @@ function toCardItem(game: GameEntry): CardItem {
     id: game.id,
     title: game.name,
     subtitle: game.installed ? formatPlaytime(game.playtimeForeverMinutes) : 'Not installed',
-    imageUrl: game.imageAppId ? steamHeaderUrl(game.imageAppId) : undefined
+    imageUrl: game.imageDataUrl ?? (game.imageAppId ? steamHeaderUrl(game.imageAppId) : undefined)
   }
 }
 
@@ -48,10 +53,15 @@ function launchOrInstall(game: GameEntry, setMessage: (message: string) => void)
 export function GamesScreen(): JSX.Element {
   const [allGames, setAllGames] = useState<GameEntry[]>([])
   const [filter, setFilter] = useState<Filter>('installed')
+  const [searchQuery, setSearchQuery] = useState('')
   const [zone, setZone] = useState<Zone>('filters')
   const [filterIndex, setFilterIndex] = useState(0)
   const [gridIndex, setGridIndex] = useState(0)
   const [selectedGame, setSelectedGame] = useState<GameEntry | null>(null)
+  const [kbRow, setKbRow] = useState(0)
+  const [kbCol, setKbCol] = useState(0)
+  const [kbValue, setKbValue] = useState('')
+  const [kbShift, setKbShift] = useState(false)
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
   const goHome = useNavigationStore((s) => s.goHome)
@@ -80,21 +90,85 @@ export function GamesScreen(): JSX.Element {
     }
   }, [setMessage])
 
-  // Most-recently-played first, in both filters — same effect as a separate
+  // Searching looks across every game regardless of the Installed/All filter —
+  // the subtitle line already shows install state, so there's no ambiguity.
+  // Most-recently-played first either way, same effect as a separate
   // "Continue Playing" row without needing one.
-  const games = [...(filter === 'installed' ? allGames.filter((g) => g.installed) : allGames)].sort(
-    (a, b) => b.lastPlayed - a.lastPlayed
-  )
+  const trimmedQuery = searchQuery.trim().toLowerCase()
+  const baseGames = trimmedQuery
+    ? allGames.filter((g) => g.name.toLowerCase().includes(trimmedQuery))
+    : filter === 'installed'
+      ? allGames.filter((g) => g.installed)
+      : allGames
+  const games = [...baseGames].sort((a, b) => b.lastPlayed - a.lastPlayed)
   const cards = games.map(toCardItem)
 
   function switchFilter(direction: 1 | -1): void {
     const next = Math.max(0, Math.min(FILTERS.length - 1, filterIndex + direction))
     setFilterIndex(next)
     setFilter(FILTERS[next])
+    setSearchQuery('')
     setGridIndex(0)
   }
 
+  function openKeyboard(initialValue: string): void {
+    setKbValue(initialValue)
+    setKbShift(false)
+    setKbRow(0)
+    setKbCol(0)
+    setZone('keyboard')
+  }
+
+  function submitKeyboard(finalValue: string): void {
+    setSearchQuery(finalValue.trim())
+    setGridIndex(0)
+    setZone('filters')
+  }
+
+  function cancelKeyboard(): void {
+    setZone('filters')
+  }
+
+  function pressVirtualKey(key: string): void {
+    const result = applyKey(key, kbValue, kbShift)
+    setKbValue(result.value)
+    setKbShift(result.shift)
+    if (result.done) submitKeyboard(result.value)
+  }
+
   useNavListener((action) => {
+    if (zone === 'keyboard') {
+      switch (action) {
+        case 'up': {
+          const next = clampKeyboardFocus(kbRow - 1, kbCol)
+          setKbRow(next.row)
+          setKbCol(next.col)
+          return
+        }
+        case 'down': {
+          const next = clampKeyboardFocus(kbRow + 1, kbCol)
+          setKbRow(next.row)
+          setKbCol(next.col)
+          return
+        }
+        case 'left':
+          setKbCol((c) => Math.max(0, c - 1))
+          return
+        case 'right':
+          setKbCol((c) => clampKeyboardFocus(kbRow, c + 1).col)
+          return
+        case 'confirm':
+          pressVirtualKey(KEY_ROWS[kbRow][kbCol])
+          return
+        case 'back':
+        case 'menu':
+          cancelKeyboard()
+          return
+        default:
+          return
+      }
+    }
+
     if (zone === 'detail') {
       switch (action) {
         case 'confirm':
@@ -116,15 +190,20 @@ export function GamesScreen(): JSX.Element {
           setFilterIndex((i) => Math.max(0, i - 1))
           return
         case 'right':
-          setFilterIndex((i) => Math.min(FILTERS.length - 1, i + 1))
+          setFilterIndex((i) => Math.min(FILTERS.length, i + 1))
           return
         case 'down':
           setZone('grid')
           setGridIndex(0)
           return
         case 'confirm':
-          setFilter(FILTERS[filterIndex])
-          setGridIndex(0)
+          if (filterIndex === FILTERS.length) {
+            openKeyboard(searchQuery)
+          } else {
+            setFilter(FILTERS[filterIndex])
+            setSearchQuery('')
+            setGridIndex(0)
+          }
           return
         case 'prevStream':
           switchFilter(-1)
@@ -179,7 +258,7 @@ export function GamesScreen(): JSX.Element {
       default:
         return
     }
-  })
+  }, 'games')
 
   const selectedCard = selectedGame ? toCardItem(selectedGame) : null
 
@@ -198,23 +277,49 @@ export function GamesScreen(): JSX.Element {
                 setZone('filters')
                 setFilterIndex(i)
                 setFilter(f)
+                setSearchQuery('')
                 setGridIndex(0)
               }}
               className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-                filter === f ? 'bg-accent text-white' : 'bg-surface text-muted'
+                filter === f && !searchQuery ? 'bg-accent text-white' : 'bg-surface text-muted'
               } ${zone === 'filters' && filterIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
             >
               {f === 'installed' ? 'Installed' : 'All Games'}
             </div>
           ))}
+          <div
+            onClick={() => {
+              setZone('filters')
+              setFilterIndex(FILTERS.length)
+              openKeyboard(searchQuery)
+            }}
+            className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+              searchQuery ? 'bg-accent text-white' : 'bg-surface text-muted'
+            } ${
+              zone === 'filters' && filterIndex === FILTERS.length
+                ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg'
+                : ''
+            }`}
+          >
+            {searchQuery ? `🔍 "${searchQuery}"` : '🔍 Search'}
+          </div>
         </div>
 
-        {/* Padding here (not just gap) is load-bearing — a focused card scales
-            up via transform, and needs room within this box or it clips. */}
-        <div className="grid flex-1 auto-rows-min grid-cols-5 gap-6 overflow-y-auto p-3">
-          {cards.length === 0 && <span className="text-muted">No games in this view yet.</span>}
+        {/* transform: scale() doesn't reserve extra layout space, so a focused
+            card grows past its own grid cell — the gap has to be wide enough
+            to absorb that growth (plus the glow) before it reaches the next
+            card, and the outer padding covers the container's own edges. */}
+        <div className="grid flex-1 auto-rows-min grid-cols-5 gap-10 overflow-y-auto p-5">
+          {cards.length === 0 && (
+            <span className="text-muted">
+              {trimmedQuery ? `No games matching "${searchQuery}"` : 'No games in this view yet.'}
+            </span>
+          )}
           {cards.map((card, i) => (
-            <div key={card.id} ref={(el) => (cardRefs.current[i] = el)}>
+            // scroll-m-10 matches the grid's gap-10 — without it, scrollIntoView's
+            // "nearest" snaps this element flush to the scroll container's edge,
+            // then the card scales/glows past that edge with no room left.
+            <div key={card.id} ref={(el) => (cardRefs.current[i] = el)} className="scroll-m-10">
               <FocusableCard
                 item={card}
                 focused={zone === 'grid' && gridIndex === i}
@@ -268,6 +373,20 @@ export function GamesScreen(): JSX.Element {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {zone === 'keyboard' && (
+        <OnScreenKeyboard
+          label="Search Games"
+          value={kbValue}
+          shift={kbShift}
+          focusedRow={kbRow}
+          focusedCol={kbCol}
+          onChange={setKbValue}
+          onSubmit={() => submitKeyboard(kbValue)}
+          onCancel={cancelKeyboard}
+          onKeyPress={pressVirtualKey}
+        />
+      )}
     </div>
   )
 }

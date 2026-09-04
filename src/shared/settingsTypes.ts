@@ -16,3 +16,10 @@ export interface StremioLoginResult {
   error: string | null
   addonsSynced: number
 }
+
+export interface StremioImportResult {
+  success: boolean
+  error: string | null
+  progressImported: number
+  libraryImported: number
+}

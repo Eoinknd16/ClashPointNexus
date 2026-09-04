@@ -1,4 +1,5 @@
 import type { CatalogType } from '@shared/stremioTypes'
+import { encodeStremioId } from './streamId'
 
 export interface RawStreamResult {
   title: string
@@ -31,7 +32,7 @@ export async function fetchStreamsFromAddon(
   id: string
 ): Promise<RawStreamResult[]> {
   const base = normalizeAddonUrl(addonBaseUrl)
-  const url = `${base}/stream/${type}/${encodeURIComponent(id)}.json`
+  const url = `${base}/stream/${type}/${encodeStremioId(id)}.json`
 
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) })

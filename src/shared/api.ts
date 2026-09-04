@@ -1,8 +1,23 @@
+import type { LibraryEntry } from './libraryTypes'
 import type { MediaInfo } from './playerConstants'
-import type { SteamSettings, StremioLoginResult, StremioSettings } from './settingsTypes'
+import type { WatchProgress } from './progressTypes'
+import type {
+  SteamSettings,
+  StremioImportResult,
+  StremioLoginResult,
+  StremioSettings
+} from './settingsTypes'
 import type { GameLaunchTarget, SteamLibraryResult } from './steamTypes'
-import type { AddonSummary, CatalogItem, CatalogType, StreamResult } from './stremioTypes'
+import type {
+  AddonCatalogRow,
+  AddonSummary,
+  CatalogItem,
+  CatalogType,
+  SeriesMeta,
+  StreamResult
+} from './stremioTypes'
 import type { ThemeDefinition } from './themeTypes'
+import type { UpdateStatus } from './updateTypes'
 
 export interface SubtitleTrack {
   id: string
@@ -17,9 +32,24 @@ export interface LauncherApi {
     install: (appId: number) => Promise<void>
   }
   stremio: {
-    getCatalog: (type: CatalogType, catalogId: string) => Promise<CatalogItem[]>
+    getCatalog: (type: CatalogType, catalogId: string, skip?: number, genre?: string) => Promise<CatalogItem[]>
     getStreams: (type: CatalogType, id: string) => Promise<StreamResult>
     getReleaseDate: (type: CatalogType, id: string) => Promise<string | null>
+    getSeriesMeta: (id: string) => Promise<SeriesMeta>
+    getContinueWatching: (type: CatalogType) => Promise<CatalogItem[]>
+    getAddonCatalogs: (type: CatalogType) => Promise<AddonCatalogRow[]>
+    search: (type: CatalogType, query: string) => Promise<CatalogItem[]>
+  }
+  progress: {
+    get: (type: CatalogType, id: string) => Promise<WatchProgress | null>
+    save: (entry: WatchProgress) => Promise<void>
+    clear: (type: CatalogType, id: string) => Promise<void>
+  }
+  library: {
+    list: () => Promise<LibraryEntry[]>
+    has: (type: CatalogType, id: string) => Promise<boolean>
+    add: (entry: Omit<LibraryEntry, 'addedAt'>) => Promise<void>
+    remove: (type: CatalogType, id: string) => Promise<void>
   }
   settings: {
     getSteam: () => Promise<SteamSettings>
@@ -28,6 +58,8 @@ export interface LauncherApi {
     setStremioAddons: (addons: AddonSummary[]) => Promise<void>
     addStremioAddon: (url: string) => Promise<AddonSummary[]>
     stremioLogin: (email: string, password: string) => Promise<StremioLoginResult>
+    resyncStremioAddons: () => Promise<StremioLoginResult>
+    importStremioHistory: () => Promise<StremioImportResult>
     getCustomThemes: () => Promise<ThemeDefinition[]>
   }
   player: {
@@ -35,5 +67,13 @@ export interface LauncherApi {
   }
   subtitles: {
     getTracks: (type: CatalogType, id: string) => Promise<SubtitleTrack[]>
+  }
+  updater: {
+    getStatus: () => Promise<UpdateStatus>
+    getVersion: () => Promise<string>
+    check: () => Promise<void>
+    quitAndInstall: () => Promise<void>
+    /** Returns an unsubscribe function. */
+    onStatus: (callback: (status: UpdateStatus) => void) => () => void
   }
 }

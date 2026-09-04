@@ -1,13 +1,15 @@
 import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
+import { registerLibraryIpc } from './library/ipc'
 import { registerPlayerIpc } from './player/ipc'
 import { startTranscodeProxy, stopTranscodeProxy } from './player/transcodeProxy'
+import { registerProgressIpc } from './progress/ipc'
 import { registerSettingsIpc } from './settings/ipc'
 import { registerSteamIpc } from './steam/ipc'
 import { registerStremioIpc } from './stremio/ipc'
 import { stopStremioServer } from './stremio/server'
 import { registerSubtitlesIpc } from './subtitles/ipc'
-import { initAutoUpdater } from './updater'
+import { initAutoUpdater, registerUpdaterIpc } from './updater'
 
 const isDev = !app.isPackaged
 
@@ -24,7 +26,11 @@ function createWindow(): void {
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      // Only for the Browse screen's <webview> — the guest page it loads runs
+      // in its own separate, isolated renderer process with no Node/Electron
+      // access, same as any ordinary browser tab.
+      webviewTag: true
     }
   })
 
@@ -54,6 +60,9 @@ app.whenReady().then(() => {
   registerSettingsIpc()
   registerPlayerIpc()
   registerSubtitlesIpc()
+  registerProgressIpc()
+  registerLibraryIpc()
+  registerUpdaterIpc()
   startTranscodeProxy()
   createWindow()
 

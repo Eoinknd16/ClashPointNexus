@@ -13,7 +13,8 @@ function shortcutEntries(steamPath: string | null, steamId64: string): GameEntry
       installed: true,
       playtimeForeverMinutes: 0,
       lastPlayed: s.lastPlayed,
-      launch: { type: 'shortcut', gameId: s.launchGameId }
+      launch: { type: 'shortcut', gameId: s.launchGameId },
+      imageDataUrl: s.imageDataUrl
     })
   )
 }

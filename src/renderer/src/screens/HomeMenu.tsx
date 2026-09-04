@@ -30,17 +30,17 @@ export function HomeMenu(): JSX.Element {
       default:
         break
     }
-  })
+  }, 'home')
 
   return (
     <div className="flex h-screen flex-col gap-8 px-10 py-8">
       <header className="flex items-center justify-between">
         <h1 className="bg-accent-gradient bg-clip-text text-3xl font-bold tracking-tight text-transparent">
-          TV Launcher
+          ClashPoint Nexus
         </h1>
         <Clock />
       </header>
-      <div className="grid flex-1 grid-cols-4 items-center gap-8">
+      <div className="grid flex-1 grid-cols-4 items-center gap-10">
         {TILES.map((tile, i) => (
           <motion.div
             key={tile.id}

@@ -8,9 +8,25 @@ const api: LauncherApi = {
     install: (appId) => ipcRenderer.invoke('steam:install', appId)
   },
   stremio: {
-    getCatalog: (type, catalogId) => ipcRenderer.invoke('stremio:getCatalog', type, catalogId),
+    getCatalog: (type, catalogId, skip, genre) =>
+      ipcRenderer.invoke('stremio:getCatalog', type, catalogId, skip, genre),
     getStreams: (type, id) => ipcRenderer.invoke('stremio:getStreams', type, id),
-    getReleaseDate: (type, id) => ipcRenderer.invoke('stremio:getReleaseDate', type, id)
+    getReleaseDate: (type, id) => ipcRenderer.invoke('stremio:getReleaseDate', type, id),
+    getSeriesMeta: (id) => ipcRenderer.invoke('stremio:getSeriesMeta', id),
+    getContinueWatching: (type) => ipcRenderer.invoke('stremio:getContinueWatching', type),
+    getAddonCatalogs: (type) => ipcRenderer.invoke('stremio:getAddonCatalogs', type),
+    search: (type, query) => ipcRenderer.invoke('stremio:search', type, query)
+  },
+  progress: {
+    get: (type, id) => ipcRenderer.invoke('progress:get', type, id),
+    save: (entry) => ipcRenderer.invoke('progress:save', entry),
+    clear: (type, id) => ipcRenderer.invoke('progress:clear', type, id)
+  },
+  library: {
+    list: () => ipcRenderer.invoke('library:list'),
+    has: (type, id) => ipcRenderer.invoke('library:has', type, id),
+    add: (entry) => ipcRenderer.invoke('library:add', entry),
+    remove: (type, id) => ipcRenderer.invoke('library:remove', type, id)
   },
   settings: {
     getSteam: () => ipcRenderer.invoke('settings:getSteam'),
@@ -19,6 +35,8 @@ const api: LauncherApi = {
     setStremioAddons: (streamAddons) => ipcRenderer.invoke('settings:setStremioAddons', streamAddons),
     addStremioAddon: (url) => ipcRenderer.invoke('settings:addStremioAddon', url),
     stremioLogin: (email, password) => ipcRenderer.invoke('settings:stremioLogin', email, password),
+    resyncStremioAddons: () => ipcRenderer.invoke('settings:resyncStremioAddons'),
+    importStremioHistory: () => ipcRenderer.invoke('settings:importStremioHistory'),
     getCustomThemes: () => ipcRenderer.invoke('settings:getCustomThemes')
   },
   player: {
@@ -26,6 +44,18 @@ const api: LauncherApi = {
   },
   subtitles: {
     getTracks: (type, id) => ipcRenderer.invoke('subtitles:getTracks', type, id)
+  },
+  updater: {
+    getStatus: () => ipcRenderer.invoke('updater:getStatus'),
+    getVersion: () => ipcRenderer.invoke('updater:getVersion'),
+    check: () => ipcRenderer.invoke('updater:check'),
+    quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall'),
+    onStatus: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]): void =>
+        callback(status)
+      ipcRenderer.on('updater:status', listener)
+      return () => ipcRenderer.removeListener('updater:status', listener)
+    }
   }
 }
 

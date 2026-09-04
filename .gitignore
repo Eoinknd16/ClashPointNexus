@@ -10,3 +10,5 @@ release
 .claude/
 steam.config.json
 stremio.config.json
+progress.config.json
+library.config.json

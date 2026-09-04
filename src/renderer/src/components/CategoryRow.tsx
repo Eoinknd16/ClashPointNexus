@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { FocusableCard, type CardItem } from './FocusableCard'
+import { ASPECT_CLASSES, FocusableCard, type CardItem } from './FocusableCard'
 
 interface CategoryRowProps {
   label: string
@@ -9,6 +9,8 @@ interface CategoryRowProps {
   focusedIndex: number
   aspect?: 'landscape' | 'portrait'
   onSelect: (index: number) => void
+  /** When provided, appends a trailing "See all" tile at index items.length. */
+  onSeeMore?: () => void
 }
 
 // Fixed-width columns (via grid-auto-flow: column) let the row scroll
@@ -16,14 +18,17 @@ interface CategoryRowProps {
 // the same w-full-fills-its-track pattern used everywhere else, so no
 // special-casing needed in FocusableCard itself.
 //
-// Generous padding here is load-bearing, not cosmetic: a focused card scales
-// up via transform (see FocusableCard), and overflow-x-hidden forces the
-// vertical axis to clip too (per spec, an axis set to non-visible forces the
-// other to "auto") — without room reserved on every side, that growth gets
-// cut off by this container's own edges.
+// Two separate things have to be accounted for here, not just one:
+// - Padding: overflow-x-hidden forces the vertical axis to clip too (per
+//   spec, an axis set to non-visible forces the other to "auto") — without
+//   room reserved on every side, a focused card's growth gets cut off by
+//   this container's own edges.
+// - Gap: transform: scale() doesn't reserve extra layout space, so a focused
+//   card grows past its own column and can overlap the *next* card — the gap
+//   has to be wide enough to absorb that growth (plus the glow) on its own.
 const ROW_CLASSES = {
-  landscape: 'grid auto-cols-[260px] grid-flow-col gap-5 overflow-x-hidden px-3 py-4',
-  portrait: 'grid auto-cols-[180px] grid-flow-col gap-5 overflow-x-hidden px-3 py-4'
+  landscape: 'grid auto-cols-[260px] grid-flow-col gap-8 overflow-x-hidden px-4 py-5',
+  portrait: 'grid auto-cols-[180px] grid-flow-col gap-8 overflow-x-hidden px-4 py-5'
 }
 
 export function CategoryRow({
@@ -32,7 +37,8 @@ export function CategoryRow({
   focused,
   focusedIndex,
   aspect = 'landscape',
-  onSelect
+  onSelect,
+  onSeeMore
 }: CategoryRowProps): JSX.Element {
   const cardRefs = useRef<Array<HTMLDivElement | null>>([])
 
@@ -69,7 +75,7 @@ export function CategoryRow({
       <div className={ROW_CLASSES[aspect]}>
         {items.length === 0 && <span className="text-sm text-muted">Nothing here yet</span>}
         {items.map((item, i) => (
-          <div key={item.id} ref={(el) => (cardRefs.current[i] = el)}>
+          <div key={item.id} ref={(el) => (cardRefs.current[i] = el)} className="scroll-m-8">
             <FocusableCard
               item={item}
               aspect={aspect}
@@ -78,6 +84,19 @@ export function CategoryRow({
             />
           </div>
         ))}
+        {onSeeMore && items.length > 0 && (
+          <div
+            ref={(el) => (cardRefs.current[items.length] = el)}
+            onClick={onSeeMore}
+            className={`scroll-m-8 flex w-full ${ASPECT_CLASSES[aspect]} shrink-0 cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed transition-colors ${
+              focused && focusedIndex === items.length
+                ? 'shadow-focus border-accent text-accent'
+                : 'border-white/10 text-muted'
+            }`}
+          >
+            <span className="text-sm font-semibold">See All →</span>
+          </div>
+        )}
       </div>
     </motion.section>
   )

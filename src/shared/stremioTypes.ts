@@ -34,4 +34,35 @@ export interface AddonSummary {
   url: string
   /** e.g. ["stream"], ["catalog", "meta"], ["subtitles"] — from the addon's own manifest. */
   resources: string[]
+  /** Movie/series catalogs this addon declares, if any — lets us pull rows from
+   * the user's own addons instead of only Cinemeta's defaults. */
+  catalogs?: Array<{ type: CatalogType; id: string; name: string }>
+}
+
+/** One addon-sourced catalog, ready to render as a row. */
+export interface AddonCatalogRow {
+  key: string
+  label: string
+  items: CatalogItem[]
+}
+
+export interface EpisodeItem {
+  /** Full Stremio video id, e.g. "tt1520211:1:4" — what getStreams/getTracks expect. */
+  id: string
+  season: number
+  episode: number
+  name: string
+  overview: string | null
+  thumbnail: string | null
+  released: string | null
+}
+
+export interface SeriesMeta {
+  released: string | null
+  episodes: EpisodeItem[]
+}
+
+/** Season/episode number order — season 0 ("Specials") sorts last, not first. */
+export function seasonSortKey(season: number): number {
+  return season === 0 ? Number.POSITIVE_INFINITY : season
 }

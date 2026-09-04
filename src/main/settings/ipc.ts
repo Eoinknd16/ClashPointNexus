@@ -1,10 +1,16 @@
 import { ipcMain } from 'electron'
-import type { SteamSettings, StremioLoginResult, StremioSettings } from '@shared/settingsTypes'
+import type {
+  SteamSettings,
+  StremioImportResult,
+  StremioLoginResult,
+  StremioSettings
+} from '@shared/settingsTypes'
 import type { AddonSummary } from '@shared/stremioTypes'
 import type { ThemeDefinition } from '@shared/themeTypes'
 import { loadSteamConfig, saveSteamConfig } from '../steam/config'
 import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../stremio/account'
 import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
+import { importStremioHistory } from '../stremio/importHistory'
 import { loadCustomThemes } from './themes'
 
 export function registerSettingsIpc(): void {
@@ -33,13 +39,16 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('settings:addStremioAddon', async (_event, url: string): Promise<AddonSummary[]> => {
     const config = loadStremioConfig()
-    let info: { name: string; resources: string[] }
+    let info: { name: string; resources: string[]; catalogs: NonNullable<AddonSummary['catalogs']> }
     try {
       info = await fetchAddonManifestInfo(url)
     } catch {
-      info = { name: new URL(url).host, resources: ['stream'] }
+      info = { name: new URL(url).host, resources: ['stream'], catalogs: [] }
     }
-    const addons = [...config.addons, { name: info.name, url, resources: info.resources }]
+    const addons = [
+      ...config.addons,
+      { name: info.name, url, resources: info.resources, catalogs: info.catalogs }
+    ]
     saveStremioConfig({ ...config, addons })
     return addons
   })
@@ -64,4 +73,24 @@ export function registerSettingsIpc(): void {
       }
     }
   )
+
+  ipcMain.handle('settings:resyncStremioAddons', async (): Promise<StremioLoginResult> => {
+    const config = loadStremioConfig()
+    if (!config.authKey) {
+      return { success: false, error: 'Not logged in', addonsSynced: 0 }
+    }
+    try {
+      const addons = await fetchAccountAddons(config.authKey)
+      saveStremioConfig({ ...config, addons })
+      return { success: true, error: null, addonsSynced: addons.length }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        addonsSynced: 0
+      }
+    }
+  })
+
+  ipcMain.handle('settings:importStremioHistory', (): Promise<StremioImportResult> => importStremioHistory())
 }
