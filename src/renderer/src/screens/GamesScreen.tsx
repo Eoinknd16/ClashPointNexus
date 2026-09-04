@@ -65,7 +65,17 @@ export function GamesScreen(): JSX.Element {
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
   const goHome = useNavigationStore((s) => s.goHome)
+  const consumePendingContinue = useNavigationStore((s) => s.consumePendingContinue)
   const cardRefs = useRef<Array<HTMLDivElement | null>>([])
+
+  // Home screen's "Continue Playing" card deep-links here — unlike TV (which
+  // just lands on the detail panel), a game launch is low-stakes enough to
+  // fire immediately, matching how clicking any game card already behaves.
+  useEffect(() => {
+    const pending = consumePendingContinue()
+    if (pending?.kind === 'game') launchOrInstall(pending.game, setMessage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (zone !== 'grid') return

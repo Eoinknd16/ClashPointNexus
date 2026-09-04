@@ -1,9 +1,11 @@
 import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { registerFilesystemIpc } from './filesystem/ipc'
+import { registerHomeIpc } from './home/ipc'
 import { registerLibraryIpc } from './library/ipc'
 import { registerPlayerIpc } from './player/ipc'
 import { startTranscodeProxy, stopTranscodeProxy } from './player/transcodeProxy'
+import { registerPowerIpc } from './power/ipc'
 import { registerProgressIpc } from './progress/ipc'
 import { registerSettingsIpc } from './settings/ipc'
 import { registerSteamIpc } from './steam/ipc'
@@ -11,6 +13,7 @@ import { registerStremioIpc } from './stremio/ipc'
 import { stopStremioServer } from './stremio/server'
 import { registerSubtitlesIpc } from './subtitles/ipc'
 import { initAutoUpdater, registerUpdaterIpc } from './updater'
+import { registerWeatherIpc } from './weather/ipc'
 
 const isDev = !app.isPackaged
 
@@ -65,6 +68,9 @@ app.whenReady().then(() => {
   registerLibraryIpc()
   registerUpdaterIpc()
   registerFilesystemIpc()
+  registerPowerIpc()
+  registerWeatherIpc()
+  registerHomeIpc()
   startTranscodeProxy()
   createWindow()
 

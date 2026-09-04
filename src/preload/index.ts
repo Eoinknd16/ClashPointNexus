@@ -63,6 +63,17 @@ const api: LauncherApi = {
     getParentPath: (dirPath) => ipcRenderer.invoke('filesystem:getParentPath', dirPath),
     getHomeDirectory: () => ipcRenderer.invoke('filesystem:getHomeDirectory'),
     openPath: (targetPath) => ipcRenderer.invoke('filesystem:openPath', targetPath)
+  },
+  power: {
+    sleep: () => ipcRenderer.invoke('power:sleep'),
+    restart: () => ipcRenderer.invoke('power:restart'),
+    shutdown: () => ipcRenderer.invoke('power:shutdown')
+  },
+  weather: {
+    get: () => ipcRenderer.invoke('weather:get')
+  },
+  home: {
+    getContinueSuggestion: () => ipcRenderer.invoke('home:getContinueSuggestion')
   }
 }
 

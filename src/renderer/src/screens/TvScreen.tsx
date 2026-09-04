@@ -198,6 +198,7 @@ export function TvScreen(): JSX.Element {
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
   const goHome = useNavigationStore((s) => s.goHome)
+  const consumePendingContinue = useNavigationStore((s) => s.consumePendingContinue)
   const sourceRefs = useRef<Array<HTMLDivElement | null>>([])
   const episodeRefs = useRef<Array<HTMLDivElement | null>>([])
   const expandedRefs = useRef<Array<HTMLDivElement | null>>([])
@@ -380,6 +381,22 @@ export function TvScreen(): JSX.Element {
       cancelled = true
     }
   }, [setMessage])
+
+  // Home screen's "Continue Watching" card deep-links here — lands on the
+  // detail panel (with an already-correct Resume label) rather than
+  // auto-playing immediately, since starting video playback the instant you
+  // tap a home-screen card is a lot more disruptive to get wrong than a game
+  // launch is.
+  useEffect(() => {
+    const pending = consumePendingContinue()
+    if (pending?.kind === 'tv') {
+      setTab(pending.tab)
+      setDetailReturnZone('rows')
+      setSelectedItem(pending.item)
+      setZone('detail')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // One row per genre, same as the real Stremio board — fetched lazily per tab
   // (not all ~20 up front for both types) and only once each, ever, per session.

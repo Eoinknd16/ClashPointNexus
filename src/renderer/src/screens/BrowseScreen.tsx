@@ -98,12 +98,26 @@ export function BrowseScreen(): JSX.Element {
   useEffect(() => {
     if (zone !== 'page') return
     let rafId: number
+    // Some controllers (esp. over Bluetooth, per the non-standard-mapping
+    // issue seen elsewhere in this app) don't actually put the right stick at
+    // axes[2]/[3], or report a resting value that isn't 0 — either way the
+    // symptom is the cursor drifting steadily in one direction with the stick
+    // untouched. Sampling the resting value once per zone-entry and treating
+    // it as the zero point cancels that out regardless of the exact cause.
+    let baselineX: number | null = null
+    let baselineY: number | null = null
 
     const tick = (): void => {
       const pad = navigator.getGamepads().find((p) => p !== null)
       if (pad) {
-        const stickX = pad.axes[2] ?? 0
-        const stickY = pad.axes[3] ?? 0
+        const rawX = pad.axes[2] ?? 0
+        const rawY = pad.axes[3] ?? 0
+        if (baselineX === null || baselineY === null) {
+          baselineX = rawX
+          baselineY = rawY
+        }
+        const stickX = rawX - baselineX
+        const stickY = rawY - baselineY
         const magnitude = Math.max(Math.abs(stickX), Math.abs(stickY))
         if (magnitude > CURSOR_DEADZONE) {
           const rect = viewportRef.current?.getBoundingClientRect()

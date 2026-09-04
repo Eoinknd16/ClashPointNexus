@@ -1,4 +1,5 @@
 import type { DirectoryListing, FileEntry } from './filesystemTypes'
+import type { ContinueSuggestion } from './homeTypes'
 import type { LibraryEntry } from './libraryTypes'
 import type { MediaInfo } from './playerConstants'
 import type { WatchProgress } from './progressTypes'
@@ -19,6 +20,7 @@ import type {
 } from './stremioTypes'
 import type { ThemeDefinition } from './themeTypes'
 import type { UpdateStatus } from './updateTypes'
+import type { WeatherData } from './weatherTypes'
 
 export interface SubtitleTrack {
   id: string
@@ -83,5 +85,16 @@ export interface LauncherApi {
     getParentPath: (dirPath: string) => Promise<string | null>
     getHomeDirectory: () => Promise<string>
     openPath: (targetPath: string) => Promise<string | null>
+  }
+  power: {
+    sleep: () => Promise<void>
+    restart: () => Promise<void>
+    shutdown: () => Promise<void>
+  }
+  weather: {
+    get: () => Promise<WeatherData | null>
+  }
+  home: {
+    getContinueSuggestion: () => Promise<ContinueSuggestion | null>
   }
 }
