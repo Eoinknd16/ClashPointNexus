@@ -1,5 +1,6 @@
 import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
+import { registerFilesystemIpc } from './filesystem/ipc'
 import { registerLibraryIpc } from './library/ipc'
 import { registerPlayerIpc } from './player/ipc'
 import { startTranscodeProxy, stopTranscodeProxy } from './player/transcodeProxy'
@@ -63,6 +64,7 @@ app.whenReady().then(() => {
   registerProgressIpc()
   registerLibraryIpc()
   registerUpdaterIpc()
+  registerFilesystemIpc()
   startTranscodeProxy()
   createWindow()
 

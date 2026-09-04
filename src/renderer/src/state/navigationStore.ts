@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ScreenId = 'home' | 'games' | 'tv' | 'browse' | 'settings'
+export type ScreenId = 'home' | 'games' | 'tv' | 'browse' | 'files' | 'settings'
 
 interface NavigationState {
   screen: ScreenId

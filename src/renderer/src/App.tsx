@@ -9,6 +9,7 @@ import { GamesScreen } from './screens/GamesScreen'
 import { TvScreen } from './screens/TvScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { BrowseScreen } from './screens/BrowseScreen'
+import { FileManagerScreen } from './screens/FileManagerScreen'
 
 function renderScreen(screen: ScreenId): JSX.Element {
   switch (screen) {
@@ -20,6 +21,8 @@ function renderScreen(screen: ScreenId): JSX.Element {
       return <SettingsScreen />
     case 'browse':
       return <BrowseScreen />
+    case 'files':
+      return <FileManagerScreen />
     default:
       return <HomeMenu />
   }

@@ -9,6 +9,7 @@ const TILES: Array<{ id: ScreenId; title: string; subtitle: string }> = [
   { id: 'games', title: 'Games', subtitle: 'Steam library' },
   { id: 'tv', title: 'TV', subtitle: 'YouTube, Stremio & streaming' },
   { id: 'browse', title: 'Browse', subtitle: 'Web browser' },
+  { id: 'files', title: 'Files', subtitle: 'This PC' },
   { id: 'settings', title: 'Settings', subtitle: 'Accounts & addons' }
 ]
 
@@ -40,7 +41,7 @@ export function HomeMenu(): JSX.Element {
         </h1>
         <Clock />
       </header>
-      <div className="grid flex-1 grid-cols-4 items-center gap-10">
+      <div className="grid flex-1 grid-cols-5 items-center gap-10">
         {TILES.map((tile, i) => (
           <motion.div
             key={tile.id}

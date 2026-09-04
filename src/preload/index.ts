@@ -56,6 +56,13 @@ const api: LauncherApi = {
       ipcRenderer.on('updater:status', listener)
       return () => ipcRenderer.removeListener('updater:status', listener)
     }
+  },
+  filesystem: {
+    listDrives: () => ipcRenderer.invoke('filesystem:listDrives'),
+    listDirectory: (dirPath) => ipcRenderer.invoke('filesystem:listDirectory', dirPath),
+    getParentPath: (dirPath) => ipcRenderer.invoke('filesystem:getParentPath', dirPath),
+    getHomeDirectory: () => ipcRenderer.invoke('filesystem:getHomeDirectory'),
+    openPath: (targetPath) => ipcRenderer.invoke('filesystem:openPath', targetPath)
   }
 }
 

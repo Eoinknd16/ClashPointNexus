@@ -1,3 +1,4 @@
+import type { DirectoryListing, FileEntry } from './filesystemTypes'
 import type { LibraryEntry } from './libraryTypes'
 import type { MediaInfo } from './playerConstants'
 import type { WatchProgress } from './progressTypes'
@@ -75,5 +76,12 @@ export interface LauncherApi {
     quitAndInstall: () => Promise<void>
     /** Returns an unsubscribe function. */
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
+  }
+  filesystem: {
+    listDrives: () => Promise<FileEntry[]>
+    listDirectory: (dirPath: string) => Promise<DirectoryListing>
+    getParentPath: (dirPath: string) => Promise<string | null>
+    getHomeDirectory: () => Promise<string>
+    openPath: (targetPath: string) => Promise<string | null>
   }
 }
