@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Default values (Midnight theme) so the page isn't unstyled before the
+   theme store's init() runs and applies whatever theme was actually chosen. */
+:root {
+  --color-bg: 10 10 16;
+  --color-surface: 21 21 31;
+  --color-surface-hi: 30 30 44;
+  --color-surface-hover: 38 38 58;
+  --color-accent: 91 140 255;
+  --color-accent-2: 160 107 255;
+  --color-muted: 143 143 163;
+  --gradient-app-glow: radial-gradient(ellipse 80% 60% at 15% -10%, rgba(91, 140, 255, 0.16), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 100% 10%, rgba(160, 107, 255, 0.12), transparent 60%);
+  --gradient-accent: linear-gradient(135deg, rgb(91, 140, 255) 0%, rgb(160, 107, 255) 100%);
+  --shadow-focus: 0 0 0 3px rgba(91, 140, 255, 0.6), 0 0 40px rgba(91, 140, 255, 0.25),
+    0 20px 40px rgba(0, 0, 0, 0.5);
+  --shadow-panel: -24px 0 60px rgba(0, 0, 0, 0.5);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  user-select: none;
+}
+
+body {
+  /* Referencing the vars directly (not via theme()) — theme('colors.bg')
+     would emit the literal, un-substituted "<alpha-value>" placeholder here,
+     which only gets resolved inside compiled Tailwind utility classes. */
+  background-color: rgb(var(--color-bg));
+  background-image: var(--gradient-app-glow);
+  background-attachment: fixed;
+  color: white;
+  font-family: theme('fontFamily.sans');
+  transition: background-color 0.3s ease;
+}
+
+/* This is a controller-driven app — focus rings are drawn manually per
+   focused card, so suppress the browser's own outline everywhere. */
+* {
+  outline: none;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}

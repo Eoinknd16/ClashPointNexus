@@ -1,0 +1,30 @@
+name: Release
+
+# Push a tag like v0.2.0 to build a Windows installer and publish it as a
+# GitHub Release — electron-updater (running in every installed copy of the
+# app) checks that release feed on startup and self-updates automatically.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,12 @@
+node_modules
+out
+dist
+dist-electron
+release
+.vite
+*.log
+*.tsbuildinfo
+.DS_Store
+.claude/
+steam.config.json
+stremio.config.json

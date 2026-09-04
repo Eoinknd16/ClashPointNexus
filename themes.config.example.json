@@ -1,0 +1,19 @@
+[
+  {
+    "id": "my-custom-theme",
+    "name": "My Custom Theme",
+    "vars": {
+      "--color-bg": "10 10 16",
+      "--color-surface": "21 21 31",
+      "--color-surface-hi": "30 30 44",
+      "--color-surface-hover": "38 38 58",
+      "--color-accent": "91 140 255",
+      "--color-accent-2": "160 107 255",
+      "--color-muted": "143 143 163",
+      "--gradient-app-glow": "radial-gradient(ellipse 80% 60% at 15% -10%, rgba(91,140,255,0.16), transparent 60%)",
+      "--gradient-accent": "linear-gradient(135deg, rgb(91,140,255) 0%, rgb(160,107,255) 100%)",
+      "--shadow-focus": "0 0 0 3px rgba(91,140,255,0.6), 0 0 40px rgba(91,140,255,0.25), 0 20px 40px rgba(0,0,0,0.5)",
+      "--shadow-panel": "-24px 0 60px rgba(0,0,0,0.5)"
+    }
+  }
+]
