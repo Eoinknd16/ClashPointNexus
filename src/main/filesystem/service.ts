@@ -1,6 +1,6 @@
 import { app, shell } from 'electron'
-import { existsSync, readdirSync, statSync } from 'fs'
-import { dirname, join, parse } from 'path'
+import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'fs'
+import { basename, dirname, join, parse } from 'path'
 import type { DirectoryListing, FileEntry } from '@shared/filesystemTypes'
 
 /** No wmic dependency (deprecated on newer Windows) — just probes each letter directly. */
@@ -64,4 +64,65 @@ export function getParentPath(dirPath: string): string | null {
 export async function openPath(targetPath: string): Promise<string | null> {
   const result = await shell.openPath(targetPath)
   return result || null
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+export function renameEntry(targetPath: string, newName: string): string | null {
+  try {
+    renameSync(targetPath, join(dirname(targetPath), newName))
+    return null
+  } catch (error) {
+    return errorMessage(error)
+  }
+}
+
+/** Recycle Bin, not a permanent delete — reversible from Windows if a bound
+ * button fires it by mistake, unlike fs.rmSync. */
+export async function deleteEntry(targetPath: string): Promise<string | null> {
+  try {
+    await shell.trashItem(targetPath)
+    return null
+  } catch (error) {
+    return errorMessage(error)
+  }
+}
+
+export function createFolder(parentDir: string, name: string): string | null {
+  try {
+    mkdirSync(join(parentDir, name))
+    return null
+  } catch (error) {
+    return errorMessage(error)
+  }
+}
+
+export function copyEntry(sourcePath: string, destDir: string): string | null {
+  try {
+    cpSync(sourcePath, join(destDir, basename(sourcePath)), { recursive: true, errorOnExist: true })
+    return null
+  } catch (error) {
+    return errorMessage(error)
+  }
+}
+
+/** Cut/paste. renameSync is instant but fails across drives (EXDEV) — falls
+ * back to copy-then-delete-original in that case, still one atomic-feeling op
+ * from the UI's perspective. */
+export function moveEntry(sourcePath: string, destDir: string): string | null {
+  const destPath = join(destDir, basename(sourcePath))
+  try {
+    renameSync(sourcePath, destPath)
+    return null
+  } catch {
+    try {
+      cpSync(sourcePath, destPath, { recursive: true, errorOnExist: true })
+      rmSync(sourcePath, { recursive: true })
+      return null
+    } catch (error) {
+      return errorMessage(error)
+    }
+  }
 }

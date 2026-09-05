@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { FocusableCard, type CardItem } from '../components/FocusableCard'
+import { CardArt, FocusableCard, type CardItem } from '../components/FocusableCard'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
@@ -16,8 +16,12 @@ type Filter = (typeof FILTERS)[number]
 // clamped to the real filters, so a quick bumper tap can't pop the keyboard).
 type Zone = 'filters' | 'grid' | 'detail' | 'keyboard'
 
-function steamHeaderUrl(appId: number): string {
-  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`
+// Steam's CDN has several differently-named assets per app, and not every
+// one exists for every appId (older/delisted/unusual titles especially) —
+// tried in this order as a fallback chain, not just the first one.
+function steamImageCandidates(appId: number): string[] {
+  const base = `https://cdn.akamai.steamstatic.com/steam/apps/${appId}`
+  return [`${base}/header.jpg`, `${base}/capsule_616x353.jpg`, `${base}/library_hero.jpg`]
 }
 
 function formatPlaytime(minutes: number): string {
@@ -32,11 +36,15 @@ function formatLastPlayed(lastPlayed: number): string {
 }
 
 function toCardItem(game: GameEntry): CardItem {
+  const steamCandidates = game.imageAppId ? steamImageCandidates(game.imageAppId) : []
   return {
     id: game.id,
     title: game.name,
     subtitle: game.installed ? formatPlaytime(game.playtimeForeverMinutes) : 'Not installed',
-    imageUrl: game.imageDataUrl ?? (game.imageAppId ? steamHeaderUrl(game.imageAppId) : undefined)
+    imageUrl: game.imageDataUrl ?? steamCandidates[0],
+    imageFallbacks: game.imageDataUrl ? undefined : steamCandidates.slice(1),
+    icon: '🎮',
+    gradientDirection: 'bg-gradient-to-br'
   }
 }
 
@@ -377,9 +385,7 @@ export function GamesScreen(): JSX.Element {
             className="shadow-panel flex w-[420px] shrink-0 flex-col gap-6 bg-surface p-8"
           >
             <div className="aspect-[2/1] w-full overflow-hidden rounded-xl bg-surface-hi">
-              {selectedCard.imageUrl && (
-                <img src={selectedCard.imageUrl} alt="" className="h-full w-full object-cover" />
-              )}
+              <CardArt item={selectedCard} className="h-full w-full" />
             </div>
 
             <div className="flex flex-col gap-1">

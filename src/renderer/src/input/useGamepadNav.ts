@@ -35,6 +35,8 @@ const BUTTON_R1 = 5 // nextStream elsewhere, Submit while typing
 const BUTTON_L2 = 6 // volume down
 const BUTTON_R2 = 7 // volumeUp elsewhere, Shift while typing
 const BUTTON_SHARE = 8 // skip to next episode
+const BUTTON_L3 = 10 // left stick click — unused elsewhere, so it's the context-menu button
+const BUTTON_R3 = 11 // right stick click — unused elsewhere, opens the global Quick Menu
 const BUTTON_DPAD_UP = 12
 const BUTTON_DPAD_DOWN = 13
 const BUTTON_DPAD_LEFT = 14
@@ -47,6 +49,8 @@ const EDGE_BUTTONS: Array<[number, NavAction]> = [
   [BUTTON_SQUARE, 'toggleSubtitles'],
   [BUTTON_TRIANGLE, 'search'],
   [BUTTON_SHARE, 'skipNext'],
+  [BUTTON_L3, 'contextMenu'],
+  [BUTTON_R3, 'quickMenu'],
   [BUTTON_L1, 'prevStream'],
   [BUTTON_R1, 'nextStream'],
   [BUTTON_L2, 'volumeDown'],

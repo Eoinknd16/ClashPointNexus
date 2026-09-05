@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CategoryRow } from '../components/CategoryRow'
 import type { CardItem } from '../components/FocusableCard'
-import { FocusableCard } from '../components/FocusableCard'
+import { CardArt, FocusableCard } from '../components/FocusableCard'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
@@ -78,7 +78,9 @@ function toCardItem(item: CatalogItem): CardItem {
     id: item.id,
     title: item.name,
     subtitle: item.year ?? undefined,
-    imageUrl: item.poster ?? undefined
+    imageUrl: item.poster ?? undefined,
+    icon: item.type === 'movie' ? '🎬' : '📺',
+    gradientDirection: 'bg-gradient-to-br'
   }
 }
 
@@ -1564,9 +1566,10 @@ export function TvScreen(): JSX.Element {
                       : ''}
                     E{ep.episode}
                   </span>
-                  {ep.thumbnail && (
-                    <img src={ep.thumbnail} alt="" className="h-16 w-28 shrink-0 rounded-lg object-cover" />
-                  )}
+                  <CardArt
+                    item={{ id: ep.id, title: ep.name, imageUrl: ep.thumbnail ?? undefined, icon: '🎬' }}
+                    className="h-16 w-28 shrink-0 rounded-lg"
+                  />
                   <div className="flex flex-1 flex-col overflow-hidden">
                     <span className="truncate font-medium">{ep.name}</span>
                     {ep.overview && <span className="line-clamp-2 text-xs text-muted">{ep.overview}</span>}
@@ -1653,9 +1656,7 @@ export function TvScreen(): JSX.Element {
             className="shadow-panel flex w-[420px] shrink-0 flex-col gap-4 overflow-y-auto bg-surface p-8"
           >
             <div className="aspect-[2/3] w-full overflow-hidden rounded-xl bg-surface-hi">
-              {selectedCard.imageUrl && (
-                <img src={selectedCard.imageUrl} alt="" className="h-full w-full object-cover" />
-              )}
+              <CardArt item={selectedCard} className="h-full w-full" />
             </div>
 
             <div className="flex flex-col gap-1">

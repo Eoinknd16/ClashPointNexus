@@ -6,14 +6,39 @@ import { useNavListener } from '../input/useNavListener'
 import { useNavigationStore, type ScreenId } from '../state/navigationStore'
 import type { ContinueSuggestion } from '@shared/homeTypes'
 import type { WeatherData } from '@shared/weatherTypes'
+import type { SystemStats } from '@shared/systemTypes'
 
-const TILES: Array<{ id: ScreenId; title: string; subtitle: string }> = [
-  { id: 'games', title: 'Games', subtitle: 'Steam library' },
-  { id: 'tv', title: 'TV', subtitle: 'YouTube, Stremio & streaming' },
-  { id: 'browse', title: 'Browse', subtitle: 'Web browser' },
-  { id: 'files', title: 'Files', subtitle: 'This PC' },
-  { id: 'settings', title: 'Settings', subtitle: 'Accounts & addons' }
+const TILES: Array<{
+  id: ScreenId
+  title: string
+  subtitle: string
+  icon: string
+  gradientDirection: string
+}> = [
+  { id: 'games', title: 'Games', subtitle: 'Steam library', icon: '🎮', gradientDirection: 'bg-gradient-to-br' },
+  {
+    id: 'tv',
+    title: 'TV',
+    subtitle: 'YouTube, Stremio & streaming',
+    icon: '🎬',
+    gradientDirection: 'bg-gradient-to-bl'
+  },
+  { id: 'browse', title: 'Browse', subtitle: 'Web browser', icon: '🌐', gradientDirection: 'bg-gradient-to-tr' },
+  { id: 'files', title: 'Files', subtitle: 'This PC', icon: '🗂️', gradientDirection: 'bg-gradient-to-tl' },
+  {
+    id: 'settings',
+    title: 'Settings',
+    subtitle: 'Accounts & addons',
+    icon: '⚙️',
+    gradientDirection: 'bg-gradient-to-t'
+  }
 ]
+
+interface LibraryStats {
+  movies: number
+  series: number
+  games: number
+}
 
 type PowerAction = 'sleep' | 'restart' | 'shutdown'
 const POWER_OPTIONS: Array<{ id: PowerAction; label: string }> = [
@@ -48,11 +73,21 @@ export function HomeMenu(): JSX.Element {
   const [pendingPowerAction, setPendingPowerAction] = useState<PowerAction | null>(null)
   const [continueSuggestion, setContinueSuggestion] = useState<ContinueSuggestion | null>(null)
   const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [libraryStats, setLibraryStats] = useState<LibraryStats | null>(null)
+  const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const goTo = useNavigationStore((s) => s.goTo)
 
   useEffect(() => {
     window.api.home.getContinueSuggestion().then(setContinueSuggestion)
     window.api.weather.get().then(setWeather)
+    window.api.system.getStats().then(setSystemStats)
+    Promise.all([window.api.library.list(), window.api.steam.getLibrary()]).then(([library, steam]) => {
+      setLibraryStats({
+        movies: library.filter((e) => e.type === 'movie').length,
+        series: library.filter((e) => e.type === 'series').length,
+        games: steam.games.length
+      })
+    })
   }, [])
 
   function activateContinue(suggestion: ContinueSuggestion): void {
@@ -178,38 +213,57 @@ export function HomeMenu(): JSX.Element {
         <Clock />
       </header>
 
-      {(weather || continueSuggestion) && (
-        <div className="flex gap-4">
-          {weather && (
-            <div className="flex shrink-0 items-center gap-3 rounded-xl bg-surface px-5 py-3">
-              <span className="text-2xl">{weatherEmoji(weather.weatherCode)}</span>
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
-                {weather.city && <span className="text-xs text-muted">{weather.city}</span>}
-              </div>
-            </div>
-          )}
+      {(weather || continueSuggestion || libraryStats || systemStats) && (
+        <div className="flex flex-wrap gap-4">
           {continueSuggestion && (
             <div
               onClick={() => {
                 setZone('top')
                 activateContinue(continueSuggestion)
               }}
-              className={`flex flex-1 cursor-pointer items-center gap-4 rounded-xl px-5 py-3 transition-colors ${
+              className={`flex w-96 max-w-full cursor-pointer items-center gap-4 rounded-xl px-5 py-3 transition-colors ${
                 zone === 'top' ? 'bg-surface-hi shadow-focus' : 'bg-surface'
               }`}
             >
-              {continueSuggestion.poster && (
+              {continueSuggestion.poster ? (
                 <img
                   src={continueSuggestion.poster}
                   alt=""
                   className="h-12 w-12 shrink-0 rounded-lg object-cover"
                 />
+              ) : (
+                <span className="text-2xl">▶️</span>
               )}
               <div className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-semibold">{continueSuggestion.title}</span>
                 <span className="truncate text-xs text-accent">{continueSuggestion.subtitle}</span>
               </div>
+            </div>
+          )}
+          {weather && (
+            <div className="flex w-48 shrink-0 items-center gap-3 rounded-xl bg-surface px-5 py-3">
+              <span className="text-2xl">{weatherEmoji(weather.weatherCode)}</span>
+              <div className="flex min-w-0 flex-col">
+                <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
+                {weather.city && <span className="truncate text-xs text-muted">{weather.city}</span>}
+              </div>
+            </div>
+          )}
+          {libraryStats && (
+            <div className="flex w-56 shrink-0 flex-col justify-center gap-1 rounded-xl bg-surface px-5 py-3">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">Library</span>
+              <span className="text-sm">
+                {libraryStats.movies} movies · {libraryStats.series} shows · {libraryStats.games} games
+              </span>
+            </div>
+          )}
+          {systemStats && (
+            <div className="flex w-56 shrink-0 flex-col justify-center gap-1 rounded-xl bg-surface px-5 py-3">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">System</span>
+              <span className="text-sm">
+                {systemStats.cpuLoadPercent !== null ? `CPU ${systemStats.cpuLoadPercent}%` : 'CPU —'} · RAM{' '}
+                {systemStats.usedMemPercent}%
+              </span>
             </div>
           )}
         </div>
@@ -225,7 +279,13 @@ export function HomeMenu(): JSX.Element {
           >
             <FocusableCard
               size="large"
-              item={{ id: tile.id, title: tile.title, subtitle: tile.subtitle }}
+              item={{
+                id: tile.id,
+                title: tile.title,
+                subtitle: tile.subtitle,
+                icon: tile.icon,
+                gradientDirection: tile.gradientDirection
+              }}
               focused={zone === 'tiles' && tileIndex === i}
               onClick={() => {
                 setZone('tiles')

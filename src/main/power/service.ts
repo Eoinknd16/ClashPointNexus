@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { app } from 'electron'
 
 /** Windows-only, matching the rest of this app (NSIS installer, Steam registry
  * lookups, etc.) — shutdown/restart are built-in commands; sleep has no direct
@@ -13,4 +14,9 @@ export function restart(): void {
 
 export function shutdown(): void {
   execFile('shutdown', ['/s', '/t', '0'])
+}
+
+/** Closes ClashPoint Nexus itself — falling back to the desktop, not the OS. */
+export function quitApp(): void {
+  app.quit()
 }

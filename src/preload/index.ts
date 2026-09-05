@@ -62,18 +62,27 @@ const api: LauncherApi = {
     listDirectory: (dirPath) => ipcRenderer.invoke('filesystem:listDirectory', dirPath),
     getParentPath: (dirPath) => ipcRenderer.invoke('filesystem:getParentPath', dirPath),
     getHomeDirectory: () => ipcRenderer.invoke('filesystem:getHomeDirectory'),
-    openPath: (targetPath) => ipcRenderer.invoke('filesystem:openPath', targetPath)
+    openPath: (targetPath) => ipcRenderer.invoke('filesystem:openPath', targetPath),
+    rename: (targetPath, newName) => ipcRenderer.invoke('filesystem:rename', targetPath, newName),
+    delete: (targetPath) => ipcRenderer.invoke('filesystem:delete', targetPath),
+    createFolder: (parentDir, name) => ipcRenderer.invoke('filesystem:createFolder', parentDir, name),
+    copy: (sourcePath, destDir) => ipcRenderer.invoke('filesystem:copy', sourcePath, destDir),
+    move: (sourcePath, destDir) => ipcRenderer.invoke('filesystem:move', sourcePath, destDir)
   },
   power: {
     sleep: () => ipcRenderer.invoke('power:sleep'),
     restart: () => ipcRenderer.invoke('power:restart'),
-    shutdown: () => ipcRenderer.invoke('power:shutdown')
+    shutdown: () => ipcRenderer.invoke('power:shutdown'),
+    quitApp: () => ipcRenderer.invoke('power:quitApp')
   },
   weather: {
     get: () => ipcRenderer.invoke('weather:get')
   },
   home: {
     getContinueSuggestion: () => ipcRenderer.invoke('home:getContinueSuggestion')
+  },
+  system: {
+    getStats: () => ipcRenderer.invoke('system:getStats')
   }
 }
 

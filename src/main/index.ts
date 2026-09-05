@@ -12,6 +12,7 @@ import { registerSteamIpc } from './steam/ipc'
 import { registerStremioIpc } from './stremio/ipc'
 import { stopStremioServer } from './stremio/server'
 import { registerSubtitlesIpc } from './subtitles/ipc'
+import { registerSystemIpc } from './system/ipc'
 import { initAutoUpdater, registerUpdaterIpc } from './updater'
 import { registerWeatherIpc } from './weather/ipc'
 
@@ -71,6 +72,7 @@ app.whenReady().then(() => {
   registerPowerIpc()
   registerWeatherIpc()
   registerHomeIpc()
+  registerSystemIpc()
   startTranscodeProxy()
   createWindow()
 

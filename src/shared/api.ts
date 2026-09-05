@@ -10,6 +10,7 @@ import type {
   StremioSettings
 } from './settingsTypes'
 import type { GameLaunchTarget, SteamLibraryResult } from './steamTypes'
+import type { SystemStats } from './systemTypes'
 import type {
   AddonCatalogRow,
   AddonSummary,
@@ -85,16 +86,26 @@ export interface LauncherApi {
     getParentPath: (dirPath: string) => Promise<string | null>
     getHomeDirectory: () => Promise<string>
     openPath: (targetPath: string) => Promise<string | null>
+    /** All four resolve to an error message on failure, null on success. */
+    rename: (targetPath: string, newName: string) => Promise<string | null>
+    delete: (targetPath: string) => Promise<string | null>
+    createFolder: (parentDir: string, name: string) => Promise<string | null>
+    copy: (sourcePath: string, destDir: string) => Promise<string | null>
+    move: (sourcePath: string, destDir: string) => Promise<string | null>
   }
   power: {
     sleep: () => Promise<void>
     restart: () => Promise<void>
     shutdown: () => Promise<void>
+    quitApp: () => Promise<void>
   }
   weather: {
     get: () => Promise<WeatherData | null>
   }
   home: {
     getContinueSuggestion: () => Promise<ContinueSuggestion | null>
+  }
+  system: {
+    getStats: () => Promise<SystemStats>
   }
 }
