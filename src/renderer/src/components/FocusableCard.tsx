@@ -21,6 +21,7 @@ export interface CardItem {
    * the theme's own accent color, never a hardcoded one, so it still matches
    * whatever custom theme the user has picked. */
   gradientDirection?: string
+  favorite?: boolean
 }
 
 interface FocusableCardProps {
@@ -126,6 +127,9 @@ export function FocusableCard({
             {item.icon}
           </span>
         </div>
+      )}
+      {item.favorite && (
+        <span className="absolute right-3 top-3 z-10 text-lg leading-none drop-shadow">⭐</span>
       )}
       <div className="relative p-4">
         <span className={`block font-semibold leading-tight ${TITLE_SIZE_CLASSES[size]}`}>

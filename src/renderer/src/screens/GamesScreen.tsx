@@ -9,7 +9,7 @@ import { useNavigationStore } from '../state/navigationStore'
 import type { GameEntry } from '@shared/steamTypes'
 
 const COLUMNS = 5
-const FILTERS = ['installed', 'all'] as const
+const FILTERS = ['installed', 'all', 'favorites'] as const
 type Filter = (typeof FILTERS)[number]
 // filterIndex ranges 0..FILTERS.length inclusive — FILTERS.length itself is a
 // search bubble, reachable by d-pad but not by the bumpers (switchFilter stays
@@ -44,7 +44,8 @@ function toCardItem(game: GameEntry): CardItem {
     imageUrl: game.imageDataUrl ?? steamCandidates[0],
     imageFallbacks: game.imageDataUrl ? undefined : steamCandidates.slice(1),
     icon: '🎮',
-    gradientDirection: 'bg-gradient-to-br'
+    gradientDirection: 'bg-gradient-to-br',
+    favorite: game.favorite
   }
 }
 
@@ -123,9 +124,27 @@ export function GamesScreen(): JSX.Element {
     ? allGames.filter((g) => g.name.toLowerCase().includes(trimmedQuery))
     : filter === 'installed'
       ? allGames.filter((g) => g.installed)
-      : allGames
+      : filter === 'favorites'
+        ? allGames.filter((g) => g.favorite)
+        : allGames
   const games = [...baseGames].sort((a, b) => b.lastPlayed - a.lastPlayed)
   const cards = games.map(toCardItem)
+
+  // Optimistic — flips the local flag immediately (grid badge + detail panel
+  // both derive from allGames/selectedGame) and rolls back only if the IPC
+  // call itself fails, rather than waiting on a round-trip for something this
+  // low-stakes.
+  function toggleFavorite(game: GameEntry | null | undefined): void {
+    if (!game) return
+    const nextFavorite = !game.favorite
+    setAllGames((prev) => prev.map((g) => (g.id === game.id ? { ...g, favorite: nextFavorite } : g)))
+    setSelectedGame((prev) => (prev && prev.id === game.id ? { ...prev, favorite: nextFavorite } : prev))
+    window.api.steam.toggleFavorite(game.id).catch(() => {
+      setAllGames((prev) => prev.map((g) => (g.id === game.id ? { ...g, favorite: game.favorite } : g)))
+      setSelectedGame((prev) => (prev && prev.id === game.id ? { ...prev, favorite: game.favorite } : prev))
+      setMessage(`Couldn't save favorite for ${game.name}`)
+    })
+  }
 
   function switchFilter(direction: 1 | -1): void {
     const next = Math.max(0, Math.min(FILTERS.length - 1, filterIndex + direction))
@@ -207,6 +226,9 @@ export function GamesScreen(): JSX.Element {
         case 'confirm':
           if (selectedGame) launchOrInstall(selectedGame, setMessage)
           return
+        case 'toggleSubtitles':
+          toggleFavorite(selectedGame)
+          return
         case 'back':
         case 'menu':
           setSelectedGame(null)
@@ -286,6 +308,9 @@ export function GamesScreen(): JSX.Element {
       case 'nextStream':
         switchFilter(1)
         return
+      case 'toggleSubtitles':
+        toggleFavorite(games[gridIndex])
+        return
       case 'confirm': {
         const game = games[gridIndex]
         if (!game) return
@@ -326,7 +351,7 @@ export function GamesScreen(): JSX.Element {
                 filter === f && !searchQuery ? 'bg-accent text-white' : 'bg-surface text-muted'
               } ${zone === 'filters' && filterIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
             >
-              {f === 'installed' ? 'Installed' : 'All Games'}
+              {f === 'installed' ? 'Installed' : f === 'all' ? 'All Games' : '⭐ Favorites'}
             </div>
           ))}
           <div
@@ -354,7 +379,11 @@ export function GamesScreen(): JSX.Element {
         <div className="grid flex-1 auto-rows-min grid-cols-5 gap-10 overflow-y-auto p-5">
           {cards.length === 0 && (
             <span className="text-muted">
-              {trimmedQuery ? `No games matching "${searchQuery}"` : 'No games in this view yet.'}
+              {trimmedQuery
+                ? `No games matching "${searchQuery}"`
+                : filter === 'favorites'
+                  ? 'No favorites yet — Square on a game adds one.'
+                  : 'No games in this view yet.'}
             </span>
           )}
           {cards.map((card, i) => (
@@ -394,8 +423,19 @@ export function GamesScreen(): JSX.Element {
               <CardArt item={selectedCard} className="h-full w-full" />
             </div>
 
-            <div className="flex flex-col gap-1">
+            <div className="flex items-start justify-between gap-3">
               <h2 className="text-2xl font-bold leading-tight">{selectedGame.name}</h2>
+              <button
+                onClick={() => toggleFavorite(selectedGame)}
+                title={selectedGame.favorite ? 'Remove favorite' : 'Add favorite (Square)'}
+                className={`shrink-0 text-2xl transition-opacity ${
+                  selectedGame.favorite ? 'opacity-100' : 'opacity-30 hover:opacity-70'
+                }`}
+              >
+                ⭐
+              </button>
+            </div>
+            <div className="-mt-4 flex flex-col gap-1">
               <p className="text-muted">
                 {selectedGame.installed
                   ? formatPlaytime(selectedGame.playtimeForeverMinutes)

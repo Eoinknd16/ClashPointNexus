@@ -34,6 +34,8 @@ export interface LauncherApi {
     getLibrary: () => Promise<SteamLibraryResult>
     launch: (target: GameLaunchTarget) => Promise<void>
     install: (appId: number) => Promise<void>
+    /** Resolves to the new favorited state. */
+    toggleFavorite: (id: string) => Promise<boolean>
   }
   stremio: {
     getCatalog: (type: CatalogType, catalogId: string, skip?: number, genre?: string) => Promise<CatalogItem[]>

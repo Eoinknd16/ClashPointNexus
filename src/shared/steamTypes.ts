@@ -13,6 +13,7 @@ export interface GameEntry {
   imageAppId?: number
   /** Local custom-artwork data URI for non-Steam shortcuts — absent if none was set. */
   imageDataUrl?: string
+  favorite: boolean
 }
 
 export interface SteamLibraryResult {
