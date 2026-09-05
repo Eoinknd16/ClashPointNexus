@@ -41,7 +41,9 @@ const api: LauncherApi = {
     stremioLogin: (email, password) => ipcRenderer.invoke('settings:stremioLogin', email, password),
     resyncStremioAddons: () => ipcRenderer.invoke('settings:resyncStremioAddons'),
     importStremioHistory: () => ipcRenderer.invoke('settings:importStremioHistory'),
-    getCustomThemes: () => ipcRenderer.invoke('settings:getCustomThemes')
+    getCustomThemes: () => ipcRenderer.invoke('settings:getCustomThemes'),
+    getStartup: () => ipcRenderer.invoke('settings:getStartup'),
+    setStartupEnabled: (enabled) => ipcRenderer.invoke('settings:setStartupEnabled', enabled)
   },
   player: {
     probeMediaInfo: (url) => ipcRenderer.invoke('player:probeMediaInfo', url)

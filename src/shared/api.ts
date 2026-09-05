@@ -9,6 +9,7 @@ import type { WatchProgress } from './progressTypes'
 import type {
   SteamSettings,
   SteamSignInResult,
+  StartupSettings,
   StremioImportResult,
   StremioLoginResult,
   StremioSettings
@@ -80,6 +81,9 @@ export interface LauncherApi {
     resyncStremioAddons: () => Promise<StremioLoginResult>
     importStremioHistory: () => Promise<StremioImportResult>
     getCustomThemes: () => Promise<ThemeDefinition[]>
+    getStartup: () => Promise<StartupSettings>
+    /** No-ops in a dev build — see StartupSettings.supported. */
+    setStartupEnabled: (enabled: boolean) => Promise<void>
   }
   player: {
     probeMediaInfo: (url: string) => Promise<MediaInfo>

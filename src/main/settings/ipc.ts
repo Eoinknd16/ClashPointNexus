@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type {
   SteamSettings,
   SteamSignInResult,
+  StartupSettings,
   StremioImportResult,
   StremioLoginResult,
   StremioSettings
@@ -13,6 +14,7 @@ import { signInWithSteam } from '../steam/openid'
 import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../stremio/account'
 import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
 import { importStremioHistory } from '../stremio/importHistory'
+import { getStartupSettings, setStartupEnabled } from './startup'
 import { loadCustomThemes } from './themes'
 
 export function registerSettingsIpc(): void {
@@ -104,4 +106,8 @@ export function registerSettingsIpc(): void {
   })
 
   ipcMain.handle('settings:importStremioHistory', (): Promise<StremioImportResult> => importStremioHistory())
+
+  ipcMain.handle('settings:getStartup', (): StartupSettings => getStartupSettings())
+
+  ipcMain.handle('settings:setStartupEnabled', (_event, enabled: boolean) => setStartupEnabled(enabled))
 }

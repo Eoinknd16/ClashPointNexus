@@ -8,6 +8,7 @@ import { useThemeStore } from '../state/themeStore'
 import type { AddonSummary } from '@shared/stremioTypes'
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
+import type { StartupSettings } from '@shared/settingsTypes'
 
 type RowKind = 'header' | 'field' | 'action' | 'addon' | 'info' | 'theme'
 
@@ -78,6 +79,7 @@ export function SettingsScreen(): JSX.Element {
   const [appVersion, setAppVersion] = useState('')
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [globalInputStatus, setGlobalInputStatus] = useState<GlobalInputStatus | null>(null)
+  const [startupSettings, setStartupSettings] = useState<StartupSettings | null>(null)
 
   const [zone, setZone] = useState<'menu' | 'keyboard'>('menu')
   const [menuIndex, setMenuIndex] = useState(0)
@@ -114,6 +116,7 @@ export function SettingsScreen(): JSX.Element {
     window.api.updater.getVersion().then(setAppVersion).catch(() => {})
     window.api.updater.getStatus().then(setUpdateStatus).catch(() => {})
     window.api.globalInput.getStatus().then(setGlobalInputStatus).catch(() => {})
+    window.api.settings.getStartup().then(setStartupSettings).catch(() => {})
     // Mirrors status changes into the footer too — the row label alone is
     // easy to not notice changing in place.
     const unsubscribeUpdater = window.api.updater.onStatus((status) => {
@@ -144,13 +147,30 @@ export function SettingsScreen(): JSX.Element {
     header('app', 'App'),
     { id: 'appVersion', kind: 'info', label: `Version ${appVersion}` },
     { id: 'checkForUpdates', kind: 'action', label: updateActionLabel(updateStatus) },
+    ...(startupSettings?.supported
+      ? [
+          {
+            id: 'toggleStartup',
+            kind: 'action' as const,
+            label: startupSettings.enabled
+              ? '✓ Launch at Windows Startup'
+              : 'Launch at Windows Startup'
+          }
+        ]
+      : [
+          {
+            id: 'startupUnsupported',
+            kind: 'info' as const,
+            label: 'Launch at Startup unavailable in dev builds'
+          }
+        ]),
 
     header('globalInput', 'Global Controller Input (works outside the app too)'),
     {
       id: 'globalInputCombos',
       kind: 'info',
       label:
-        'Hold L1+R1+Options: Quick Menu · L1+R1+Share: Mouse Mode · L1+R1+Square: Show Desktop'
+        'PS Button or hold L1+R1+Options: Quick Menu · L1+R1+Share: Mouse Mode · L1+R1+Square: Show Desktop'
     },
     {
       id: 'globalInputHelper',
@@ -170,6 +190,19 @@ export function SettingsScreen(): JSX.Element {
                 : globalInputStatus.controllerConnected === false
                   ? '✗ No controller detected — check it\'s connected and Windows recognizes it as a game controller'
                   : 'Waiting for a reading...'
+          }
+        ]
+      : []),
+    ...(globalInputStatus?.helperRunning
+      ? [
+          {
+            id: 'hidPsButton',
+            kind: 'info' as const,
+            label: globalInputStatus.hidPsButtonCaptureLive
+              ? '✓ PS Button capture active'
+              : globalInputStatus.hidPsButtonDiagnostic
+                ? `PS Button capture: ${globalInputStatus.hidPsButtonDiagnostic}`
+                : 'PS Button capture: waiting for controller data...'
           }
         ]
       : []),
@@ -358,6 +391,19 @@ export function SettingsScreen(): JSX.Element {
     }
   }
 
+  async function doToggleStartup(): Promise<void> {
+    if (!startupSettings) return
+    const next = !startupSettings.enabled
+    setStartupSettings({ ...startupSettings, enabled: next })
+    try {
+      await window.api.settings.setStartupEnabled(next)
+      setMessage(next ? 'Will launch automatically at Windows startup' : "Won't launch automatically anymore")
+    } catch (error) {
+      setStartupSettings({ ...startupSettings, enabled: !next })
+      setMessage(`Couldn't update startup setting: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   function doCheckForUpdates(): void {
     if (updateStatus?.state === 'downloaded') {
       void window.api.updater.quitAndInstall()
@@ -400,6 +446,8 @@ export function SettingsScreen(): JSX.Element {
       void doImportHistory()
     } else if (row.id === 'checkForUpdates') {
       doCheckForUpdates()
+    } else if (row.id === 'toggleStartup') {
+      void doToggleStartup()
     }
   }
 

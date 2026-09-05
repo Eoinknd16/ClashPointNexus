@@ -10,6 +10,8 @@ let helperRunning = false
 let controllerConnected: boolean | null = null
 let lastError: string | null = null
 let restartCount = 0
+let hidPsButtonCaptureLive = false
+let hidPsButtonDiagnostic: string | null = null
 let stopped = false
 let stdoutBuffer = ''
 let stderrBuffer = ''
@@ -40,7 +42,15 @@ export function isMouseModeActive(): boolean {
 }
 
 export function getGlobalInputStatus(): GlobalInputStatus {
-  return { helperRunning, controllerConnected, mouseModeActive, lastError, restartCount }
+  return {
+    helperRunning,
+    controllerConnected,
+    mouseModeActive,
+    lastError,
+    restartCount,
+    hidPsButtonCaptureLive,
+    hidPsButtonDiagnostic
+  }
 }
 
 function notifyStatus(): void {
@@ -68,6 +78,12 @@ function handleLine(line: string): void {
   } else if (line === 'MOUSE_MODE_OFF') {
     mouseModeActive = false
     onMouseModeChange?.(false)
+    notifyStatus()
+  } else if (line === 'HID_PS_CAPTURE_LIVE') {
+    hidPsButtonCaptureLive = true
+    notifyStatus()
+  } else if (line.startsWith('HID_DIAG: ')) {
+    hidPsButtonDiagnostic = line.slice('HID_DIAG: '.length)
     notifyStatus()
   }
 }
@@ -121,6 +137,8 @@ export function startGlobalInputWatcher(): void {
     const wasMouseModeActive = mouseModeActive
     mouseModeActive = false
     controllerConnected = null
+    hidPsButtonCaptureLive = false
+    hidPsButtonDiagnostic = null
     if (stderrBuffer.trim()) lastError = stderrBuffer.trim().slice(-500)
     stderrBuffer = ''
     if (wasMouseModeActive) onMouseModeChange?.(false)

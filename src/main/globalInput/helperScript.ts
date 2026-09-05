@@ -28,6 +28,36 @@
 //                 desync)
 // ("Menu"/"View" are this API's names for Options/Share on a PlayStation
 // pad, Start/Back on an Xbox pad; "X" is Square on a PlayStation pad.)
+//
+// PS/Home button -> also fires "COMBO_QUICKMENU" (same effect as the
+// L1+R1+Menu combo, no separate Electron-side handling needed), a single
+// press with no hold required. Windows.Gaming.Input deliberately doesn't
+// expose this button at all (Windows reserves the Xbox Guide-button
+// equivalent for its own Game Bar), so this needs raw HID reading instead --
+// SetupDi device enumeration + CreateFile/ReadFile straight against the
+// DualSense's HID interface (VID 0x054C), completely independent of the
+// WGI-based Gamepad polling above. Verified live against a real DualSense
+// connected to this dev machine before shipping (not guessed from docs
+// alone): SetupDi enumeration/marshaling was confirmed correct, and an idle
+// input report read back byte-for-byte matching the assumed layout --
+// report ID 1, byte[8] low nibble = dpad (8 = released), byte[9] = shoulder/
+// create/options/stick-click buttons, byte[10] bit 0 = PS button. Bluetooth
+// reports are documented elsewhere as the same layout shifted one byte
+// later (report ID 0x31, PS button at byte[11]) -- included but NOT verified
+// live the way the report-ID-1 case was, since the one Bluetooth-registered
+// HID collection found on the test machine turned out to be a stale pairing
+// entry with no live data flowing (a live USB-mode collection was what
+// actually responded). One background thread per discovered Sony HID path
+// (there can be several stale/duplicate entries per physical controller),
+// each independently blocking on its own ReadFile loop -- a dead/stale path
+// just blocks forever on its own thread harmlessly, and any thread that
+// throws is caught so it can never take down the process. This entire
+// subsystem is best-effort layered on top of everything else: if HID
+// enumeration finds nothing, or every open attempt fails (e.g. Steam's own
+// controller support has the device open exclusively), the rest of the
+// helper (WGI nav, Mouse Mode, the bumper combos) keeps working exactly as
+// before -- diagnostics are drained into HID_DIAG/HID_PS_CAPTURE_LIVE lines
+// each tick so a failure here is visible in Settings instead of silent.
 // A "TOGGLE_MOUSE" line on stdin does the same toggle, for the in-app Quick
 // Menu button — read on a background .NET thread (pure C#, started once via
 // StartStdinListener), not polled inline in the main loop. An earlier
@@ -50,9 +80,25 @@
 export const GLOBAL_INPUT_HELPER_SCRIPT = `
 Add-Type -TypeDefinition '
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 public struct POINT { public int X; public int Y; }
+
+public struct SP_DEVICE_INTERFACE_DATA {
+    public int cbSize;
+    public Guid InterfaceClassGuid;
+    public int Flags;
+    public IntPtr Reserved;
+}
+
+public struct HIDD_ATTRIBUTES {
+    public int Size;
+    public ushort VendorID;
+    public ushort ProductID;
+    public ushort VersionNumber;
+}
 
 public class ClashPointNativeInput {
     [DllImport("user32.dll")]
@@ -82,10 +128,180 @@ public class ClashPointNativeInput {
         stdinThread.IsBackground = true;
         stdinThread.Start();
     }
+
+    // --- PS/Home button capture (raw HID, independent of Windows.Gaming.Input) ---
+    const int DIGCF_PRESENT = 0x02;
+    const int DIGCF_DEVICEINTERFACE = 0x10;
+    const uint GENERIC_READ = 0x80000000;
+    const uint GENERIC_WRITE = 0x40000000;
+    const uint FILE_SHARE_READ = 0x1;
+    const uint FILE_SHARE_WRITE = 0x2;
+    const uint OPEN_EXISTING = 3;
+    const int SONY_VID = 0x054C;
+
+    public static volatile bool HomeButtonPressed = false;
+    public static volatile bool HidCaptureLive = false;
+    private static List<string> hidDiagnostics = new List<string>();
+    private static readonly object diagLock = new object();
+
+    private static void LogHidDiag(string msg) {
+        lock (diagLock) { hidDiagnostics.Add(msg); }
+    }
+
+    public static string[] DrainHidDiagnostics() {
+        lock (diagLock) {
+            var arr = hidDiagnostics.ToArray();
+            hidDiagnostics.Clear();
+            return arr;
+        }
+    }
+
+    [DllImport("hid.dll")]
+    static extern void HidD_GetHidGuid(out Guid gu);
+
+    [DllImport("hid.dll", SetLastError = true)]
+    static extern bool HidD_GetAttributes(SafeFileHandle hidHandle, ref HIDD_ATTRIBUTES attributes);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    static extern IntPtr SetupDiGetClassDevs(ref Guid classGuid, IntPtr enumerator, IntPtr hwndParent, int flags);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    static extern bool SetupDiEnumDeviceInterfaces(IntPtr deviceInfoSet, IntPtr deviceInfoData, ref Guid interfaceClassGuid, int memberIndex, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData);
+
+    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr deviceInfoSet, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData, IntPtr deviceInterfaceDetailData, int deviceInterfaceDetailDataSize, ref int requiredSize, IntPtr deviceInfoData);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    static extern bool SetupDiDestroyDeviceInfoList(IntPtr deviceInfoSet);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern SafeFileHandle CreateFile(string fileName, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr templateFile);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool ReadFile(SafeFileHandle handle, byte[] buffer, int numberOfBytesToRead, out int numberOfBytesRead, IntPtr overlapped);
+
+    // cbSize here must be the fixed magic constant for the pointer size (8 on
+    // x64, 6 on x86) documented for SP_DEVICE_INTERFACE_DETAIL_DATA -- NOT
+    // Marshal.SizeOf of any C# struct, since its real layout (an int cbSize
+    // immediately followed by a variable-length wide-char array with no
+    // struct padding) cannot be declared as a portable managed struct at all.
+    // Confirmed correct live against real HID devices on a test machine
+    // before shipping: enumeration successfully returned real, correctly-
+    // formatted device paths whose embedded VID/PID matched the readback
+    // from HidD_GetAttributes for the same handle.
+    private static List<string> FindSonyHidPaths() {
+        var paths = new List<string>();
+        Guid hidGuid;
+        HidD_GetHidGuid(out hidGuid);
+        IntPtr deviceInfoSet = SetupDiGetClassDevs(ref hidGuid, IntPtr.Zero, IntPtr.Zero, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+        if (deviceInfoSet == IntPtr.Zero) return paths;
+        try {
+            int index = 0;
+            while (true) {
+                var interfaceData = new SP_DEVICE_INTERFACE_DATA();
+                interfaceData.cbSize = Marshal.SizeOf(interfaceData);
+                if (!SetupDiEnumDeviceInterfaces(deviceInfoSet, IntPtr.Zero, ref hidGuid, index, ref interfaceData)) break;
+                index++;
+
+                int requiredSize = 0;
+                SetupDiGetDeviceInterfaceDetail(deviceInfoSet, ref interfaceData, IntPtr.Zero, 0, ref requiredSize, IntPtr.Zero);
+                if (requiredSize <= 0) continue;
+
+                IntPtr detailBuffer = Marshal.AllocHGlobal(requiredSize);
+                try {
+                    Marshal.WriteInt32(detailBuffer, IntPtr.Size == 8 ? 8 : 6);
+                    int requiredSize2 = 0;
+                    if (!SetupDiGetDeviceInterfaceDetail(deviceInfoSet, ref interfaceData, detailBuffer, requiredSize, ref requiredSize2, IntPtr.Zero)) continue;
+                    string path = Marshal.PtrToStringUni(new IntPtr(detailBuffer.ToInt64() + 4));
+                    if (string.IsNullOrEmpty(path)) continue;
+
+                    var handle = CreateFile(path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+                    if (handle.IsInvalid) continue;
+                    try {
+                        var attrs = new HIDD_ATTRIBUTES();
+                        attrs.Size = Marshal.SizeOf(attrs);
+                        if (HidD_GetAttributes(handle, ref attrs) && attrs.VendorID == SONY_VID) {
+                            paths.Add(path);
+                        }
+                    } finally {
+                        handle.Close();
+                    }
+                } finally {
+                    Marshal.FreeHGlobal(detailBuffer);
+                }
+            }
+        } finally {
+            SetupDiDestroyDeviceInfoList(deviceInfoSet);
+        }
+        return paths;
+    }
+
+    // One of these runs per discovered path, forever, each on its own
+    // background thread -- a stale/dead path (e.g. an old Bluetooth pairing
+    // entry with nothing actually feeding it, seen live on the test machine
+    // alongside a live USB-mode one for the same physical controller) just
+    // blocks on ReadFile forever, harmlessly, on its own thread. Report ID 1
+    // (USB) was verified live; report ID 0x31 (Bluetooth, PS button one byte
+    // later) is included from documentation but not verified against a live
+    // Bluetooth stream.
+    private static void HidReadLoop(string path) {
+        SafeFileHandle handle = null;
+        try {
+            handle = CreateFile(path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+            if (handle.IsInvalid) {
+                LogHidDiag("open failed for a Sony HID path, err=" + Marshal.GetLastWin32Error());
+                return;
+            }
+            var buf = new byte[96];
+            bool wasPressed = false;
+            while (true) {
+                int bytesRead;
+                bool ok = ReadFile(handle, buf, buf.Length, out bytesRead, IntPtr.Zero);
+                if (!ok) break; // device gone/disconnected -- exit this thread quietly
+                if (bytesRead < 11) continue;
+
+                HidCaptureLive = true;
+                int reportId = buf[0];
+                int psByteIndex = -1;
+                if (reportId == 0x01) psByteIndex = 10;
+                else if (reportId == 0x31) psByteIndex = 11;
+                if (psByteIndex >= 0 && psByteIndex < bytesRead) {
+                    bool pressed = (buf[psByteIndex] & 0x01) != 0;
+                    if (pressed && !wasPressed) HomeButtonPressed = true;
+                    wasPressed = pressed;
+                }
+            }
+        } catch (Exception ex) {
+            LogHidDiag("read loop crashed: " + ex.Message);
+        } finally {
+            if (handle != null) handle.Close();
+        }
+    }
+
+    // Best-effort: any failure here (no Sony device found, every open
+    // attempt fails, enumeration itself throws) is caught and logged via
+    // LogHidDiag rather than allowed to affect the rest of this helper --
+    // Mouse Mode, the bumper combos, and WGI nav must keep working
+    // regardless of whether raw HID access panned out.
+    public static void StartHidHomeButtonListeners() {
+        try {
+            var paths = FindSonyHidPaths();
+            LogHidDiag("found " + paths.Count + " Sony HID path(s)");
+            foreach (var path in paths) {
+                string p = path;
+                var t = new System.Threading.Thread(() => HidReadLoop(p));
+                t.IsBackground = true;
+                t.Start();
+            }
+        } catch (Exception ex) {
+            LogHidDiag("enumeration failed: " + ex.Message);
+        }
+    }
 }
 '
 
 [ClashPointNativeInput]::StartStdinListener()
+[ClashPointNativeInput]::StartHidHomeButtonListeners()
 
 # WinRT type projection — the standard PowerShell idiom for loading a
 # Windows Runtime API. Needed once before [Windows.Gaming.Input.Gamepad]
@@ -130,6 +346,7 @@ $prevB = $false
 # initial read is $false, and the very first state never gets reported.
 # Caught by actually running an earlier version of this before shipping.
 $prevConnectedState = "unknown"
+$prevHidCaptureLive = $false
 
 Write-Output "HELPER_STARTED"
 
@@ -138,6 +355,19 @@ while ($true) {
     [ClashPointNativeInput]::ToggleMouseRequested = $false
     $mouseMode = -not $mouseMode
     if ($mouseMode) { Write-Output "MOUSE_MODE_ON" } else { Write-Output "MOUSE_MODE_OFF" }
+  }
+
+  if ([ClashPointNativeInput]::HomeButtonPressed) {
+    [ClashPointNativeInput]::HomeButtonPressed = $false
+    Write-Output "COMBO_QUICKMENU"
+  }
+
+  $hidCaptureLive = [ClashPointNativeInput]::HidCaptureLive
+  if ($hidCaptureLive -and -not $prevHidCaptureLive) { Write-Output "HID_PS_CAPTURE_LIVE" }
+  $prevHidCaptureLive = $hidCaptureLive
+
+  foreach ($diag in [ClashPointNativeInput]::DrainHidDiagnostics()) {
+    Write-Output "HID_DIAG: $diag"
   }
 
   $gamepad = [Windows.Gaming.Input.Gamepad]::Gamepads | Select-Object -First 1

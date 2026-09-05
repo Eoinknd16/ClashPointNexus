@@ -29,3 +29,11 @@ export interface SteamSignInResult {
   error: string | null
   steamId64: string | null
 }
+
+export interface StartupSettings {
+  enabled: boolean
+  /** False in a dev build — process.execPath there is the bare Electron
+   * binary, not this app, so registering it as a login item would launch
+   * the wrong thing entirely. */
+  supported: boolean
+}
