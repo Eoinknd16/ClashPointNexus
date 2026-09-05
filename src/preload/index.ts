@@ -94,6 +94,15 @@ const api: LauncherApi = {
   globalInput: {
     getMouseModeStatus: () => ipcRenderer.invoke('globalInput:getMouseModeStatus'),
     toggleMouseMode: () => ipcRenderer.invoke('globalInput:toggleMouseMode'),
+    getStatus: () => ipcRenderer.invoke('globalInput:getStatus'),
+    onStatusChanged: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        status: Parameters<typeof callback>[0]
+      ): void => callback(status)
+      ipcRenderer.on('globalInput:statusChanged', listener)
+      return () => ipcRenderer.removeListener('globalInput:statusChanged', listener)
+    },
     onMouseModeChanged: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, active: boolean): void => callback(active)
       ipcRenderer.on('globalInput:mouseModeChanged', listener)

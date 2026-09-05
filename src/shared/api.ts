@@ -1,4 +1,5 @@
 import type { DirectoryListing, FileEntry } from './filesystemTypes'
+import type { GlobalInputStatus } from './globalInputTypes'
 import type { ContinueSuggestion } from './homeTypes'
 import type { LibraryEntry } from './libraryTypes'
 import type { MediaInfo } from './playerConstants'
@@ -129,6 +130,14 @@ export interface LauncherApi {
      * where the watcher never starts. */
     getMouseModeStatus: () => Promise<boolean>
     toggleMouseMode: () => Promise<void>
+    /** Whether the helper process is running at all and whether XInput sees
+     * a controller — added after a real-world report of Mouse Mode not
+     * working with no way to tell why (XInput only recognizes Xbox
+     * controllers and things explicitly remapped to emulate one; a
+     * DualSense/DualShock plugged in directly won't register here even
+     * though the rest of the app's Gamepad-API-based nav reads it fine). */
+    getStatus: () => Promise<GlobalInputStatus>
+    onStatusChanged: (callback: (status: GlobalInputStatus) => void) => () => void
     /** Returns an unsubscribe function. */
     onMouseModeChanged: (callback: (active: boolean) => void) => () => void
     /** Fired when the physical L1+R1+Start combo is held outside the app —

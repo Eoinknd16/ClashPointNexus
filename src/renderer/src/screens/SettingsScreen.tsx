@@ -7,6 +7,7 @@ import { useNavigationStore } from '../state/navigationStore'
 import { useThemeStore } from '../state/themeStore'
 import type { AddonSummary } from '@shared/stremioTypes'
 import type { UpdateStatus } from '@shared/updateTypes'
+import type { GlobalInputStatus } from '@shared/globalInputTypes'
 
 type RowKind = 'header' | 'field' | 'action' | 'addon' | 'info' | 'theme'
 
@@ -76,6 +77,7 @@ export function SettingsScreen(): JSX.Element {
   const [addons, setAddons] = useState<AddonSummary[]>([])
   const [appVersion, setAppVersion] = useState('')
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+  const [globalInputStatus, setGlobalInputStatus] = useState<GlobalInputStatus | null>(null)
 
   const [zone, setZone] = useState<'menu' | 'keyboard'>('menu')
   const [menuIndex, setMenuIndex] = useState(0)
@@ -111,14 +113,20 @@ export function SettingsScreen(): JSX.Element {
       .catch(() => {})
     window.api.updater.getVersion().then(setAppVersion).catch(() => {})
     window.api.updater.getStatus().then(setUpdateStatus).catch(() => {})
+    window.api.globalInput.getStatus().then(setGlobalInputStatus).catch(() => {})
     // Mirrors status changes into the footer too — the row label alone is
     // easy to not notice changing in place.
-    return window.api.updater.onStatus((status) => {
+    const unsubscribeUpdater = window.api.updater.onStatus((status) => {
       setUpdateStatus(status)
       if (status.state === 'not-available') setMessage('Already on the latest version')
       else if (status.state === 'downloaded') setMessage(`Update v${status.version} ready — tap to restart & install`)
       else if (status.state === 'error') setMessage(`Update check failed: ${status.error}`)
     })
+    const unsubscribeGlobalInput = window.api.globalInput.onStatusChanged(setGlobalInputStatus)
+    return () => {
+      unsubscribeUpdater()
+      unsubscribeGlobalInput()
+    }
   }, [])
 
   const rows: SettingsRow[] = [
@@ -136,6 +144,32 @@ export function SettingsScreen(): JSX.Element {
     header('app', 'App'),
     { id: 'appVersion', kind: 'info', label: `Version ${appVersion}` },
     { id: 'checkForUpdates', kind: 'action', label: updateActionLabel(updateStatus) },
+
+    header('globalInput', 'Global Controller Input (Quick Menu combo / Mouse Mode)'),
+    {
+      id: 'globalInputHelper',
+      kind: 'info',
+      label: globalInputStatus?.helperRunning
+        ? '✓ Background listener running'
+        : '✗ Not running (packaged builds only, not npm run dev)'
+    },
+    ...(globalInputStatus?.helperRunning
+      ? [
+          {
+            id: 'globalInputController',
+            kind: 'info' as const,
+            label:
+              globalInputStatus.controllerConnected === true
+                ? '✓ Controller detected'
+                : globalInputStatus.controllerConnected === false
+                  ? '✗ No controller detected — XInput only sees Xbox controllers and things remapped to emulate one (DS4Windows, Steam Input); a DualSense/DualShock plugged in directly won’t show up here'
+                  : 'Waiting for a reading...'
+          }
+        ]
+      : []),
+    ...(globalInputStatus?.lastError
+      ? [{ id: 'globalInputError', kind: 'info' as const, label: `Last error: ${globalInputStatus.lastError}` }]
+      : []),
 
     header('steam', 'Steam'),
     { id: 'steamApiKey', kind: 'field', label: 'Steam API Key', value: steamApiKey, masked: true },

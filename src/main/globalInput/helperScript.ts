@@ -15,10 +15,29 @@
 //   L1+R1+Start -> "COMBO_QUICKMENU"  (bring Nexus to front, open Quick Menu)
 //   L1+R1+Back  -> toggle Mouse Mode, "MOUSE_MODE_ON"/"MOUSE_MODE_OFF"
 // A "TOGGLE_MOUSE" line on stdin does the same toggle, for the in-app Quick
-// Menu button — read via [Console]::In.Peek(), non-blocking, each tick.
+// Menu button — read on a background .NET thread (pure C#, started once via
+// StartStdinListener below), not polled inline in the main loop. An earlier
+// version used [Console]::In.Peek() each tick to check non-blockingly, but
+// Peek() on a piped/redirected stdin actually BLOCKS until data arrives —
+// confirmed by actually running it, not by assumption — which meant the
+// entire polling loop (both combos, everything) never ran at all until
+// something was written to stdin, which normally never happens on its own.
+// A raw PowerShell scriptblock isn't safe to run on a manually-created
+// background thread (the engine has real thread-affinity constraints), so
+// the listener itself is plain C#, only setting a static flag the main loop
+// checks non-blockingly.
 //
 // While Mouse Mode is on: right stick moves the real OS cursor, A/B are
 // left/right click, triggers are scroll wheel.
+//
+// Diagnostics — "HELPER_STARTED" once at launch, plus edge-triggered
+// "CONTROLLER_CONNECTED"/"CONTROLLER_DISCONNECTED" whenever XInputGetState's
+// result changes — added after a real-world report of Mouse Mode not working
+// at all, with no way to tell whether that meant "no controller detected"
+// (XInput only recognizes Xbox controllers and things explicitly remapped to
+// emulate one, e.g. DS4Windows/Steam Input — a DualSense/DualShock plugged in
+// directly won't show up here even though Chromium's separate Gamepad API,
+// which the rest of this app runs on, reads it fine) versus a combo/logic bug.
 export const GLOBAL_INPUT_HELPER_SCRIPT = `
 Add-Type -TypeDefinition '
 using System;
@@ -56,8 +75,26 @@ public class ClashPointNativeInput {
 
     [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int nIndex);
+
+    public static volatile bool ToggleMouseRequested = false;
+    private static System.Threading.Thread stdinThread;
+
+    public static void StartStdinListener() {
+        stdinThread = new System.Threading.Thread(() => {
+            string line;
+            while ((line = Console.In.ReadLine()) != null) {
+                if (line.Trim() == "TOGGLE_MOUSE") {
+                    ToggleMouseRequested = true;
+                }
+            }
+        });
+        stdinThread.IsBackground = true;
+        stdinThread.Start();
+    }
 }
 '
+
+[ClashPointNativeInput]::StartStdinListener()
 
 $BTN_DPAD_UP = 0x0001
 $BTN_DPAD_DOWN = 0x0002
@@ -89,18 +126,31 @@ $mouseModeComboStart = $null
 $mouseModeFiredForThisHold = $false
 $prevA = $false
 $prevB = $false
+# A string sentinel, not $null/boolean -- PowerShell's -ne coerces $null to
+# match the other operand's type when one side is a [bool], so comparing a
+# boolean $connected against a starting $null silently evaluates as "same"
+# whenever the initial read is $false, and the very first state never gets
+# reported. Caught by actually running this before shipping, not by
+# reasoning about it.
+$prevConnectedState = "unknown"
+
+Write-Output "HELPER_STARTED"
 
 while ($true) {
-  if ([Console]::In.Peek() -ge 0) {
-    $cmd = [Console]::In.ReadLine()
-    if ($cmd -eq "TOGGLE_MOUSE") {
-      $mouseMode = -not $mouseMode
-      if ($mouseMode) { Write-Output "MOUSE_MODE_ON" } else { Write-Output "MOUSE_MODE_OFF" }
-    }
+  if ([ClashPointNativeInput]::ToggleMouseRequested) {
+    [ClashPointNativeInput]::ToggleMouseRequested = $false
+    $mouseMode = -not $mouseMode
+    if ($mouseMode) { Write-Output "MOUSE_MODE_ON" } else { Write-Output "MOUSE_MODE_OFF" }
   }
 
   $state = New-Object XINPUT_STATE
   $result = [ClashPointNativeInput]::XInputGetState(0, [ref]$state)
+  $connectedState = if ($result -eq 0) { "yes" } else { "no" }
+
+  if ($connectedState -ne $prevConnectedState) {
+    if ($connectedState -eq "yes") { Write-Output "CONTROLLER_CONNECTED" } else { Write-Output "CONTROLLER_DISCONNECTED" }
+    $prevConnectedState = $connectedState
+  }
 
   if ($result -eq 0) {
     $gp = $state.Gamepad
