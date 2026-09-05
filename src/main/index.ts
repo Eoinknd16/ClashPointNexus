@@ -2,8 +2,13 @@ import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { registerAppsIpc } from './apps/ipc'
 import { registerFilesystemIpc } from './filesystem/ipc'
-import { registerGlobalInputIpc } from './globalInput/ipc'
-import { setQuickMenuComboHandler, startGlobalInputWatcher, stopGlobalInputWatcher } from './globalInput/service'
+import { goToDesktop, registerGlobalInputIpc } from './globalInput/ipc'
+import {
+  setQuickMenuComboHandler,
+  setShowDesktopComboHandler,
+  startGlobalInputWatcher,
+  stopGlobalInputWatcher
+} from './globalInput/service'
 import { registerHomeIpc } from './home/ipc'
 import { registerLibraryIpc } from './library/ipc'
 import { registerPlayerIpc } from './player/ipc'
@@ -103,6 +108,7 @@ app.whenReady().then(() => {
       mainWindow.focus()
       mainWindow.webContents.send('globalInput:openQuickMenu')
     })
+    setShowDesktopComboHandler(() => goToDesktop(mainWindow))
     startGlobalInputWatcher()
   }
 

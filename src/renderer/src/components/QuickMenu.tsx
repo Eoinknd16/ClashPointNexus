@@ -11,6 +11,7 @@ type ActionId =
   | 'volumeDown'
   | 'toggleMute'
   | 'toggleMouseMode'
+  | 'goToDesktop'
   | 'sleep'
   | 'restart'
   | 'shutdown'
@@ -67,6 +68,7 @@ export function QuickMenu(): JSX.Element | null {
       id: 'toggleMouseMode',
       label: mouseModeActive ? '🖱️ Disable Mouse Mode' : '🖱️ Enable Mouse Mode'
     })
+    options.push({ id: 'goToDesktop', label: '🖥️ Show Desktop' })
     options.push({ id: 'sleep', label: '💤 Sleep' })
     options.push({ id: 'restart', label: '🔁 Restart PC' })
     options.push({ id: 'shutdown', label: '⏻ Shut Down PC' })
@@ -122,6 +124,10 @@ export function QuickMenu(): JSX.Element | null {
         return
       case 'toggleMouseMode':
         void window.api.globalInput.toggleMouseMode()
+        closeMenu()
+        return
+      case 'goToDesktop':
+        void window.api.globalInput.goToDesktop()
         closeMenu()
         return
       case 'sleep':

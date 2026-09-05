@@ -145,7 +145,13 @@ export function SettingsScreen(): JSX.Element {
     { id: 'appVersion', kind: 'info', label: `Version ${appVersion}` },
     { id: 'checkForUpdates', kind: 'action', label: updateActionLabel(updateStatus) },
 
-    header('globalInput', 'Global Controller Input (Quick Menu combo / Mouse Mode)'),
+    header('globalInput', 'Global Controller Input (works outside the app too)'),
+    {
+      id: 'globalInputCombos',
+      kind: 'info',
+      label:
+        'Hold L1+R1+Options: Quick Menu · L1+R1+Share: Mouse Mode · L1+R1+Square: Show Desktop'
+    },
     {
       id: 'globalInputHelper',
       kind: 'info',

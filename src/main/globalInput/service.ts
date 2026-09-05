@@ -14,11 +14,16 @@ let stdoutBuffer = ''
 let stderrBuffer = ''
 
 let onQuickMenuCombo: (() => void) | null = null
+let onShowDesktopCombo: (() => void) | null = null
 let onMouseModeChange: ((active: boolean) => void) | null = null
 let onStatusChange: ((status: GlobalInputStatus) => void) | null = null
 
 export function setQuickMenuComboHandler(handler: (() => void) | null): void {
   onQuickMenuCombo = handler
+}
+
+export function setShowDesktopComboHandler(handler: (() => void) | null): void {
+  onShowDesktopCombo = handler
 }
 
 export function setMouseModeChangeHandler(handler: ((active: boolean) => void) | null): void {
@@ -53,6 +58,8 @@ function handleLine(line: string): void {
     notifyStatus()
   } else if (line === 'COMBO_QUICKMENU') {
     onQuickMenuCombo?.()
+  } else if (line === 'COMBO_SHOWDESKTOP') {
+    onShowDesktopCombo?.()
   } else if (line === 'MOUSE_MODE_ON') {
     mouseModeActive = true
     onMouseModeChange?.(true)

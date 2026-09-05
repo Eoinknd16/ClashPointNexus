@@ -17,12 +17,17 @@
 // polls the driver directly with no concept of window focus, which is what
 // makes reading it from a standalone background process work at all.
 //
-// Two combos, both requiring 500ms held (not just pressed) so neither is
+// Three combos, all requiring 500ms held (not just pressed) so none is
 // remotely reachable by accident during normal play:
 //   L1+R1+Menu -> "COMBO_QUICKMENU"  (bring Nexus to front, open Quick Menu)
 //   L1+R1+View -> toggle Mouse Mode, "MOUSE_MODE_ON"/"MOUSE_MODE_OFF"
+//   L1+R1+X    -> "COMBO_SHOWDESKTOP" (Electron side decides minimize vs.
+//                 restore, based on the window's own real state -- this
+//                 script only ever reports the combo firing, never tracks a
+//                 parallel "is it hidden" flag of its own, so the two can't
+//                 desync)
 // ("Menu"/"View" are this API's names for Options/Share on a PlayStation
-// pad, Start/Back on an Xbox pad.)
+// pad, Start/Back on an Xbox pad; "X" is Square on a PlayStation pad.)
 // A "TOGGLE_MOUSE" line on stdin does the same toggle, for the in-app Quick
 // Menu button — read on a background .NET thread (pure C#, started once via
 // StartStdinListener), not polled inline in the main loop. An earlier
@@ -92,11 +97,13 @@ $BTN_MENU = 0x1
 $BTN_VIEW = 0x2
 $BTN_A = 0x4
 $BTN_B = 0x8
+$BTN_X = 0x10
 $BTN_LEFT_SHOULDER = 0x400
 $BTN_RIGHT_SHOULDER = 0x800
 
 $QUICKMENU_COMBO = $BTN_LEFT_SHOULDER -bor $BTN_RIGHT_SHOULDER -bor $BTN_MENU
 $MOUSEMODE_COMBO = $BTN_LEFT_SHOULDER -bor $BTN_RIGHT_SHOULDER -bor $BTN_VIEW
+$SHOWDESKTOP_COMBO = $BTN_LEFT_SHOULDER -bor $BTN_RIGHT_SHOULDER -bor $BTN_X
 $HOLD_MS = 500
 # Sticks here are already normalized doubles (-1.0..1.0), triggers 0.0..1.0 --
 # a different scale than XInput's raw 16-bit/byte values, so these are tuned
@@ -113,6 +120,8 @@ $quickMenuComboStart = $null
 $quickMenuFiredForThisHold = $false
 $mouseModeComboStart = $null
 $mouseModeFiredForThisHold = $false
+$showDesktopComboStart = $null
+$showDesktopFiredForThisHold = $false
 $prevA = $false
 $prevB = $false
 # A string sentinel, not $null/boolean -- PowerShell's -ne coerces $null to
@@ -168,6 +177,19 @@ while ($true) {
     } else {
       $mouseModeComboStart = $null
       $mouseModeFiredForThisHold = $false
+    }
+
+    if (($held -band $SHOWDESKTOP_COMBO) -eq $SHOWDESKTOP_COMBO) {
+      if ($null -eq $showDesktopComboStart) {
+        $showDesktopComboStart = Get-Date
+        $showDesktopFiredForThisHold = $false
+      } elseif ((-not $showDesktopFiredForThisHold) -and (((Get-Date) - $showDesktopComboStart).TotalMilliseconds -ge $HOLD_MS)) {
+        Write-Output "COMBO_SHOWDESKTOP"
+        $showDesktopFiredForThisHold = $true
+      }
+    } else {
+      $showDesktopComboStart = $null
+      $showDesktopFiredForThisHold = $false
     }
 
     if ($mouseMode) {

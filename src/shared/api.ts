@@ -131,6 +131,11 @@ export interface LauncherApi {
      * where the watcher never starts. */
     getMouseModeStatus: () => Promise<boolean>
     toggleMouseMode: () => Promise<void>
+    /** Sends Nexus to the background (minimize, dropping fullscreen first)
+     * so the real Windows desktop/taskbar/other windows are visible and
+     * clickable via Mouse Mode's already-global cursor control — calling it
+     * again restores and refocuses Nexus, without ever quitting it. */
+    goToDesktop: () => Promise<void>
     /** Whether the helper process is running at all and whether XInput sees
      * a controller — added after a real-world report of Mouse Mode not
      * working with no way to tell why (XInput only recognizes Xbox
