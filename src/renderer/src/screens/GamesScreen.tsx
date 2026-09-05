@@ -6,7 +6,7 @@ import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKe
 import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
-import type { AchievementProgress, GameEntry } from '@shared/steamTypes'
+import type { AchievementProgress, GameEntry, GameStoreInfo } from '@shared/steamTypes'
 
 const COLUMNS = 5
 const FILTERS = ['installed', 'all', 'favorites'] as const
@@ -35,12 +35,19 @@ function formatLastPlayed(lastPlayed: number): string {
   return `Last played ${new Date(lastPlayed * 1000).toLocaleDateString()}`
 }
 
+function gameStatusLabel(game: GameEntry): string | null {
+  if (game.downloadProgressPercent != null) return `⬇ Downloading ${game.downloadProgressPercent}%`
+  if (game.updatePending) return '⬆ Update available'
+  return null
+}
+
 function toCardItem(game: GameEntry): CardItem {
   const steamCandidates = game.imageAppId ? steamImageCandidates(game.imageAppId) : []
+  const status = gameStatusLabel(game)
   return {
     id: game.id,
     title: game.name,
-    subtitle: game.installed ? formatPlaytime(game.playtimeForeverMinutes) : 'Not installed',
+    subtitle: status ?? (game.installed ? formatPlaytime(game.playtimeForeverMinutes) : 'Not installed'),
     imageUrl: game.imageDataUrl ?? steamCandidates[0],
     imageFallbacks: game.imageDataUrl ? undefined : steamCandidates.slice(1),
     icon: '🎮',
@@ -72,6 +79,7 @@ export function GamesScreen(): JSX.Element {
   const [kbValue, setKbValue] = useState('')
   const [kbShift, setKbShift] = useState(false)
   const [achievements, setAchievements] = useState<AchievementProgress | null>(null)
+  const [storeInfo, setStoreInfo] = useState<GameStoreInfo | null>(null)
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
   const goHome = useNavigationStore((s) => s.goHome)
@@ -111,6 +119,25 @@ export function GamesScreen(): JSX.Element {
       })
       .catch(() => {
         if (!cancelled) setAchievements(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedAppId])
+
+  // Steam's public storefront API needs no key/account at all — same
+  // on-demand-per-selection reasoning as achievements above.
+  useEffect(() => {
+    setStoreInfo(null)
+    if (selectedAppId === null) return
+    let cancelled = false
+    window.api.steam
+      .getStoreInfo(selectedAppId)
+      .then((result) => {
+        if (!cancelled) setStoreInfo(result)
+      })
+      .catch(() => {
+        if (!cancelled) setStoreInfo(null)
       })
     return () => {
       cancelled = true
@@ -443,7 +470,7 @@ export function GamesScreen(): JSX.Element {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 60, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="shadow-panel flex w-[420px] shrink-0 flex-col gap-6 bg-surface p-8"
+            className="shadow-panel flex w-[420px] shrink-0 flex-col gap-6 overflow-y-auto bg-surface p-8"
           >
             <div className="aspect-[2/1] w-full overflow-hidden rounded-xl bg-surface-hi">
               <CardArt item={selectedCard} className="h-full w-full" />
@@ -468,6 +495,9 @@ export function GamesScreen(): JSX.Element {
                   : 'Not installed'}
               </p>
               <p className="text-sm text-muted">{formatLastPlayed(selectedGame.lastPlayed)}</p>
+              {gameStatusLabel(selectedGame) && (
+                <p className="text-sm font-medium text-accent">{gameStatusLabel(selectedGame)}</p>
+              )}
               {achievements && (
                 <div className="mt-2 flex flex-col gap-1">
                   <p className="text-sm text-muted">
@@ -482,6 +512,28 @@ export function GamesScreen(): JSX.Element {
                 </div>
               )}
             </div>
+
+            {storeInfo && (
+              <div className="flex flex-col gap-2 border-t border-white/5 pt-4">
+                {storeInfo.genres.length > 0 && (
+                  <p className="text-xs uppercase tracking-wide text-accent">{storeInfo.genres.join(' · ')}</p>
+                )}
+                {storeInfo.description && (
+                  <p className="line-clamp-4 text-sm text-muted">{storeInfo.description}</p>
+                )}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                  {storeInfo.releaseDate && <span>📅 {storeInfo.releaseDate}</span>}
+                  {storeInfo.metacriticScore != null && <span>Metacritic {storeInfo.metacriticScore}</span>}
+                </div>
+                {storeInfo.developers.length > 0 && (
+                  <p className="text-xs text-muted">Developer: {storeInfo.developers.join(', ')}</p>
+                )}
+                {storeInfo.publishers.length > 0 &&
+                  storeInfo.publishers.join(',') !== storeInfo.developers.join(',') && (
+                    <p className="text-xs text-muted">Publisher: {storeInfo.publishers.join(', ')}</p>
+                  )}
+              </div>
+            )}
 
             <button
               onClick={() => launchOrInstall(selectedGame, setMessage)}

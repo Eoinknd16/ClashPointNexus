@@ -1,8 +1,9 @@
-import type { AchievementProgress, GameEntry, SteamLibraryResult } from '@shared/steamTypes'
+import type { AchievementProgress, GameEntry, GameStoreInfo, SteamLibraryResult } from '@shared/steamTypes'
 import { loadSteamConfig } from './config'
 import { listFavoriteGameIds } from './favorites'
 import { findSteamPath, getInstalledGames, type InstalledApp } from './library'
 import { getNonSteamShortcuts } from './shortcuts'
+import { fetchAppDetails } from './storeApi'
 import { fetchOwnedGames, fetchPlayerAchievements } from './webApi'
 
 function shortcutEntries(steamPath: string | null, steamId64: string): GameEntry[] {
@@ -31,7 +32,9 @@ function installedOnlyEntries(installed: InstalledApp[]): GameEntry[] {
       lastPlayed: g.lastPlayed,
       launch: { type: 'steam', appId: Number(g.appId) },
       imageAppId: Number(g.appId),
-      favorite: false
+      favorite: false,
+      updatePending: g.updatePending,
+      downloadProgressPercent: g.downloadProgressPercent
     })
   )
 }
@@ -75,7 +78,9 @@ export async function getSteamLibrary(): Promise<SteamLibraryResult> {
         lastPlayed: local?.lastPlayed ?? 0,
         launch: { type: 'steam', appId: game.appId },
         imageAppId: game.appId,
-        favorite: false
+        favorite: false,
+        updatePending: local?.updatePending,
+        downloadProgressPercent: local?.downloadProgressPercent
       }
     })
 
@@ -97,4 +102,9 @@ export async function getAchievements(appId: number): Promise<AchievementProgres
   const config = loadSteamConfig()
   if (!config.apiKey || !config.steamId64) return null
   return fetchPlayerAchievements(config.apiKey, config.steamId64, appId)
+}
+
+/** No API key gate here — the storefront API needs none. */
+export async function getStoreInfo(appId: number): Promise<GameStoreInfo | null> {
+  return fetchAppDetails(appId)
 }

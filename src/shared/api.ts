@@ -10,7 +10,7 @@ import type {
   StremioLoginResult,
   StremioSettings
 } from './settingsTypes'
-import type { AchievementProgress, GameLaunchTarget, SteamLibraryResult } from './steamTypes'
+import type { AchievementProgress, GameLaunchTarget, GameStoreInfo, SteamLibraryResult } from './steamTypes'
 import type { SystemStats } from './systemTypes'
 import type {
   AddonCatalogRow,
@@ -39,6 +39,8 @@ export interface LauncherApi {
     toggleFavorite: (id: string) => Promise<boolean>
     /** Null covers every "not applicable" case (no achievements schema, private stats, no API key configured) alike. */
     getAchievements: (appId: number) => Promise<AchievementProgress | null>
+    /** Steam's public storefront API — no key/account needed. */
+    getStoreInfo: (appId: number) => Promise<GameStoreInfo | null>
   }
   stremio: {
     getCatalog: (type: CatalogType, catalogId: string, skip?: number, genre?: string) => Promise<CatalogItem[]>

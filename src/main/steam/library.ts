@@ -10,7 +10,18 @@ export interface InstalledApp {
   sizeOnDisk: number
   lastPlayed: number
   libraryPath: string
+  updatePending: boolean
+  /** 0-100 while Steam is actively fetching bytes for this app, null otherwise. */
+  downloadProgressPercent: number | null
 }
+
+// ACF's StateFlags is a bitmask undocumented by Valve but well-established
+// across community Steam-library tools (consistent enough across Steam
+// client versions to rely on for a display-only "needs attention" signal —
+// worst case here is a badge that's occasionally stale, not anything that
+// affects actually playing a game).
+const STATE_FLAG_UPDATE_REQUIRED = 0x2
+const STATE_FLAG_DOWNLOADING = 0x80000
 
 const DEFAULT_STEAM_PATH = 'C:\\Program Files (x86)\\Steam'
 
@@ -46,13 +57,21 @@ function parseAppManifest(vdfText: string, libraryPath: string): InstalledApp | 
   const state = root['AppState']
   if (!state || typeof state === 'string') return null
 
+  const stateFlags = Number(state['StateFlags'] ?? 0)
+  const bytesToDownload = Number(state['BytesToDownload'] ?? 0)
+  const bytesDownloaded = Number(state['BytesDownloaded'] ?? 0)
+  const activelyDownloading =
+    (stateFlags & STATE_FLAG_DOWNLOADING) !== 0 && bytesToDownload > 0 && bytesDownloaded < bytesToDownload
+
   return {
     appId: String(state['appid'] ?? ''),
     name: String(state['name'] ?? 'Unknown'),
     installDir: String(state['installdir'] ?? ''),
     sizeOnDisk: Number(state['SizeOnDisk'] ?? 0),
     lastPlayed: Number(state['LastPlayed'] ?? 0),
-    libraryPath
+    libraryPath,
+    updatePending: (stateFlags & STATE_FLAG_UPDATE_REQUIRED) !== 0,
+    downloadProgressPercent: activelyDownloading ? Math.round((bytesDownloaded / bytesToDownload) * 100) : null
   }
 }
 
