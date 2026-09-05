@@ -836,7 +836,7 @@ export function TvScreen(): JSX.Element {
     const video = videoRef.current
     if (!video) return
 
-    const streamUrl = transcodedStreamUrl(sourceUrl, offsetSeconds, resolvedAudioIndex)
+    const streamUrl = transcodedStreamUrl(sourceUrl, offsetSeconds, resolvedAudioIndex, info.videoCodec?.name)
     const mimeType = buildMseCodecString(info.videoCodec)
     const canUseMse = mimeType && typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(mimeType)
 

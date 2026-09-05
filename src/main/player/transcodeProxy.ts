@@ -85,15 +85,27 @@ export async function probeMediaInfo(sourceUrl: string): Promise<MediaInfo> {
   })
 }
 
+// Codecs Chromium's <video> element can actually decode — anything else
+// (XviD/mpeg4, mpeg2video, msmpeg4v3/wmv, vc1, etc. — common in older or
+// obscure releases circulating via addons) needs re-encoding, not just
+// remuxing, or the result is audio with a black/blank video area.
+const NATIVELY_PLAYABLE_VIDEO_CODECS = new Set(['h264', 'hevc', 'vp8', 'vp9', 'av1'])
+
 function handleStream(url: URL, res: import('http').ServerResponse): void {
   const sourceUrl = url.searchParams.get('url')
   const startSeconds = Number(url.searchParams.get('t') ?? '0')
   const audioStreamIndex = url.searchParams.get('audio')
+  const videoCodecName = url.searchParams.get('vcodec')
   if (!sourceUrl) {
     res.writeHead(400)
     res.end()
     return
   }
+
+  // Codec unknown (probe failed/timed out) still defaults to copy — the fast
+  // path stays the default, this only forces a re-encode when we positively
+  // know the source codec isn't one the <video> element can decode.
+  const needsVideoReencode = videoCodecName !== null && !NATIVELY_PLAYABLE_VIDEO_CODECS.has(videoCodecName)
 
   const ffmpeg = binaryPath('ffmpeg.exe')
   if (!ffmpeg) {
@@ -118,8 +130,9 @@ function handleStream(url: URL, res: import('http').ServerResponse): void {
     // Explicit stream mapping only when we know which audio track is English —
     // otherwise let ffmpeg pick its own default (usually stream 0).
     ...(audioStreamIndex ? ['-map', '0:v:0', '-map', `0:${audioStreamIndex}`] : []),
-    '-c:v',
-    'copy',
+    ...(needsVideoReencode
+      ? ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p']
+      : ['-c:v', 'copy']),
     '-c:a',
     'aac',
     '-ac',
