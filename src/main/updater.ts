@@ -38,7 +38,12 @@ export function registerUpdaterIpc(): void {
   })
 
   ipcMain.handle('updater:quitAndInstall', () => {
-    if (status.state === 'downloaded') autoUpdater.quitAndInstall()
+    // Silent + force-relaunch: without these args, NSIS opens its full
+    // assisted-install wizard (Next/Install/Finish), which needs a mouse.
+    // `isSilentInstall=true` runs the installer with the standard NSIS `/S`
+    // flag instead — no UI at all — and `isForceRunAfter=true` relaunches
+    // the app automatically once it's done, so the whole thing is hands-off.
+    if (status.state === 'downloaded') autoUpdater.quitAndInstall(true, true)
   })
 }
 
