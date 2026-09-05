@@ -208,6 +208,12 @@ export function TvScreen(): JSX.Element {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const trackRef = useRef<HTMLTrackElement | null>(null)
   const mseStopRef = useRef<(() => void) | null>(null)
+  // startPlaybackAt is async (probes media info, then awaits startMsePlayback
+  // setting up the MediaSource) — if the screen is left mid-way through that,
+  // the awaited calls still resolve later and would otherwise go on to store
+  // a live MSE session into mseStopRef *after* the unmount cleanup already
+  // ran, orphaning it (nothing left to ever call stop() on it).
+  const isMountedRef = useRef(true)
   const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastProgressSaveRef = useRef(0)
   // Kept fresh every render (same pattern as useNavListener's handlerRef) so
@@ -306,7 +312,10 @@ export function TvScreen(): JSX.Element {
   // to (and the hide-controls timer keeps touching) a video element that's
   // being torn out from under it mid-playback.
   useEffect(() => {
-    return () => stopPlaybackRef.current()
+    return () => {
+      isMountedRef.current = false
+      stopPlaybackRef.current()
+    }
   }, [])
 
   useEffect(() => {
@@ -790,7 +799,12 @@ export function TvScreen(): JSX.Element {
       try {
         // eslint-disable-next-line no-console
         console.log('[player] using MSE playback:', mimeType)
-        mseStopRef.current = await startMsePlayback(video, streamUrl, mimeType, offsetSeconds)
+        const stopMse = await startMsePlayback(video, streamUrl, mimeType, offsetSeconds)
+        if (!isMountedRef.current) {
+          stopMse()
+          return
+        }
+        mseStopRef.current = stopMse
         video.volume = volume
         void video.play().catch(() => {})
         return
