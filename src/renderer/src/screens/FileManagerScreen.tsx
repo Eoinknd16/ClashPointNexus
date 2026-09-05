@@ -8,7 +8,7 @@ import type { FileEntry } from '@shared/filesystemTypes'
 /** null = the root "This PC" view (Home shortcut + drives), not a real path. */
 type CurrentPath = string | null
 type Zone = 'list' | 'contextMenu' | 'confirmDelete' | 'keyboard'
-type KeyboardPurpose = 'rename' | 'newFolder'
+type KeyboardPurpose = 'rename' | 'newFolder' | 'search'
 type MenuActionId = 'open' | 'newFolder' | 'rename' | 'cut' | 'copy' | 'paste' | 'delete'
 interface MenuOption {
   id: MenuActionId
@@ -54,6 +54,7 @@ export function FileManagerScreen(): JSX.Element {
   const [menuIndex, setMenuIndex] = useState(0)
   const [confirmIndex, setConfirmIndex] = useState(0)
   const [clipboard, setClipboard] = useState<Clipboard | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [kbPurpose, setKbPurpose] = useState<KeyboardPurpose | null>(null)
   const [kbValue, setKbValue] = useState('')
   const [kbShift, setKbShift] = useState(false)
@@ -88,6 +89,15 @@ export function FileManagerScreen(): JSX.Element {
     rowRefs.current[focusIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [focusIndex])
 
+  // entries stays the full unfiltered listing (so clearing the filter doesn't
+  // need a re-fetch) — everything that indexes by focusIndex uses this
+  // filtered view instead, so up/down and the context menu operate on
+  // whatever's actually visible.
+  const trimmedSearch = searchQuery.trim().toLowerCase()
+  const visibleEntries = trimmedSearch
+    ? entries.filter((e) => e.name.toLowerCase().includes(trimmedSearch))
+    : entries
+
   function activateEntry(entry: FileEntry): void {
     if (entry.isDirectory) {
       setCurrentPath(entry.path)
@@ -111,7 +121,7 @@ export function FileManagerScreen(): JSX.Element {
 
   function buildMenuOptions(): MenuOption[] {
     const options: MenuOption[] = []
-    const entry = entries[focusIndex]
+    const entry = visibleEntries[focusIndex]
     if (entry) {
       options.push({ id: 'open', label: 'Open' })
       options.push({ id: 'rename', label: 'Rename' })
@@ -139,7 +149,7 @@ export function FileManagerScreen(): JSX.Element {
   }
 
   async function runMenuAction(id: MenuActionId): Promise<void> {
-    const entry = entries[focusIndex]
+    const entry = visibleEntries[focusIndex]
     if (currentPath === null) {
       closeMenu()
       return
@@ -195,7 +205,7 @@ export function FileManagerScreen(): JSX.Element {
   }
 
   async function confirmDelete(): Promise<void> {
-    const entry = entries[focusIndex]
+    const entry = visibleEntries[focusIndex]
     setZone('list')
     if (!entry) return
     setMessage(`Deleting ${entry.name}...`)
@@ -209,6 +219,12 @@ export function FileManagerScreen(): JSX.Element {
     const purpose = kbPurpose
     setZone('list')
     setKbPurpose(null)
+
+    if (purpose === 'search') {
+      setSearchQuery(finalValue)
+      setFocusIndex(0)
+      return
+    }
     if (!value || !currentPath) return
 
     if (purpose === 'newFolder') {
@@ -219,7 +235,7 @@ export function FileManagerScreen(): JSX.Element {
       return
     }
     if (purpose === 'rename') {
-      const entry = entries[focusIndex]
+      const entry = visibleEntries[focusIndex]
       if (!entry) return
       setMessage(`Renaming to "${value}"...`)
       const error = await window.api.filesystem.rename(entry.path, value)
@@ -331,13 +347,16 @@ export function FileManagerScreen(): JSX.Element {
         setFocusIndex((i) => Math.max(0, i - 1))
         return
       case 'down':
-        setFocusIndex((i) => Math.min(entries.length - 1, i + 1))
+        setFocusIndex((i) => Math.min(visibleEntries.length - 1, i + 1))
         return
       case 'confirm': {
-        const entry = entries[focusIndex]
+        const entry = visibleEntries[focusIndex]
         if (entry) activateEntry(entry)
         return
       }
+      case 'search':
+        openKeyboardFor('search', searchQuery)
+        return
       case 'contextMenu':
         if (currentPath === null) return
         setMenuIndex(0)
@@ -345,6 +364,11 @@ export function FileManagerScreen(): JSX.Element {
         return
       case 'back':
       case 'menu':
+        if (searchQuery) {
+          setSearchQuery('')
+          setFocusIndex(0)
+          return
+        }
         goUp()
         return
       default:
@@ -358,13 +382,22 @@ export function FileManagerScreen(): JSX.Element {
   return (
     <div className="flex h-screen flex-col gap-4 bg-bg px-10 py-8">
       <header className="flex items-center justify-between gap-4">
-        <h1 className="truncate text-3xl font-bold tracking-tight">{currentPath ?? 'This PC'}</h1>
+        <div className="flex min-w-0 items-center gap-3">
+          <h1 className="truncate text-3xl font-bold tracking-tight">{currentPath ?? 'This PC'}</h1>
+          {searchQuery && (
+            <span className="shrink-0 rounded-full bg-surface-hi px-3 py-1 text-sm text-accent">
+              Filtering: "{searchQuery}" (Back to clear)
+            </span>
+          )}
+        </div>
         {!isRoot && (
-          <span className="shrink-0 text-sm text-muted">Click the left stick (L3) for file options</span>
+          <span className="shrink-0 text-sm text-muted">
+            Search: Triangle · Options: click left stick (L3)
+          </span>
         )}
       </header>
 
-      {!isRoot && entries.length > 0 && (
+      {!isRoot && visibleEntries.length > 0 && (
         <div className="flex items-center gap-4 px-5 text-xs uppercase tracking-wide text-muted">
           <span className="flex-1">Name</span>
           <span className="w-40 shrink-0">Date modified</span>
@@ -374,8 +407,10 @@ export function FileManagerScreen(): JSX.Element {
       )}
 
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
-        {entries.length === 0 && <span className="px-5 text-muted">Empty folder</span>}
-        {entries.map((entry, i) => (
+        {visibleEntries.length === 0 && (
+          <span className="px-5 text-muted">{searchQuery ? 'No matches' : 'Empty folder'}</span>
+        )}
+        {visibleEntries.map((entry, i) => (
           <div
             key={entry.path}
             ref={(el) => (rowRefs.current[i] = el)}
@@ -452,7 +487,7 @@ export function FileManagerScreen(): JSX.Element {
 
       {zone === 'keyboard' && (
         <OnScreenKeyboard
-          label={kbPurpose === 'rename' ? 'Rename' : 'New folder name'}
+          label={kbPurpose === 'rename' ? 'Rename' : kbPurpose === 'search' ? 'Search this folder' : 'New folder name'}
           value={kbValue}
           shift={kbShift}
           focusedRow={kbRow}
