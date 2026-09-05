@@ -5,6 +5,7 @@ import type { MediaInfo } from './playerConstants'
 import type { WatchProgress } from './progressTypes'
 import type {
   SteamSettings,
+  SteamSignInResult,
   StremioImportResult,
   StremioLoginResult,
   StremioSettings
@@ -62,6 +63,11 @@ export interface LauncherApi {
   settings: {
     getSteam: () => Promise<SteamSettings>
     setSteam: (settings: SteamSettings) => Promise<void>
+    /** Opens a real Steam login window and captures the SteamID64 from a
+     * verified OpenID callback — an API key still has to be entered manually
+     * (Steam's Web API always requires one), but this removes needing to
+     * look up your own 17-digit SteamID64. */
+    steamSignIn: () => Promise<SteamSignInResult>
     getStremio: () => Promise<StremioSettings>
     setStremioAddons: (addons: AddonSummary[]) => Promise<void>
     addStremioAddon: (url: string) => Promise<AddonSummary[]>

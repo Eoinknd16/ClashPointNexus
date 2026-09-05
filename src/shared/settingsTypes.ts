@@ -23,3 +23,9 @@ export interface StremioImportResult {
   progressImported: number
   libraryImported: number
 }
+
+export interface SteamSignInResult {
+  success: boolean
+  error: string | null
+  steamId64: string | null
+}

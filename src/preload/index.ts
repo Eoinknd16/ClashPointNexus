@@ -33,6 +33,7 @@ const api: LauncherApi = {
   settings: {
     getSteam: () => ipcRenderer.invoke('settings:getSteam'),
     setSteam: (settings) => ipcRenderer.invoke('settings:setSteam', settings),
+    steamSignIn: () => ipcRenderer.invoke('settings:steamSignIn'),
     getStremio: () => ipcRenderer.invoke('settings:getStremio'),
     setStremioAddons: (streamAddons) => ipcRenderer.invoke('settings:setStremioAddons', streamAddons),
     addStremioAddon: (url) => ipcRenderer.invoke('settings:addStremioAddon', url),

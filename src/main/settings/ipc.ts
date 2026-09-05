@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type {
   SteamSettings,
+  SteamSignInResult,
   StremioImportResult,
   StremioLoginResult,
   StremioSettings
@@ -8,6 +9,7 @@ import type {
 import type { AddonSummary } from '@shared/stremioTypes'
 import type { ThemeDefinition } from '@shared/themeTypes'
 import { loadSteamConfig, saveSteamConfig } from '../steam/config'
+import { signInWithSteam } from '../steam/openid'
 import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../stremio/account'
 import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
 import { importStremioHistory } from '../stremio/importHistory'
@@ -21,6 +23,15 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('settings:setSteam', (_event, settings: SteamSettings) => {
     saveSteamConfig(settings)
+  })
+
+  ipcMain.handle('settings:steamSignIn', async (): Promise<SteamSignInResult> => {
+    const { steamId64, error } = await signInWithSteam()
+    if (steamId64) {
+      saveSteamConfig({ ...loadSteamConfig(), steamId64 })
+      return { success: true, error: null, steamId64 }
+    }
+    return { success: false, error, steamId64: null }
   })
 
   ipcMain.handle('settings:getStremio', (): StremioSettings => {

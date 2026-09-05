@@ -139,7 +139,14 @@ export function SettingsScreen(): JSX.Element {
 
     header('steam', 'Steam'),
     { id: 'steamApiKey', kind: 'field', label: 'Steam API Key', value: steamApiKey, masked: true },
-    { id: 'steamId64', kind: 'field', label: 'Steam ID64', value: steamId64 },
+    { id: 'steamApiKeyHint', kind: 'info', label: 'Get one at steamcommunity.com/dev/apikey' },
+    {
+      id: 'steamIdStatus',
+      kind: 'info',
+      label: steamId64 ? `✓ Linked to SteamID ${steamId64}` : 'Not linked to a Steam account'
+    },
+    { id: 'steamSignIn', kind: 'action', label: steamId64 ? 'Re-link Steam Account' : 'Sign In With Steam' },
+    { id: 'steamId64', kind: 'field', label: 'Steam ID64 (manual entry)', value: steamId64 },
 
     header('stremioAccount', 'Stremio Account'),
     {
@@ -249,6 +256,17 @@ export function SettingsScreen(): JSX.Element {
     if (result.done) submitKeyboard(result.value)
   }
 
+  async function doSteamSignIn(): Promise<void> {
+    setMessage('Opening Steam sign-in...')
+    const result = await window.api.settings.steamSignIn()
+    if (result.success && result.steamId64) {
+      setSteamId64(result.steamId64)
+      setMessage(`Linked to SteamID ${result.steamId64}`)
+    } else {
+      setMessage(`Steam sign-in failed: ${result.error}`)
+    }
+  }
+
   async function doLogin(): Promise<void> {
     setMessage('Logging in to Stremio...')
     const result = await window.api.settings.stremioLogin(stremioEmail, stremioPassword)
@@ -324,6 +342,8 @@ export function SettingsScreen(): JSX.Element {
       setMessage('Addon removed')
     } else if (row.id === 'addAddon') {
       openKeyboard('newAddon', '')
+    } else if (row.id === 'steamSignIn') {
+      void doSteamSignIn()
     } else if (row.id === 'stremioLogin') {
       if (loggedIn) void doResync()
       else void doLogin()
