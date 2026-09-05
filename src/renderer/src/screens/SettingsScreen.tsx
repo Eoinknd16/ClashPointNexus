@@ -347,6 +347,15 @@ export function SettingsScreen(): JSX.Element {
         case 'confirm':
           pressVirtualKey(KEY_ROWS[kbRow][kbCol])
           return
+        case 'toggleSubtitles':
+          pressVirtualKey('BACKSPACE')
+          return
+        case 'volumeUp':
+          pressVirtualKey('SHIFT')
+          return
+        case 'nextStream':
+          submitKeyboard(kbValue)
+          return
         case 'back':
         case 'menu':
           cancelKeyboard()

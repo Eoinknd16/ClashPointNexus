@@ -170,6 +170,15 @@ export function GamesScreen(): JSX.Element {
         case 'confirm':
           pressVirtualKey(KEY_ROWS[kbRow][kbCol])
           return
+        case 'toggleSubtitles':
+          pressVirtualKey('BACKSPACE')
+          return
+        case 'volumeUp':
+          pressVirtualKey('SHIFT')
+          return
+        case 'nextStream':
+          submitKeyboard(kbValue)
+          return
         case 'back':
         case 'menu':
           cancelKeyboard()
@@ -221,6 +230,10 @@ export function GamesScreen(): JSX.Element {
         case 'nextStream':
           switchFilter(1)
           return
+        case 'search':
+          setFilterIndex(FILTERS.length)
+          openKeyboard(searchQuery)
+          return
         case 'back':
         case 'menu':
           goHome()
@@ -232,6 +245,11 @@ export function GamesScreen(): JSX.Element {
 
     // zone === 'grid'
     switch (action) {
+      case 'search':
+        setZone('filters')
+        setFilterIndex(FILTERS.length)
+        openKeyboard(searchQuery)
+        return
       case 'up':
         if (gridIndex < COLUMNS) {
           setZone('filters')

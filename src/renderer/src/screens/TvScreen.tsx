@@ -971,6 +971,15 @@ export function TvScreen(): JSX.Element {
         case 'confirm':
           pressVirtualKey(KEY_ROWS[kbRow][kbCol])
           return
+        case 'toggleSubtitles':
+          pressVirtualKey('BACKSPACE')
+          return
+        case 'volumeUp':
+          pressVirtualKey('SHIFT')
+          return
+        case 'nextStream':
+          submitKeyboard(kbValue)
+          return
         case 'back':
         case 'menu':
           cancelKeyboard()
@@ -1231,6 +1240,10 @@ export function TvScreen(): JSX.Element {
         case 'nextStream':
           switchTab(1)
           return
+        case 'search':
+          setTabIndex(TABS.length)
+          openKeyboard(searchQuery)
+          return
         case 'back':
         case 'menu':
           goHome()
@@ -1248,6 +1261,11 @@ export function TvScreen(): JSX.Element {
       // nothing in the DOM corresponds to.
       const rowLen = row ? Math.min(row.items.length, ROW_PREVIEW_CAP) : 0
       switch (action) {
+        case 'search':
+          setZone('filters')
+          setTabIndex(TABS.length)
+          openKeyboard(searchQuery)
+          return
         case 'up':
           if (rowIndex === 0) {
             setZone('filters')

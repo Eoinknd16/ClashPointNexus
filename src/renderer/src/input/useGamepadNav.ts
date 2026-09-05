@@ -18,15 +18,23 @@ const MIN_BUTTON_GAP_MS = 60
 
 // Standard gamepad mapping (W3C) — DualSense and Xbox controllers both
 // map to this layout in Chromium, dpad and left stick both drive nav.
+//
+// Several of these fire a different, unrelated action depending on which
+// zone is listening — same pattern as left/right meaning "seek" in the
+// player but "move focus" in a filters row. In particular, the on-screen
+// keyboard zone (shared by Games/TV search, Browse's address bar, and
+// Settings fields) reinterprets Square/R1/R2 as Backspace/Submit/Shift,
+// since toggleSubtitles/nextStream/volumeUp mean nothing while typing.
 const BUTTON_CONFIRM = 0
 const BUTTON_BACK = 1
-const BUTTON_SQUARE = 2 // toggle subtitles
-const BUTTON_TRIANGLE = 3 // skip to next episode
+const BUTTON_SQUARE = 2 // toggleSubtitles elsewhere, Backspace while typing
+const BUTTON_TRIANGLE = 3 // universal "open search" shortcut
 const BUTTON_MENU = 9
 const BUTTON_L1 = 4 // previous stream
-const BUTTON_R1 = 5 // next stream
+const BUTTON_R1 = 5 // nextStream elsewhere, Submit while typing
 const BUTTON_L2 = 6 // volume down
-const BUTTON_R2 = 7 // volume up
+const BUTTON_R2 = 7 // volumeUp elsewhere, Shift while typing
+const BUTTON_SHARE = 8 // skip to next episode
 const BUTTON_DPAD_UP = 12
 const BUTTON_DPAD_DOWN = 13
 const BUTTON_DPAD_LEFT = 14
@@ -37,7 +45,8 @@ const EDGE_BUTTONS: Array<[number, NavAction]> = [
   [BUTTON_BACK, 'back'],
   [BUTTON_MENU, 'menu'],
   [BUTTON_SQUARE, 'toggleSubtitles'],
-  [BUTTON_TRIANGLE, 'skipNext'],
+  [BUTTON_TRIANGLE, 'search'],
+  [BUTTON_SHARE, 'skipNext'],
   [BUTTON_L1, 'prevStream'],
   [BUTTON_R1, 'nextStream'],
   [BUTTON_L2, 'volumeDown'],

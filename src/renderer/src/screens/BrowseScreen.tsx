@@ -209,6 +209,15 @@ export function BrowseScreen(): JSX.Element {
         case 'confirm':
           pressVirtualKey(KEY_ROWS[kbRow][kbCol])
           return
+        case 'toggleSubtitles':
+          pressVirtualKey('BACKSPACE')
+          return
+        case 'volumeUp':
+          pressVirtualKey('SHIFT')
+          return
+        case 'nextStream':
+          submitKeyboard(kbValue)
+          return
         case 'back':
         case 'menu':
           cancelKeyboard()
@@ -241,6 +250,11 @@ export function BrowseScreen(): JSX.Element {
         case 'nextStream':
           activateToolbar('forward')
           return
+        case 'search':
+          setZone('address')
+          setToolbarIndex(TOOLBAR_ITEMS.length - 1)
+          openKeyboard(url)
+          return
         case 'back':
         case 'menu':
           setZone('address')
@@ -263,6 +277,10 @@ export function BrowseScreen(): JSX.Element {
         return
       case 'confirm':
         activateToolbar(TOOLBAR_ITEMS[toolbarIndex])
+        return
+      case 'search':
+        setToolbarIndex(TOOLBAR_ITEMS.length - 1)
+        openKeyboard(url)
         return
       case 'back':
       case 'menu':
