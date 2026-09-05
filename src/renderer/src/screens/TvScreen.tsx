@@ -8,6 +8,7 @@ import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKe
 import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
+import { useCrashLogStore } from '../state/crashLogStore'
 import { subtitleTrackUrl, transcodedStreamUrl } from '@shared/playerConstants'
 import { buildMseCodecString } from '../player/codecStrings'
 import { startMsePlayback } from '../player/msePlayer'
@@ -314,7 +315,23 @@ export function TvScreen(): JSX.Element {
   useEffect(() => {
     return () => {
       isMountedRef.current = false
-      stopPlaybackRef.current()
+      // Explicit try/catch, not relying on React to route an unmount-cleanup
+      // exception to an error boundary — that specific case (a boundary that's
+      // itself unmounting in the same commit as the child whose cleanup just
+      // threw) is a genuinely fuzzy edge in React's own error handling, and
+      // this is exactly the codepath under suspicion for the blank-screen
+      // reports, so it gets its own safety net instead of trusting one.
+      try {
+        stopPlaybackRef.current()
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('[TvScreen] stopPlayback threw during unmount:', error)
+        useCrashLogStore
+          .getState()
+          .reportError(
+            `Playback cleanup crashed on leaving TV: ${error instanceof Error ? error.message : String(error)}`
+          )
+      }
     }
   }, [])
 

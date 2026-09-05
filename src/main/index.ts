@@ -50,6 +50,13 @@ function createWindow(): void {
     if (isDev && input.key === 'Escape' && input.type === 'keyDown') {
       mainWindow.close()
     }
+    // F12 opens DevTools in packaged builds too — otherwise a crash report
+    // that isn't caught by anything the renderer itself surfaces (the
+    // CrashToast, an error boundary) has no way to actually get looked at,
+    // since a packaged build has no console visible by default.
+    if (input.key === 'F12' && input.type === 'keyDown') {
+      mainWindow.webContents.toggleDevTools()
+    }
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
