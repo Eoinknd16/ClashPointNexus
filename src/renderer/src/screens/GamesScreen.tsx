@@ -9,8 +9,23 @@ import { useNavigationStore } from '../state/navigationStore'
 import type { AchievementProgress, GameEntry, GameStoreInfo } from '@shared/steamTypes'
 
 const COLUMNS = 5
-const FILTERS = ['installed', 'all', 'favorites'] as const
+const FILTERS = ['installed', 'notInstalled', 'all', 'favorites', 'controllerFriendly'] as const
 type Filter = (typeof FILTERS)[number]
+
+function filterLabel(f: Filter): string {
+  switch (f) {
+    case 'installed':
+      return 'Installed'
+    case 'notInstalled':
+      return 'Not Installed'
+    case 'all':
+      return 'All Games'
+    case 'favorites':
+      return '⭐ Favorites'
+    case 'controllerFriendly':
+      return '🎮 Controller Friendly'
+  }
+}
 // filterIndex ranges 0..FILTERS.length inclusive — FILTERS.length itself is a
 // search bubble, reachable by d-pad but not by the bumpers (switchFilter stays
 // clamped to the real filters, so a quick bumper tap can't pop the keyboard).
@@ -80,11 +95,50 @@ export function GamesScreen(): JSX.Element {
   const [kbShift, setKbShift] = useState(false)
   const [achievements, setAchievements] = useState<AchievementProgress | null>(null)
   const [storeInfo, setStoreInfo] = useState<GameStoreInfo | null>(null)
+  const [storeInfoByApp, setStoreInfoByApp] = useState<Record<number, GameStoreInfo | null>>({})
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
   const goHome = useNavigationStore((s) => s.goHome)
   const consumePendingContinue = useNavigationStore((s) => s.consumePendingContinue)
   const cardRefs = useRef<Array<HTMLDivElement | null>>([])
+  const isMountedRef = useRef(true)
+  const requestedStoreInfoRef = useRef<Set<number>>(new Set())
+
+  useEffect(
+    () => () => {
+      isMountedRef.current = false
+    },
+    []
+  )
+
+  // Background enrichment for the Controller Friendly filter, which (unlike
+  // the on-demand per-selection fetch below) needs to know every owned
+  // game's store info up front, not just whichever one is selected. Runs
+  // once per appId ever (requestedStoreInfoRef, a ref so it survives this
+  // effect re-running when allGames gets a new reference, e.g. from a
+  // favorite toggle) — the actual network throttling lives in the main
+  // process (service.ts's getStoreInfo), so firing every request at once
+  // here is fine. Deliberately no per-run "cancelled" flag: this is a
+  // persistent background task, not a fetch tied to a specific input value,
+  // so an in-flight request from an earlier run must still land when it
+  // resolves rather than being silently dropped — isMountedRef only turns
+  // false on a real unmount, not on every allGames change.
+  useEffect(() => {
+    for (const game of allGames) {
+      if (game.launch.type !== 'steam') continue
+      const appId = game.launch.appId
+      if (requestedStoreInfoRef.current.has(appId)) continue
+      requestedStoreInfoRef.current.add(appId)
+      window.api.steam
+        .getStoreInfo(appId)
+        .then((info) => {
+          if (isMountedRef.current) setStoreInfoByApp((prev) => ({ ...prev, [appId]: info }))
+        })
+        .catch(() => {
+          if (isMountedRef.current) setStoreInfoByApp((prev) => ({ ...prev, [appId]: null }))
+        })
+    }
+  }, [allGames])
 
   // Home screen's "Continue Playing" card deep-links here — unlike TV (which
   // just lands on the detail panel), a game launch is low-stakes enough to
@@ -177,11 +231,26 @@ export function GamesScreen(): JSX.Element {
     ? allGames.filter((g) => g.name.toLowerCase().includes(trimmedQuery))
     : filter === 'installed'
       ? allGames.filter((g) => g.installed)
-      : filter === 'favorites'
-        ? allGames.filter((g) => g.favorite)
-        : allGames
+      : filter === 'notInstalled'
+        ? allGames.filter((g) => !g.installed)
+        : filter === 'favorites'
+          ? allGames.filter((g) => g.favorite)
+          : filter === 'controllerFriendly'
+            ? allGames.filter((g) => {
+                if (g.launch.type !== 'steam') return false
+                const support = storeInfoByApp[g.launch.appId]?.controllerSupport
+                return support === 'full' || support === 'partial'
+              })
+            : allGames
   const games = [...baseGames].sort((a, b) => b.lastPlayed - a.lastPlayed)
   const cards = games.map(toCardItem)
+
+  const totalSteamGames = allGames.reduce((n, g) => n + (g.launch.type === 'steam' ? 1 : 0), 0)
+  const scannedSteamGames = allGames.reduce(
+    (n, g) => n + (g.launch.type === 'steam' && g.launch.appId in storeInfoByApp ? 1 : 0),
+    0
+  )
+  const stillScanningControllerSupport = scannedSteamGames < totalSteamGames
 
   // Optimistic — flips the local flag immediately (grid badge + detail panel
   // both derive from allGames/selectedGame) and rolls back only if the IPC
@@ -404,7 +473,7 @@ export function GamesScreen(): JSX.Element {
                 filter === f && !searchQuery ? 'bg-accent text-white' : 'bg-surface text-muted'
               } ${zone === 'filters' && filterIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
             >
-              {f === 'installed' ? 'Installed' : f === 'all' ? 'All Games' : '⭐ Favorites'}
+              {filterLabel(f)}
             </div>
           ))}
           <div
@@ -425,6 +494,12 @@ export function GamesScreen(): JSX.Element {
           </div>
         </div>
 
+        {filter === 'controllerFriendly' && stillScanningControllerSupport && (
+          <p className="-mt-4 text-xs text-muted">
+            Still scanning your library for controller support ({scannedSteamGames}/{totalSteamGames})...
+          </p>
+        )}
+
         {/* transform: scale() doesn't reserve extra layout space, so a focused
             card grows past its own grid cell — the gap has to be wide enough
             to absorb that growth (plus the glow) before it reaches the next
@@ -436,7 +511,11 @@ export function GamesScreen(): JSX.Element {
                 ? `No games matching "${searchQuery}"`
                 : filter === 'favorites'
                   ? 'No favorites yet — Square on a game adds one.'
-                  : 'No games in this view yet.'}
+                  : filter === 'controllerFriendly'
+                    ? stillScanningControllerSupport
+                      ? 'Still scanning your library — controller-friendly games will appear here as they are found.'
+                      : 'No controller-friendly games found in your library.'
+                    : 'No games in this view yet.'}
             </span>
           )}
           {cards.map((card, i) => (
@@ -517,6 +596,11 @@ export function GamesScreen(): JSX.Element {
               <div className="flex flex-col gap-2 border-t border-white/5 pt-4">
                 {storeInfo.genres.length > 0 && (
                   <p className="text-xs uppercase tracking-wide text-accent">{storeInfo.genres.join(' · ')}</p>
+                )}
+                {storeInfo.controllerSupport !== 'none' && (
+                  <p className="text-xs font-medium text-muted">
+                    🎮 {storeInfo.controllerSupport === 'full' ? 'Full' : 'Partial'} Controller Support
+                  </p>
                 )}
                 {storeInfo.description && (
                   <p className="line-clamp-4 text-sm text-muted">{storeInfo.description}</p>

@@ -4,6 +4,7 @@ import { listFavoriteGameIds } from './favorites'
 import { findSteamPath, getInstalledGames, type InstalledApp } from './library'
 import { getNonSteamShortcuts } from './shortcuts'
 import { fetchAppDetails } from './storeApi'
+import { getCachedStoreInfo, setCachedStoreInfo } from './storeCache'
 import { fetchOwnedGames, fetchPlayerAchievements } from './webApi'
 
 function shortcutEntries(steamPath: string | null, steamId64: string): GameEntry[] {
@@ -104,7 +105,30 @@ export async function getAchievements(appId: number): Promise<AchievementProgres
   return fetchPlayerAchievements(config.apiKey, config.steamId64, appId)
 }
 
-/** No API key gate here — the storefront API needs none. */
+// Chained through one shared promise rather than a real queue data structure
+// — the only thing that matters is spacing out actual network calls so the
+// Games screen's background prefetch (every owned game, potentially 100+ of
+// them, all requested at once) can't burst-hit the storefront API. Cache
+// hits below bypass this entirely, so it only ever throttles genuinely new
+// appIds, never a screen revisit.
+let fetchQueue: Promise<unknown> = Promise.resolve()
+const FETCH_SPACING_MS = 350
+
+/** No API key gate here — the storefront API needs none. Checks the on-disk
+ * cache first (populated across every session, not just this one) before
+ * ever making a network call. */
 export async function getStoreInfo(appId: number): Promise<GameStoreInfo | null> {
-  return fetchAppDetails(appId)
+  const cached = getCachedStoreInfo(appId)
+  if (cached) return cached
+
+  const queued = fetchQueue.then(async () => {
+    const info = await fetchAppDetails(appId)
+    await new Promise((resolve) => setTimeout(resolve, FETCH_SPACING_MS))
+    return info
+  })
+  fetchQueue = queued.catch(() => undefined)
+
+  const info = await queued
+  if (info) setCachedStoreInfo(appId, info)
+  return info
 }

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { registerAppsIpc } from './apps/ipc'
+import { registerArcadeIpc } from './arcade/ipc'
 import { registerFilesystemIpc } from './filesystem/ipc'
 import { goToDesktop, registerGlobalInputIpc } from './globalInput/ipc'
 import {
@@ -91,6 +92,7 @@ app.whenReady().then(() => {
   registerHomeIpc()
   registerSystemIpc()
   registerAppsIpc()
+  registerArcadeIpc()
   startTranscodeProxy()
   const mainWindow = createWindow()
   registerGlobalInputIpc(mainWindow)

@@ -121,6 +121,10 @@ const api: LauncherApi = {
     remove: (id) => ipcRenderer.invoke('apps:remove', id),
     toggleFavorite: (id) => ipcRenderer.invoke('apps:toggleFavorite', id),
     launch: (executablePath, args) => ipcRenderer.invoke('apps:launch', executablePath, args)
+  },
+  arcade: {
+    getHighScores: () => ipcRenderer.invoke('arcade:getHighScores'),
+    submitScore: (name, score) => ipcRenderer.invoke('arcade:submitScore', name, score)
   }
 }
 

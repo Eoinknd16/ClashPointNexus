@@ -39,4 +39,7 @@ export interface GameStoreInfo {
   metacriticScore: number | null
   developers: string[]
   publishers: string[]
+  /** From the storefront's "categories" list (ids 28/18) — 'none' covers
+   * both "explicitly no controller support" and "categories didn't say". */
+  controllerSupport: 'full' | 'partial' | 'none'
 }

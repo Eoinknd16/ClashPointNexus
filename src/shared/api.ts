@@ -1,4 +1,5 @@
 import type { AppEntry } from './appsTypes'
+import type { HighScoreEntry, ScoreSubmitResult } from './arcadeTypes'
 import type { DirectoryListing, FileEntry } from './filesystemTypes'
 import type { GlobalInputStatus } from './globalInputTypes'
 import type { ContinueSuggestion } from './homeTypes'
@@ -159,5 +160,10 @@ export interface LauncherApi {
     toggleFavorite: (id: string) => Promise<boolean>
     /** Resolves to an error message on failure, null on success. */
     launch: (executablePath: string, args: string) => Promise<string | null>
+  }
+  arcade: {
+    getHighScores: () => Promise<HighScoreEntry[]>
+    /** Local-only leaderboard for now — see arcadeTypes.ts. */
+    submitScore: (name: string, score: number) => Promise<ScoreSubmitResult>
   }
 }

@@ -27,6 +27,13 @@ const TILES: Array<{
   { id: 'files', title: 'Files', subtitle: 'This PC', icon: '🗂️', gradientDirection: 'bg-gradient-to-tl' },
   { id: 'apps', title: 'Apps', subtitle: 'Launch anything', icon: '📦', gradientDirection: 'bg-gradient-to-tr' },
   {
+    id: 'arcade',
+    title: 'Arcade',
+    subtitle: 'Nexus Dash · High Scores',
+    icon: '🕹️',
+    gradientDirection: 'bg-gradient-to-b'
+  },
+  {
     id: 'settings',
     title: 'Settings',
     subtitle: 'Accounts & addons',
@@ -275,7 +282,7 @@ export function HomeMenu(): JSX.Element {
         </div>
       )}
 
-      <div className="grid flex-1 grid-cols-6 items-center gap-10">
+      <div className="grid flex-1 grid-cols-7 items-center gap-10">
         {TILES.map((tile, i) => (
           <motion.div
             key={tile.id}
