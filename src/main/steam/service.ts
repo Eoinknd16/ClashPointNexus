@@ -1,9 +1,9 @@
-import type { GameEntry, SteamLibraryResult } from '@shared/steamTypes'
+import type { AchievementProgress, GameEntry, SteamLibraryResult } from '@shared/steamTypes'
 import { loadSteamConfig } from './config'
 import { listFavoriteGameIds } from './favorites'
 import { findSteamPath, getInstalledGames, type InstalledApp } from './library'
 import { getNonSteamShortcuts } from './shortcuts'
-import { fetchOwnedGames } from './webApi'
+import { fetchOwnedGames, fetchPlayerAchievements } from './webApi'
 
 function shortcutEntries(steamPath: string | null, steamId64: string): GameEntry[] {
   if (!steamPath) return []
@@ -91,4 +91,10 @@ export async function getSteamLibrary(): Promise<SteamLibraryResult> {
       error: error instanceof Error ? error.message : String(error)
     }
   }
+}
+
+export async function getAchievements(appId: number): Promise<AchievementProgress | null> {
+  const config = loadSteamConfig()
+  if (!config.apiKey || !config.steamId64) return null
+  return fetchPlayerAchievements(config.apiKey, config.steamId64, appId)
 }

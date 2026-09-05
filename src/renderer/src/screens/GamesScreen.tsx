@@ -6,7 +6,7 @@ import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKe
 import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
-import type { GameEntry } from '@shared/steamTypes'
+import type { AchievementProgress, GameEntry } from '@shared/steamTypes'
 
 const COLUMNS = 5
 const FILTERS = ['installed', 'all', 'favorites'] as const
@@ -71,6 +71,7 @@ export function GamesScreen(): JSX.Element {
   const [kbCol, setKbCol] = useState(0)
   const [kbValue, setKbValue] = useState('')
   const [kbShift, setKbShift] = useState(false)
+  const [achievements, setAchievements] = useState<AchievementProgress | null>(null)
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
   const goHome = useNavigationStore((s) => s.goHome)
@@ -90,6 +91,31 @@ export function GamesScreen(): JSX.Element {
     if (zone !== 'grid') return
     cardRefs.current[gridIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [zone, gridIndex])
+
+  // Only Steam-launched games have a Steam achievements schema at all — non-
+  // Steam shortcuts never do. Fetched on demand per selection rather than for
+  // the whole library up front, since it's one extra Web API round-trip per
+  // game and most of a library is never opened in a given session. Keyed off
+  // the appId (a stable primitive), not the selectedGame object itself —
+  // toggling favorite replaces that object with a new reference, which would
+  // otherwise re-trigger this fetch for no reason.
+  const selectedAppId = selectedGame?.launch.type === 'steam' ? selectedGame.launch.appId : null
+  useEffect(() => {
+    setAchievements(null)
+    if (selectedAppId === null) return
+    let cancelled = false
+    window.api.steam
+      .getAchievements(selectedAppId)
+      .then((result) => {
+        if (!cancelled) setAchievements(result)
+      })
+      .catch(() => {
+        if (!cancelled) setAchievements(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedAppId])
 
   useEffect(() => {
     let cancelled = false
@@ -442,6 +468,19 @@ export function GamesScreen(): JSX.Element {
                   : 'Not installed'}
               </p>
               <p className="text-sm text-muted">{formatLastPlayed(selectedGame.lastPlayed)}</p>
+              {achievements && (
+                <div className="mt-2 flex flex-col gap-1">
+                  <p className="text-sm text-muted">
+                    🏆 {achievements.unlocked}/{achievements.total} achievements
+                  </p>
+                  <div className="h-1.5 w-full rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-accent-gradient"
+                      style={{ width: `${Math.round((achievements.unlocked / achievements.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <button

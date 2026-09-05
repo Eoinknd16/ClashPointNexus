@@ -21,3 +21,8 @@ export interface SteamLibraryResult {
   needsApiKey: boolean
   error: string | null
 }
+
+export interface AchievementProgress {
+  unlocked: number
+  total: number
+}

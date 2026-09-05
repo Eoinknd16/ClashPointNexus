@@ -9,7 +9,7 @@ import type {
   StremioLoginResult,
   StremioSettings
 } from './settingsTypes'
-import type { GameLaunchTarget, SteamLibraryResult } from './steamTypes'
+import type { AchievementProgress, GameLaunchTarget, SteamLibraryResult } from './steamTypes'
 import type { SystemStats } from './systemTypes'
 import type {
   AddonCatalogRow,
@@ -36,6 +36,8 @@ export interface LauncherApi {
     install: (appId: number) => Promise<void>
     /** Resolves to the new favorited state. */
     toggleFavorite: (id: string) => Promise<boolean>
+    /** Null covers every "not applicable" case (no achievements schema, private stats, no API key configured) alike. */
+    getAchievements: (appId: number) => Promise<AchievementProgress | null>
   }
   stremio: {
     getCatalog: (type: CatalogType, catalogId: string, skip?: number, genre?: string) => Promise<CatalogItem[]>

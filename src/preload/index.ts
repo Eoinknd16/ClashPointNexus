@@ -6,7 +6,8 @@ const api: LauncherApi = {
     getLibrary: () => ipcRenderer.invoke('steam:getLibrary'),
     launch: (target) => ipcRenderer.invoke('steam:launch', target),
     install: (appId) => ipcRenderer.invoke('steam:install', appId),
-    toggleFavorite: (id) => ipcRenderer.invoke('steam:toggleFavorite', id)
+    toggleFavorite: (id) => ipcRenderer.invoke('steam:toggleFavorite', id),
+    getAchievements: (appId) => ipcRenderer.invoke('steam:getAchievements', appId)
   },
   stremio: {
     getCatalog: (type, catalogId, skip, genre) =>
