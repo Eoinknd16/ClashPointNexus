@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { stopActivePlayback } from '../player/activePlayback'
 import type { GameEntry } from '@shared/steamTypes'
 import type { CatalogItem, CatalogType } from '@shared/stremioTypes'
 
@@ -22,8 +23,20 @@ interface NavigationState {
 export const useNavigationStore = create<NavigationState>((set, get) => ({
   screen: 'home',
   pendingContinue: null,
-  goTo: (screen, pendingContinue) => set({ screen, pendingContinue: pendingContinue ?? null }),
-  goHome: () => set({ screen: 'home', pendingContinue: null }),
+  goTo: (screen, pendingContinue) => {
+    // Stops any TV playback synchronously before the transition even starts
+    // — see activePlayback.ts for why that matters (a video still playing
+    // during AnimatePresence's exit fade can keep that fade from ever being
+    // considered finished, leaving the outgoing screen stuck mounted and the
+    // incoming one never mounted at all — a stuck-blank-page failure that
+    // isn't a crash, so nothing anywhere would have caught it).
+    stopActivePlayback()
+    set({ screen, pendingContinue: pendingContinue ?? null })
+  },
+  goHome: () => {
+    stopActivePlayback()
+    set({ screen: 'home', pendingContinue: null })
+  },
   consumePendingContinue: () => {
     const action = get().pendingContinue
     if (action) set({ pendingContinue: null })

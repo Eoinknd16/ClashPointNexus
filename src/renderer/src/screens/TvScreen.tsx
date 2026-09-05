@@ -10,6 +10,7 @@ import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
 import { useCrashLogStore } from '../state/crashLogStore'
 import { subtitleTrackUrl, transcodedStreamUrl } from '@shared/playerConstants'
+import { registerActivePlaybackStop } from '../player/activePlayback'
 import { buildMseCodecString } from '../player/codecStrings'
 import { startMsePlayback } from '../player/msePlayer'
 import type { SubtitleTrack } from '@shared/api'
@@ -304,35 +305,43 @@ export function TvScreen(): JSX.Element {
   const inEpisodesView = zone === 'episodes'
   const inPlayerView = zone === 'player' || (zone === 'sources' && sourcesReturnZone === 'player')
 
-  // Normal in-screen navigation (the player zone's own back/menu handling)
-  // already calls stopPlayback directly. This covers the path that doesn't
-  // go through that: a top-level screen change fired from somewhere outside
-  // TvScreen entirely — the Quick Menu's Home/Settings actions call goHome()/
-  // goTo() straight on the navigation store — which unmounts TvScreen without
-  // ever running its own cleanup. Without this, MSE keeps appending buffers
-  // to (and the hide-controls timer keeps touching) a video element that's
-  // being torn out from under it mid-playback.
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false
-      // Explicit try/catch, not relying on React to route an unmount-cleanup
-      // exception to an error boundary — that specific case (a boundary that's
-      // itself unmounting in the same commit as the child whose cleanup just
-      // threw) is a genuinely fuzzy edge in React's own error handling, and
-      // this is exactly the codepath under suspicion for the blank-screen
-      // reports, so it gets its own safety net instead of trusting one.
-      try {
-        stopPlaybackRef.current()
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('[TvScreen] stopPlayback threw during unmount:', error)
-        useCrashLogStore
-          .getState()
-          .reportError(
-            `Playback cleanup crashed on leaving TV: ${error instanceof Error ? error.message : String(error)}`
-          )
-      }
+  function stopPlaybackSafely(context: string): void {
+    // Explicit try/catch, not relying on React to route this to an error
+    // boundary — when called from an unmount cleanup, that specific case (a
+    // boundary that's itself unmounting in the same commit as the child
+    // whose cleanup just threw) is a genuinely fuzzy edge in React's own
+    // error handling, and this is exactly the codepath under suspicion for
+    // the blank-screen reports, so it gets its own safety net instead of
+    // trusting one.
+    try {
+      stopPlaybackRef.current()
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error(`[TvScreen] stopPlayback threw (${context}):`, error)
+      useCrashLogStore
+        .getState()
+        .reportError(`Playback cleanup crashed (${context}): ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  // Registers with navigationStore's goTo/goHome so a top-level screen
+  // change synchronously stops playback *before* the transition starts, not
+  // just whenever TvScreen eventually unmounts. That distinction is the
+  // actual fix for the reported bug, not just belt-and-suspenders: a <video>
+  // still playing during AnimatePresence's exit fade keeps firing
+  // onTimeUpdate, continuously re-rendering the "exiting" screen — which can
+  // keep Framer Motion from ever considering that exit finished, so the
+  // incoming screen never mounts and the outgoing one (audio included) never
+  // tears down. Stopping playback synchronously, before the fade even
+  // starts, means there's nothing left to keep re-rendering during it.
+  useEffect(() => {
+    registerActivePlaybackStop(() => stopPlaybackSafely('pre-navigation'))
+    return () => {
+      registerActivePlaybackStop(null)
+      isMountedRef.current = false
+      stopPlaybackSafely('unmount')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
