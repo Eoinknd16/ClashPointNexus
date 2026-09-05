@@ -9,6 +9,7 @@ let mouseModeActive = false
 let helperRunning = false
 let controllerConnected: boolean | null = null
 let lastError: string | null = null
+let restartCount = 0
 let stopped = false
 let stdoutBuffer = ''
 let stderrBuffer = ''
@@ -39,7 +40,7 @@ export function isMouseModeActive(): boolean {
 }
 
 export function getGlobalInputStatus(): GlobalInputStatus {
-  return { helperRunning, controllerConnected, mouseModeActive, lastError }
+  return { helperRunning, controllerConnected, mouseModeActive, lastError, restartCount }
 }
 
 function notifyStatus(): void {
@@ -104,10 +105,26 @@ export function startGlobalInputWatcher(): void {
   proc.on('exit', () => {
     if (helperProcess === proc) helperProcess = null
     helperRunning = false
+    // This is the actual fix for a real "controller stops working entirely
+    // until I restart the app" report: mouseModeActive here is this
+    // service's own tracked copy, surfaced to Settings via notifyStatus()
+    // below -- but useGamepadNav.ts suppresses ALL in-app gamepad nav based
+    // on a SEPARATE renderer-side flag (mouseModeState.ts) that only ever
+    // hears about changes through onMouseModeChange, fired from handleLine's
+    // MOUSE_MODE_ON/OFF cases. If the helper process ever exits while mouse
+    // mode was on -- restarted after a one-off PowerShell hiccup, the exact
+    // scenario this auto-restart exists to recover from -- that callback
+    // never fired, so the renderer's suppression flag stayed stuck true
+    // forever, even though the brand-new helper instance starts fresh with
+    // mouse mode off. Restart resilience only actually works end-to-end if
+    // this path notifies the same way a real MOUSE_MODE_OFF does.
+    const wasMouseModeActive = mouseModeActive
     mouseModeActive = false
     controllerConnected = null
     if (stderrBuffer.trim()) lastError = stderrBuffer.trim().slice(-500)
     stderrBuffer = ''
+    if (wasMouseModeActive) onMouseModeChange?.(false)
+    if (!stopped) restartCount += 1
     notifyStatus()
     if (!stopped) setTimeout(startGlobalInputWatcher, RESTART_DELAY_MS)
   })
@@ -115,7 +132,10 @@ export function startGlobalInputWatcher(): void {
   proc.on('error', (error) => {
     if (helperProcess === proc) helperProcess = null
     helperRunning = false
+    const wasMouseModeActive = mouseModeActive
+    mouseModeActive = false
     lastError = error.message
+    if (wasMouseModeActive) onMouseModeChange?.(false)
     notifyStatus()
   })
 }

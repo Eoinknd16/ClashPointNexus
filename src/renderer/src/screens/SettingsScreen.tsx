@@ -173,6 +173,15 @@ export function SettingsScreen(): JSX.Element {
           }
         ]
       : []),
+    ...(globalInputStatus && globalInputStatus.restartCount > 0
+      ? [
+          {
+            id: 'globalInputRestarts',
+            kind: 'info' as const,
+            label: `⚠ Background listener has restarted ${globalInputStatus.restartCount} time(s) this session`
+          }
+        ]
+      : []),
     ...(globalInputStatus?.lastError
       ? [{ id: 'globalInputError', kind: 'info' as const, label: `Last error: ${globalInputStatus.lastError}` }]
       : []),
