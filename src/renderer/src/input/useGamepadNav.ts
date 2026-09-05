@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { isMouseModeActive } from './mouseModeState'
 import { emitNav, type NavAction } from './navBus'
 
 // Two-threshold (hysteresis) deadzone: a direction only "presses" once the
@@ -98,12 +99,22 @@ export function useGamepadNav(): void {
     window.addEventListener('gamepadconnected', handleConnect)
     window.addEventListener('gamepaddisconnected', handleDisconnect)
 
-    const fireOnce = (buttonIndex: number, action: NavAction, isPressed: boolean, time: number): void => {
+    // shouldEmit still lets press/release state update normally even while
+    // suppressed (Mouse Mode active) — otherwise a button already held when
+    // Mouse Mode ends looks like a brand-new press the instant it's checked
+    // again, firing a spurious action right as control hands back.
+    const fireOnce = (
+      buttonIndex: number,
+      action: NavAction,
+      isPressed: boolean,
+      time: number,
+      shouldEmit: boolean
+    ): void => {
       const wasPressed = pressed.has(buttonIndex)
       if (isPressed && !wasPressed) {
         const last = lastPressAt.get(buttonIndex) ?? -Infinity
         pressed.add(buttonIndex)
-        if (time - last >= MIN_BUTTON_GAP_MS) {
+        if (shouldEmit && time - last >= MIN_BUTTON_GAP_MS) {
           lastPressAt.set(buttonIndex, time)
           emitNav(action)
         }
@@ -164,8 +175,21 @@ export function useGamepadNav(): void {
           }
         }
 
+        // The global helper (a separate process, polling the same physical
+        // controller independently for Mouse Mode) and this app's own
+        // Gamepad-API-based nav both read every button press while Mouse
+        // Mode is active — without suppressing emission here, the same
+        // button press fires twice: a real OS-level click wherever the
+        // cursor actually is, *and* this app's own in-app "confirm" on
+        // whatever this app's own controller-focus happens to be, an
+        // unrelated target. Press/release tracking still runs normally
+        // (the `shouldEmit` param on fireOnce, not skipping this loop
+        // entirely) so nothing looks like a fresh press the instant Mouse
+        // Mode ends with a button still physically held.
+        const shouldEmit = !isMouseModeActive()
+
         for (const [buttonIndex, action] of EDGE_BUTTONS) {
-          fireOnce(buttonIndex, action, pad.buttons[buttonIndex]?.pressed ?? false, time)
+          fireOnce(buttonIndex, action, pad.buttons[buttonIndex]?.pressed ?? false, time, shouldEmit)
         }
 
         const direction = computeDirection(pad)
@@ -175,12 +199,12 @@ export function useGamepadNav(): void {
               heldDirection = direction
               lastDirectionEmitAt = time
               nextRepeatAt = time + INITIAL_REPEAT_DELAY_MS
-              emitNav(direction)
+              if (shouldEmit) emitNav(direction)
             }
           } else if (time >= nextRepeatAt) {
             lastDirectionEmitAt = time
             nextRepeatAt = time + REPEAT_INTERVAL_MS
-            emitNav(direction)
+            if (shouldEmit) emitNav(direction)
           }
         } else {
           heldDirection = null

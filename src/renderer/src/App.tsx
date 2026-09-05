@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useGamepadNav } from './input/useGamepadNav'
 import { useKeyboardNav } from './input/useKeyboardNav'
-import { emitNav } from './input/navBus'
+import { emitNav, subscribeNav } from './input/navBus'
+import { setMouseModeActive } from './input/mouseModeState'
 import { useNavigationStore, type ScreenId } from './state/navigationStore'
 import { useThemeStore } from './state/themeStore'
 import { HomeMenu } from './screens/HomeMenu'
@@ -46,6 +47,34 @@ function App(): JSX.Element {
   // focus) — reuses the exact same Quick Menu the R3 stick-click already
   // opens in-app, just triggered from outside instead of via the Gamepad API.
   useEffect(() => window.api.globalInput.onOpenQuickMenu(() => emitNav('quickMenu')), [])
+
+  // Keeps useGamepadNav's double-click-suppression flag in sync with the
+  // actual global Mouse Mode state — fetched once for whatever it already
+  // was (e.g. toggled on by the physical combo before this window ever had
+  // focus) plus live updates after that.
+  useEffect(() => {
+    window.api.globalInput.getMouseModeStatus().then(setMouseModeActive).catch(() => {})
+    return window.api.globalInput.onMouseModeChanged(setMouseModeActive)
+  }, [])
+
+  // Cursor visibility (index.css) — shown on any real mouse movement, hidden
+  // again on the next controller nav action. Deliberately not gated on Mouse
+  // Mode specifically: Mouse Mode's cursor movement is a genuine OS-level
+  // mousemove too (a real SetCursorPos call, indistinguishable from physical
+  // movement at the browser level), so this covers it for free, and a plain
+  // mouse/keyboard user with no controller at all keeps a visible cursor
+  // exactly when they're using it — gating on Mouse Mode alone would have
+  // hidden their cursor permanently instead.
+  useEffect(() => {
+    const showCursor = (): void => document.body.setAttribute('data-cursor-visible', 'true')
+    const hideCursor = (): void => document.body.setAttribute('data-cursor-visible', 'false')
+    window.addEventListener('mousemove', showCursor)
+    const unsubscribeNav = subscribeNav(hideCursor)
+    return () => {
+      window.removeEventListener('mousemove', showCursor)
+      unsubscribeNav()
+    }
+  }, [])
 
   return (
     <>

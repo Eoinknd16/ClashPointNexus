@@ -47,6 +47,28 @@ body {
   outline: none;
 }
 
+/* Hidden by default — a stray OS cursor sitting over the controller-driven
+   UI (left wherever it was from a prior mouse move, Mouse Mode session, or
+   just general Windows cursor persistence) has no reason to be visible
+   while actually navigating by controller. App.tsx shows it again on any
+   real mousemove and hides it again on the next controller nav action —
+   Mouse Mode's cursor movement is a genuine OS-level mousemove too (it's a
+   real SetCursorPos call, indistinguishable from physical movement at the
+   browser level), so this naturally covers it without special-casing Mouse
+   Mode specifically, and without breaking plain mouse/keyboard use (no
+   controller at all) the way gating purely on Mouse Mode would have.
+   !important + a universal selector: Tailwind's cursor-pointer utility
+   (used all over this app's clickable cards) sets cursor directly on those
+   elements, which otherwise wins over a plain inherited body-level rule. */
+body,
+body * {
+  cursor: none !important;
+}
+body[data-cursor-visible='true'],
+body[data-cursor-visible='true'] * {
+  cursor: auto !important;
+}
+
 ::-webkit-scrollbar {
   display: none;
 }
