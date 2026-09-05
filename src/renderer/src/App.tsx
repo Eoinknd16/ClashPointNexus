@@ -12,6 +12,7 @@ import { BrowseScreen } from './screens/BrowseScreen'
 import { FileManagerScreen } from './screens/FileManagerScreen'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { QuickMenu } from './components/QuickMenu'
+import { CrashToast } from './components/CrashToast'
 
 function renderScreen(screen: ScreenId): JSX.Element {
   switch (screen) {
@@ -57,6 +58,7 @@ function App(): JSX.Element {
       {/* Mounted outside the per-screen boundary/transition so it's reachable
           (and survives) regardless of which screen is showing or crashes. */}
       <QuickMenu />
+      <CrashToast />
     </>
   )
 }

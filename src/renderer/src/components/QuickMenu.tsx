@@ -54,17 +54,25 @@ export function QuickMenu(): JSX.Element | null {
   function openMenu(): void {
     setIndex(0)
     setConfirmAction(null)
-    window.api.steam.getLibrary().then((result) => {
-      const sorted = [...result.games].sort((a, b) => b.lastPlayed - a.lastPlayed)
-      setMostRecentGame(sorted[0] ?? null)
-    })
+    window.api.steam
+      .getLibrary()
+      .then((result) => {
+        const sorted = [...result.games].sort((a, b) => b.lastPlayed - a.lastPlayed)
+        setMostRecentGame(sorted[0] ?? null)
+      })
+      .catch(() => setMostRecentGame(null))
     setOpen(true)
   }
 
   function runAction(id: ActionId): void {
     switch (id) {
       case 'resumeGame':
-        if (mostRecentGame) void window.api.steam.launch(mostRecentGame.launch)
+        if (mostRecentGame) {
+          window.api.steam.launch(mostRecentGame.launch).catch((error) => {
+            // eslint-disable-next-line no-console
+            console.error('[QuickMenu] resumeGame launch failed:', error)
+          })
+        }
         closeMenu()
         return
       case 'home':

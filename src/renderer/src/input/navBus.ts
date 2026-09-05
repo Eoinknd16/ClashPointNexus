@@ -1,3 +1,5 @@
+import { useCrashLogStore } from '../state/crashLogStore'
+
 export type NavAction =
   | 'up'
   | 'down'
@@ -47,6 +49,7 @@ export function emitNav(action: NavAction): void {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('[navBus] override listener threw for action:', action, error)
+      useCrashLogStore.getState().reportError(`Quick Menu action "${action}" crashed: ${describeError(error)}`)
     }
     return
   }
@@ -56,8 +59,13 @@ export function emitNav(action: NavAction): void {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('[navBus] listener threw for action:', action, error)
+      useCrashLogStore.getState().reportError(`Nav action "${action}" crashed: ${describeError(error)}`)
     }
   }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error)
 }
 
 export function subscribeNav(handler: NavHandler): () => void {

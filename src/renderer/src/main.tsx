@@ -2,21 +2,27 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { useCrashLogStore } from './state/crashLogStore'
 import './styles/index.css'
 
-// Visibility only — can't recover a React tree from here, since these fire for
-// errors React never even saw (a rejected promise, a throw inside framer-
-// motion's own rAF-driven animation loop). The ErrorBoundary below is what
-// actually prevents the blank-page failure mode; this is so a report of it
-// happening again comes with a real stack trace in the console instead of
-// nothing to go on.
+// Can't recover a React tree from here, since these fire for errors React
+// never even saw (a rejected promise, a throw inside framer-motion's own
+// rAF-driven animation loop) — the ErrorBoundary below is what actually
+// prevents the blank-page failure mode. But console.error is invisible in a
+// packaged build with no DevTools open, so these also surface on the
+// CrashToast banner — the only way to see what actually crashed without a
+// dev console.
 window.addEventListener('error', (event) => {
+  const message = event.error instanceof Error ? event.error.message : String(event.error ?? event.message)
   // eslint-disable-next-line no-console
   console.error('[global] uncaught error:', event.error ?? event.message)
+  useCrashLogStore.getState().reportError(`Uncaught error: ${message}`)
 })
 window.addEventListener('unhandledrejection', (event) => {
+  const message = event.reason instanceof Error ? event.reason.message : String(event.reason)
   // eslint-disable-next-line no-console
   console.error('[global] unhandled rejection:', event.reason)
+  useCrashLogStore.getState().reportError(`Unhandled promise rejection: ${message}`)
 })
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
