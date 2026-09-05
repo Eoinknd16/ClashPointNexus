@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { useGamepadNav } from './input/useGamepadNav'
 import { useKeyboardNav } from './input/useKeyboardNav'
 import { useNavigationStore, type ScreenId } from './state/navigationStore'
@@ -43,20 +42,23 @@ function App(): JSX.Element {
 
   return (
     <>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={screen}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.22, ease: 'easeInOut' }}
-          className="h-screen w-screen"
-        >
-          <ErrorBoundary key={screen}>{renderScreen(screen)}</ErrorBoundary>
-        </motion.div>
-      </AnimatePresence>
-      {/* Mounted outside the per-screen boundary/transition so it's reachable
-          (and survives) regardless of which screen is showing or crashes. */}
+      {/*
+        Plain conditional render, not AnimatePresence — the fade transition
+        it drove here depended on framer-motion's exit-animation-completion
+        callback ever actually firing to unmount the outgoing screen. That
+        callback getting stuck (confirmed: the outgoing screen's own <video>
+        stayed mounted and click-interactive, just invisible at opacity:0)
+        is what caused the recurring blank-screen bug — the incoming screen
+        never got a chance to mount because AnimatePresence's mode="wait"
+        was still waiting on a completion signal that never came. A plain
+        keyed div ties unmount/mount directly to React's own reconciliation,
+        which can't get stuck like that — at the cost of the fade itself.
+      */}
+      <div key={screen} className="h-screen w-screen">
+        <ErrorBoundary key={screen}>{renderScreen(screen)}</ErrorBoundary>
+      </div>
+      {/* Mounted outside the per-screen boundary so it's reachable (and
+          survives) regardless of which screen is showing or crashes. */}
       <QuickMenu />
       <CrashToast />
     </>

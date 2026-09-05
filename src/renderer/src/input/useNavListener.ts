@@ -6,12 +6,12 @@ import { useNavigationStore, type ScreenId } from '../state/navigationStore'
  * Subscribes a screen/component to nav events while it's mounted.
  *
  * Pass this screen's own id when the caller is a top-level screen (not a
- * modal/overlay component). AnimatePresence keeps the outgoing screen fully
- * mounted — hooks, state, and this subscription all still live — for its
- * ~220ms exit fade after navigationStore.screen has already changed, so a
- * button press right after "back" can otherwise land on the screen that's on
- * its way out instead of the one now showing. Checking the live current
- * screen on every event (not just at mount) closes that window.
+ * modal/overlay component). App.tsx unmounts the outgoing screen synchronously
+ * on a screen change (previously delayed by an AnimatePresence exit fade,
+ * removed after its exit-completion callback was found getting stuck and
+ * leaving a screen mounted-but-invisible) — this guard is still worth keeping
+ * regardless, since checking the live current screen on every event (not just
+ * at mount) protects against any other future source of a lagging unmount.
  */
 export function useNavListener(handler: (action: NavAction) => void, screenId?: ScreenId): void {
   const handlerRef = useRef(handler)
