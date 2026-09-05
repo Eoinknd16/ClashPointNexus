@@ -3,6 +3,7 @@ import type { StremioImportResult } from '@shared/settingsTypes'
 import { addToLibrary } from '../library/config'
 import { saveProgress } from '../progress/config'
 import { fetchLibraryItems } from './account'
+import { fetchBasicMeta } from './cinemeta'
 import { loadStremioConfig } from './config'
 
 /** Series video ids look like "tt1234567:1:4" — season/episode are the 2nd/3rd segments. */
@@ -67,7 +68,16 @@ export async function importStremioHistory(): Promise<StremioImportResult> {
       }
 
       if (!item.temp) {
-        addToLibrary({ type, id: item._id, name: item.name, poster: item.poster ?? null })
+        // Stremio's own account API (this datastore) has a sparser poster field
+        // than Cinemeta's actual metadata — prefer Cinemeta's when it has one,
+        // rather than importing a permanently-blank card.
+        const meta = await fetchBasicMeta(type, item._id)
+        addToLibrary({
+          type,
+          id: item._id,
+          name: meta?.name ?? item.name,
+          poster: meta?.poster ?? item.poster ?? null
+        })
         libraryImported++
       }
     }

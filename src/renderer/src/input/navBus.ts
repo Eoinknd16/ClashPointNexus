@@ -11,6 +11,7 @@ export type NavAction =
   | 'volumeDown'
   | 'volumeUp'
   | 'toggleSubtitles'
+  | 'skipNext'
 
 type NavHandler = (action: NavAction) => void
 

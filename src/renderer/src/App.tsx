@@ -10,6 +10,7 @@ import { TvScreen } from './screens/TvScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { BrowseScreen } from './screens/BrowseScreen'
 import { FileManagerScreen } from './screens/FileManagerScreen'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function renderScreen(screen: ScreenId): JSX.Element {
   switch (screen) {
@@ -48,7 +49,7 @@ function App(): JSX.Element {
         transition={{ duration: 0.22, ease: 'easeInOut' }}
         className="h-screen w-screen"
       >
-        {renderScreen(screen)}
+        <ErrorBoundary key={screen}>{renderScreen(screen)}</ErrorBoundary>
       </motion.div>
     </AnimatePresence>
   )

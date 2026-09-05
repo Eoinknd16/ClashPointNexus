@@ -105,7 +105,14 @@ export function SettingsScreen(): JSX.Element {
     })
     window.api.updater.getVersion().then(setAppVersion)
     window.api.updater.getStatus().then(setUpdateStatus)
-    return window.api.updater.onStatus(setUpdateStatus)
+    // Mirrors status changes into the footer too — the row label alone is
+    // easy to not notice changing in place.
+    return window.api.updater.onStatus((status) => {
+      setUpdateStatus(status)
+      if (status.state === 'not-available') setMessage('Already on the latest version')
+      else if (status.state === 'downloaded') setMessage(`Update v${status.version} ready — tap to restart & install`)
+      else if (status.state === 'error') setMessage(`Update check failed: ${status.error}`)
+    })
   }, [])
 
   const rows: SettingsRow[] = [
@@ -279,6 +286,13 @@ export function SettingsScreen(): JSX.Element {
       return
     }
     if (updateStatus?.state === 'checking' || updateStatus?.state === 'downloading') return
+    if (updateStatus?.state === 'unsupported') {
+      setMessage('Updates only work in an installed/packaged build, not npm run dev')
+      return
+    }
+    // Extra, harder-to-miss feedback beyond the row's own label — the row text
+    // changing in place is easy to not notice.
+    setMessage('Checking for updates...')
     void window.api.updater.check()
   }
 

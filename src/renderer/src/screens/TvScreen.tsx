@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CategoryRow } from '../components/CategoryRow'
 import type { CardItem } from '../components/FocusableCard'
@@ -565,6 +565,13 @@ export function TvScreen(): JSX.Element {
     return sorted[idx + 1] ?? null
   }
 
+  function skipToNextEpisode(): void {
+    if (activePlayback?.kind !== 'series') return
+    const next = findNextEpisode(activePlayback.season, activePlayback.episode)
+    if (next) void playEpisode(next)
+    else setMessage('No next episode available')
+  }
+
   function toggleLibrary(): void {
     if (!selectedItem) return
     if (isSelectedInLibrary) {
@@ -627,10 +634,17 @@ export function TvScreen(): JSX.Element {
       return
     }
 
+    // Always searches both types regardless of which tab you're on — movies
+    // and series are concatenated movies-first so the expanded grid can group
+    // them into labeled sections just by watching where item.type changes.
     setZone('filters')
     setMessage(`Searching for "${trimmed}"...`)
     try {
-      const results = await window.api.stremio.search(tab, trimmed)
+      const [movies, series] = await Promise.all([
+        window.api.stremio.search('movie', trimmed),
+        window.api.stremio.search('series', trimmed)
+      ])
+      const results = [...movies, ...series]
       showSearchResults(results)
       setMessage(results.length > 0 ? 'Ready' : `No results for "${trimmed}"`)
     } catch (error) {
@@ -1020,6 +1034,9 @@ export function TvScreen(): JSX.Element {
         case 'toggleSubtitles':
           toggleSubtitles()
           return
+        case 'skipNext':
+          skipToNextEpisode()
+          return
         case 'back':
         case 'menu': {
           const wasSeries = activePlayback?.kind === 'series'
@@ -1388,6 +1405,14 @@ export function TvScreen(): JSX.Element {
             <div className="flex items-center gap-4">
               <span>Vol {Math.round(volume * 100)}%</span>
               <span>{subtitlesOn ? 'CC On' : 'CC Off'}</span>
+              {activePlayback?.kind === 'series' && (
+                <button
+                  onClick={skipToNextEpisode}
+                  className="rounded-lg bg-white/10 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-white/20"
+                >
+                  Next Episode ⏭
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1414,21 +1439,34 @@ export function TvScreen(): JSX.Element {
             if (el.scrollTop + el.clientHeight >= el.scrollHeight - 800) void loadMoreExpanded()
           }}
         >
-          {expandedItems.map((item, i) => (
-            <div key={item.id} ref={(el) => (expandedRefs.current[i] = el)} className="scroll-m-10">
-              <FocusableCard
-                item={toCardItem(item)}
-                aspect="portrait"
-                focused={expandedIndex === i}
-                onClick={() => {
-                  setExpandedIndex(i)
-                  setDetailReturnZone('expanded')
-                  setSelectedItem(item)
-                  setZone('detail')
-                }}
-              />
-            </div>
-          ))}
+          {expandedItems.map((item, i) => {
+            // Search results are movies-first then series (see submitSearch) —
+            // a label whenever the type changes groups them without needing
+            // separate state, since every CatalogItem already carries its own type.
+            const showSectionLabel = expandedRowKey === 'search' && item.type !== expandedItems[i - 1]?.type
+            return (
+              <Fragment key={item.id}>
+                {showSectionLabel && (
+                  <h2 className={`col-span-6 text-lg font-semibold text-muted ${i > 0 ? 'mt-4' : ''}`}>
+                    {item.type === 'movie' ? 'Movies' : 'TV Series'}
+                  </h2>
+                )}
+                <div ref={(el) => (expandedRefs.current[i] = el)} className="scroll-m-10">
+                  <FocusableCard
+                    item={toCardItem(item)}
+                    aspect="portrait"
+                    focused={expandedIndex === i}
+                    onClick={() => {
+                      setExpandedIndex(i)
+                      setDetailReturnZone('expanded')
+                      setSelectedItem(item)
+                      setZone('detail')
+                    }}
+                  />
+                </div>
+              </Fragment>
+            )
+          })}
         </div>
 
         {expandedLoading && <p className="text-center text-sm text-muted">Loading more...</p>}

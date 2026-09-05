@@ -21,6 +21,7 @@ const MIN_BUTTON_GAP_MS = 60
 const BUTTON_CONFIRM = 0
 const BUTTON_BACK = 1
 const BUTTON_SQUARE = 2 // toggle subtitles
+const BUTTON_TRIANGLE = 3 // skip to next episode
 const BUTTON_MENU = 9
 const BUTTON_L1 = 4 // previous stream
 const BUTTON_R1 = 5 // next stream
@@ -36,6 +37,7 @@ const EDGE_BUTTONS: Array<[number, NavAction]> = [
   [BUTTON_BACK, 'back'],
   [BUTTON_MENU, 'menu'],
   [BUTTON_SQUARE, 'toggleSubtitles'],
+  [BUTTON_TRIANGLE, 'skipNext'],
   [BUTTON_L1, 'prevStream'],
   [BUTTON_R1, 'nextStream'],
   [BUTTON_L2, 'volumeDown'],

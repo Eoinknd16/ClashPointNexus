@@ -16,7 +16,9 @@ const KEY_MAP: Record<string, NavAction> = {
   '=': 'volumeUp',
   '+': 'volumeUp',
   s: 'toggleSubtitles',
-  S: 'toggleSubtitles'
+  S: 'toggleSubtitles',
+  n: 'skipNext',
+  N: 'skipNext'
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {

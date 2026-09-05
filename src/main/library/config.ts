@@ -70,3 +70,13 @@ export function removeFromLibrary(type: CatalogType, id: string): void {
   delete all[storageKey(type, id)]
   saveAll(all)
 }
+
+/** Persists a backfilled poster so the lookup only ever happens once per entry. */
+export function updateLibraryPoster(type: CatalogType, id: string, poster: string): void {
+  const all = loadAll()
+  const key = storageKey(type, id)
+  const entry = all[key]
+  if (!entry) return
+  all[key] = { ...entry, poster }
+  saveAll(all)
+}
