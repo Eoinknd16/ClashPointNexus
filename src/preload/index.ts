@@ -82,7 +82,10 @@ const api: LauncherApi = {
     getContinueSuggestion: () => ipcRenderer.invoke('home:getContinueSuggestion')
   },
   system: {
-    getStats: () => ipcRenderer.invoke('system:getStats')
+    getStats: () => ipcRenderer.invoke('system:getStats'),
+    volumeUp: () => ipcRenderer.invoke('system:volumeUp'),
+    volumeDown: () => ipcRenderer.invoke('system:volumeDown'),
+    toggleMute: () => ipcRenderer.invoke('system:toggleMute')
   }
 }
 

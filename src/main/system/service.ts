@@ -1,5 +1,43 @@
+import { execFile } from 'child_process'
 import os from 'os'
 import type { SystemStats } from '@shared/systemTypes'
+
+// Official Win32 virtual-key codes for the hardware media keys — keybd_event
+// synthesizes a real system-wide key press/release, so this changes the OS
+// master volume regardless of which app has focus, the same as an actual
+// keyboard's volume keys. No bundled binary (nircmd etc.) and no native
+// Node module: user32.dll and powershell.exe both already ship with Windows.
+const VK_VOLUME_MUTE = 0xad
+const VK_VOLUME_DOWN = 0xae
+const VK_VOLUME_UP = 0xaf
+
+function sendMediaKey(virtualKeyCode: number): void {
+  const script = [
+    'Add-Type -TypeDefinition \'',
+    'using System;',
+    'using System.Runtime.InteropServices;',
+    'public class ClashPointVolume {',
+    '  [DllImport("user32.dll")]',
+    '  public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);',
+    '}',
+    "'",
+    `[ClashPointVolume]::keybd_event(${virtualKeyCode}, 0, 0, [UIntPtr]::Zero)`,
+    `[ClashPointVolume]::keybd_event(${virtualKeyCode}, 0, 2, [UIntPtr]::Zero)`
+  ].join('\n')
+  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script])
+}
+
+export function volumeUp(): void {
+  sendMediaKey(VK_VOLUME_UP)
+}
+
+export function volumeDown(): void {
+  sendMediaKey(VK_VOLUME_DOWN)
+}
+
+export function toggleMute(): void {
+  sendMediaKey(VK_VOLUME_MUTE)
+}
 
 function cpuTimes(): { idle: number; total: number } {
   let idle = 0

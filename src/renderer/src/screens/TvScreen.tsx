@@ -210,6 +210,12 @@ export function TvScreen(): JSX.Element {
   const mseStopRef = useRef<(() => void) | null>(null)
   const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastProgressSaveRef = useRef(0)
+  // Kept fresh every render (same pattern as useNavListener's handlerRef) so
+  // the unmount effect below always calls the current closure — capturing
+  // stopPlayback once at mount time would run it with whatever activePlayback/
+  // duration/baseOffset existed on the very first render (null/undefined),
+  // silently no-oping instead of actually tearing anything down.
+  const stopPlaybackRef = useRef<() => void>(() => {})
   // Synchronous lock for loadMoreExpanded — expandedLoading (React state) can
   // still read stale across two nav presses that land in the same tick, since
   // its update isn't applied until the next render; a ref updates immediately.
@@ -290,6 +296,18 @@ export function TvScreen(): JSX.Element {
 
   const inEpisodesView = zone === 'episodes'
   const inPlayerView = zone === 'player' || (zone === 'sources' && sourcesReturnZone === 'player')
+
+  // Normal in-screen navigation (the player zone's own back/menu handling)
+  // already calls stopPlayback directly. This covers the path that doesn't
+  // go through that: a top-level screen change fired from somewhere outside
+  // TvScreen entirely — the Quick Menu's Home/Settings actions call goHome()/
+  // goTo() straight on the navigation store — which unmounts TvScreen without
+  // ever running its own cleanup. Without this, MSE keeps appending buffers
+  // to (and the hide-controls timer keeps touching) a video element that's
+  // being torn out from under it mid-playback.
+  useEffect(() => {
+    return () => stopPlaybackRef.current()
+  }, [])
 
   useEffect(() => {
     if (zone !== 'sources') return
@@ -804,6 +822,7 @@ export function TvScreen(): JSX.Element {
     setAudioIndex(undefined)
     setActivePlayback(null)
   }
+  stopPlaybackRef.current = stopPlayback
 
   function selectSource(index: number): void {
     const stream = streams[index]

@@ -107,5 +107,8 @@ export interface LauncherApi {
   }
   system: {
     getStats: () => Promise<SystemStats>
+    volumeUp: () => Promise<void>
+    volumeDown: () => Promise<void>
+    toggleMute: () => Promise<void>
   }
 }

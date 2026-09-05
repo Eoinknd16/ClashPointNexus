@@ -3,7 +3,17 @@ import { useNavListener, useExclusiveNavListener } from '../input/useNavListener
 import { useNavigationStore } from '../state/navigationStore'
 import type { GameEntry } from '@shared/steamTypes'
 
-type ActionId = 'resumeGame' | 'home' | 'settings' | 'sleep' | 'restart' | 'shutdown' | 'quit'
+type ActionId =
+  | 'resumeGame'
+  | 'home'
+  | 'settings'
+  | 'volumeUp'
+  | 'volumeDown'
+  | 'toggleMute'
+  | 'sleep'
+  | 'restart'
+  | 'shutdown'
+  | 'quit'
 interface Option {
   id: ActionId
   label: string
@@ -39,6 +49,9 @@ export function QuickMenu(): JSX.Element | null {
     if (mostRecentGame) options.push({ id: 'resumeGame', label: `▶ Resume "${mostRecentGame.name}"` })
     options.push({ id: 'home', label: '🏠 Home' })
     options.push({ id: 'settings', label: '⚙️ Settings' })
+    options.push({ id: 'volumeUp', label: '🔊 Volume Up' })
+    options.push({ id: 'volumeDown', label: '🔉 Volume Down' })
+    options.push({ id: 'toggleMute', label: '🔇 Mute' })
     options.push({ id: 'sleep', label: '💤 Sleep' })
     options.push({ id: 'restart', label: '🔁 Restart PC' })
     options.push({ id: 'shutdown', label: '⏻ Shut Down PC' })
@@ -82,6 +95,15 @@ export function QuickMenu(): JSX.Element | null {
       case 'settings':
         goTo('settings')
         closeMenu()
+        return
+      case 'volumeUp':
+        void window.api.system.volumeUp()
+        return
+      case 'volumeDown':
+        void window.api.system.volumeDown()
+        return
+      case 'toggleMute':
+        void window.api.system.toggleMute()
         return
       case 'sleep':
         void window.api.power.sleep()
