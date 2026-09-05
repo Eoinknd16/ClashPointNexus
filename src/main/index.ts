@@ -96,6 +96,7 @@ app.whenReady().then(() => {
   // a hair-trigger bug while iterating on this exact code would be a bad time.
   if (!isDev) {
     setQuickMenuComboHandler(() => {
+      if (mainWindow.isDestroyed()) return
       mainWindow.show()
       mainWindow.focus()
       mainWindow.webContents.send('globalInput:openQuickMenu')

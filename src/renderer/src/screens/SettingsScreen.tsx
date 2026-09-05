@@ -162,7 +162,7 @@ export function SettingsScreen(): JSX.Element {
               globalInputStatus.controllerConnected === true
                 ? '✓ Controller detected'
                 : globalInputStatus.controllerConnected === false
-                  ? '✗ No controller detected — XInput only sees Xbox controllers and things remapped to emulate one (DS4Windows, Steam Input); a DualSense/DualShock plugged in directly won’t show up here'
+                  ? '✗ No controller detected — check it\'s connected and Windows recognizes it as a game controller'
                   : 'Waiting for a reading...'
           }
         ]
