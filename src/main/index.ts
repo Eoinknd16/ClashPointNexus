@@ -1,5 +1,6 @@
 import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
+import { registerAppsIpc } from './apps/ipc'
 import { registerFilesystemIpc } from './filesystem/ipc'
 import { registerGlobalInputIpc } from './globalInput/ipc'
 import { setQuickMenuComboHandler, startGlobalInputWatcher, stopGlobalInputWatcher } from './globalInput/service'
@@ -84,6 +85,7 @@ app.whenReady().then(() => {
   registerWeatherIpc()
   registerHomeIpc()
   registerSystemIpc()
+  registerAppsIpc()
   startTranscodeProxy()
   const mainWindow = createWindow()
   registerGlobalInputIpc(mainWindow)

@@ -8,8 +8,8 @@ import type { FileEntry } from '@shared/filesystemTypes'
 /** null = the root "This PC" view (Home shortcut + drives), not a real path. */
 type CurrentPath = string | null
 type Zone = 'list' | 'contextMenu' | 'confirmDelete' | 'keyboard'
-type KeyboardPurpose = 'rename' | 'newFolder' | 'search'
-type MenuActionId = 'open' | 'newFolder' | 'rename' | 'cut' | 'copy' | 'paste' | 'delete'
+type KeyboardPurpose = 'rename' | 'newFolder' | 'search' | 'addToLauncher'
+type MenuActionId = 'open' | 'newFolder' | 'rename' | 'cut' | 'copy' | 'paste' | 'delete' | 'addToLauncher'
 interface MenuOption {
   id: MenuActionId
   label: string
@@ -42,6 +42,15 @@ function fileTypeLabel(entry: FileEntry): string {
   const dot = entry.name.lastIndexOf('.')
   if (dot <= 0 || dot === entry.name.length - 1) return 'File'
   return `${entry.name.slice(dot + 1).toUpperCase()} File`
+}
+
+function isExecutable(entry: FileEntry): boolean {
+  return !entry.isDirectory && entry.name.toLowerCase().endsWith('.exe')
+}
+
+function stripExtension(name: string): string {
+  const dot = name.lastIndexOf('.')
+  return dot <= 0 ? name : name.slice(0, dot)
 }
 
 export function FileManagerScreen(): JSX.Element {
@@ -127,6 +136,7 @@ export function FileManagerScreen(): JSX.Element {
       options.push({ id: 'rename', label: 'Rename' })
       options.push({ id: 'copy', label: 'Copy' })
       options.push({ id: 'cut', label: 'Cut' })
+      if (isExecutable(entry)) options.push({ id: 'addToLauncher', label: 'Add to App Launcher' })
     }
     options.push({ id: 'newFolder', label: 'New Folder' })
     if (clipboard) options.push({ id: 'paste', label: `Paste "${clipboard.name}"` })
@@ -164,6 +174,9 @@ export function FileManagerScreen(): JSX.Element {
         return
       case 'rename':
         if (entry) openKeyboardFor('rename', entry.name)
+        return
+      case 'addToLauncher':
+        if (entry) openKeyboardFor('addToLauncher', stripExtension(entry.name))
         return
       case 'copy':
         if (entry) {
@@ -241,6 +254,18 @@ export function FileManagerScreen(): JSX.Element {
       const error = await window.api.filesystem.rename(entry.path, value)
       setMessage(error ? `Rename failed: ${error}` : `Renamed to "${value}"`)
       void reload()
+      return
+    }
+    if (purpose === 'addToLauncher') {
+      const entry = visibleEntries[focusIndex]
+      if (!entry) return
+      setMessage(`Adding "${value}" to App Launcher...`)
+      try {
+        await window.api.apps.add(value, entry.path, '')
+        setMessage(`Added "${value}" to App Launcher`)
+      } catch (error) {
+        setMessage(`Couldn't add to App Launcher: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 
@@ -487,7 +512,15 @@ export function FileManagerScreen(): JSX.Element {
 
       {zone === 'keyboard' && (
         <OnScreenKeyboard
-          label={kbPurpose === 'rename' ? 'Rename' : kbPurpose === 'search' ? 'Search this folder' : 'New folder name'}
+          label={
+            kbPurpose === 'rename'
+              ? 'Rename'
+              : kbPurpose === 'search'
+                ? 'Search this folder'
+                : kbPurpose === 'addToLauncher'
+                  ? 'App name'
+                  : 'New folder name'
+          }
           value={kbValue}
           shift={kbShift}
           focusedRow={kbRow}

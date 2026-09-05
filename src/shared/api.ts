@@ -1,3 +1,4 @@
+import type { AppEntry } from './appsTypes'
 import type { DirectoryListing, FileEntry } from './filesystemTypes'
 import type { GlobalInputStatus } from './globalInputTypes'
 import type { ContinueSuggestion } from './homeTypes'
@@ -144,5 +145,14 @@ export interface LauncherApi {
      * the main process has already brought the window to the foreground by
      * the time this fires; the listener just needs to open the Quick Menu. */
     onOpenQuickMenu: (callback: () => void) => () => void
+  }
+  apps: {
+    list: () => Promise<AppEntry[]>
+    add: (name: string, executablePath: string, args: string) => Promise<AppEntry>
+    remove: (id: string) => Promise<void>
+    /** Resolves to the new favorited state. */
+    toggleFavorite: (id: string) => Promise<boolean>
+    /** Resolves to an error message on failure, null on success. */
+    launch: (executablePath: string, args: string) => Promise<string | null>
   }
 }

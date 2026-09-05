@@ -3,7 +3,7 @@ import { stopActivePlayback } from '../player/activePlayback'
 import type { GameEntry } from '@shared/steamTypes'
 import type { CatalogItem, CatalogType } from '@shared/stremioTypes'
 
-export type ScreenId = 'home' | 'games' | 'tv' | 'browse' | 'files' | 'settings'
+export type ScreenId = 'home' | 'games' | 'tv' | 'browse' | 'files' | 'apps' | 'settings'
 
 /** Set by the Home screen's "Continue" card so the target screen can jump
  * straight to the right content on mount instead of just opening blank. */

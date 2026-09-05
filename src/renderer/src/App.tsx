@@ -11,6 +11,7 @@ import { TvScreen } from './screens/TvScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { BrowseScreen } from './screens/BrowseScreen'
 import { FileManagerScreen } from './screens/FileManagerScreen'
+import { AppsScreen } from './screens/AppsScreen'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { QuickMenu } from './components/QuickMenu'
 import { CrashToast } from './components/CrashToast'
@@ -27,6 +28,8 @@ function renderScreen(screen: ScreenId): JSX.Element {
       return <BrowseScreen />
     case 'files':
       return <FileManagerScreen />
+    case 'apps':
+      return <AppsScreen />
     default:
       return <HomeMenu />
   }

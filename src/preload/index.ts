@@ -113,6 +113,13 @@ const api: LauncherApi = {
       ipcRenderer.on('globalInput:openQuickMenu', listener)
       return () => ipcRenderer.removeListener('globalInput:openQuickMenu', listener)
     }
+  },
+  apps: {
+    list: () => ipcRenderer.invoke('apps:list'),
+    add: (name, executablePath, args) => ipcRenderer.invoke('apps:add', name, executablePath, args),
+    remove: (id) => ipcRenderer.invoke('apps:remove', id),
+    toggleFavorite: (id) => ipcRenderer.invoke('apps:toggleFavorite', id),
+    launch: (executablePath, args) => ipcRenderer.invoke('apps:launch', executablePath, args)
   }
 }
 
