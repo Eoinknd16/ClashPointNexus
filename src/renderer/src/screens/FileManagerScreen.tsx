@@ -442,7 +442,7 @@ export function FileManagerScreen(): JSX.Element {
       {zone === 'contextMenu' && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
           <div className="flex w-80 flex-col gap-2 rounded-2xl bg-surface p-6">
-            <h2 className="mb-2 truncate text-lg font-semibold">{entries[focusIndex]?.name ?? 'Folder'}</h2>
+            <h2 className="mb-2 truncate text-lg font-semibold">{visibleEntries[focusIndex]?.name ?? 'Folder'}</h2>
             {menuOptions.map((option, i) => (
               <div
                 key={option.id}
@@ -462,7 +462,7 @@ export function FileManagerScreen(): JSX.Element {
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
           <div className="flex w-80 flex-col gap-4 rounded-2xl bg-surface p-8">
             <h2 className="text-lg font-semibold">
-              Move "{entries[focusIndex]?.name}" to the Recycle Bin?
+              Move "{visibleEntries[focusIndex]?.name}" to the Recycle Bin?
             </h2>
             <div className="flex gap-3">
               {['Yes', 'No'].map((label, i) => (
