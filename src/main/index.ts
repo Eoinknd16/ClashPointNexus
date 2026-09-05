@@ -1,6 +1,8 @@
 import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { registerFilesystemIpc } from './filesystem/ipc'
+import { registerGlobalInputIpc } from './globalInput/ipc'
+import { setQuickMenuComboHandler, startGlobalInputWatcher, stopGlobalInputWatcher } from './globalInput/service'
 import { registerHomeIpc } from './home/ipc'
 import { registerLibraryIpc } from './library/ipc'
 import { registerPlayerIpc } from './player/ipc'
@@ -18,7 +20,7 @@ import { registerWeatherIpc } from './weather/ipc'
 
 const isDev = !app.isPackaged
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
 
   const mainWindow = new BrowserWindow({
@@ -64,6 +66,8 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  return mainWindow
 }
 
 app.whenReady().then(() => {
@@ -81,9 +85,23 @@ app.whenReady().then(() => {
   registerHomeIpc()
   registerSystemIpc()
   startTranscodeProxy()
-  createWindow()
+  const mainWindow = createWindow()
+  registerGlobalInputIpc(mainWindow)
 
   if (!isDev) initAutoUpdater()
+
+  // Gated to packaged builds only — the whole point is reaching Nexus from
+  // outside the app (another game, the desktop), which isn't a meaningful
+  // scenario to exercise from a dev-mode window, and losing mouse control to
+  // a hair-trigger bug while iterating on this exact code would be a bad time.
+  if (!isDev) {
+    setQuickMenuComboHandler(() => {
+      mainWindow.show()
+      mainWindow.focus()
+      mainWindow.webContents.send('globalInput:openQuickMenu')
+    })
+    startGlobalInputWatcher()
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -97,4 +115,5 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   stopStremioServer()
   stopTranscodeProxy()
+  stopGlobalInputWatcher()
 })

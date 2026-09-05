@@ -123,4 +123,17 @@ export interface LauncherApi {
     volumeDown: () => Promise<void>
     toggleMute: () => Promise<void>
   }
+  globalInput: {
+    /** Whether the background XInput watcher currently has system-wide mouse
+     * control active — unsupported (always resolves false) in a dev build,
+     * where the watcher never starts. */
+    getMouseModeStatus: () => Promise<boolean>
+    toggleMouseMode: () => Promise<void>
+    /** Returns an unsubscribe function. */
+    onMouseModeChanged: (callback: (active: boolean) => void) => () => void
+    /** Fired when the physical L1+R1+Start combo is held outside the app —
+     * the main process has already brought the window to the foreground by
+     * the time this fires; the listener just needs to open the Quick Menu. */
+    onOpenQuickMenu: (callback: () => void) => () => void
+  }
 }

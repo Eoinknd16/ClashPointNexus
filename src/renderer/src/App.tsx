@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useGamepadNav } from './input/useGamepadNav'
 import { useKeyboardNav } from './input/useKeyboardNav'
+import { emitNav } from './input/navBus'
 import { useNavigationStore, type ScreenId } from './state/navigationStore'
 import { useThemeStore } from './state/themeStore'
 import { HomeMenu } from './screens/HomeMenu'
@@ -39,6 +40,12 @@ function App(): JSX.Element {
   useEffect(() => {
     void initTheme()
   }, [initTheme])
+
+  // The main process has already brought the window to the foreground by the
+  // time this fires (the physical combo works regardless of which window had
+  // focus) — reuses the exact same Quick Menu the R3 stick-click already
+  // opens in-app, just triggered from outside instead of via the Gamepad API.
+  useEffect(() => window.api.globalInput.onOpenQuickMenu(() => emitNav('quickMenu')), [])
 
   return (
     <>

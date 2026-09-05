@@ -90,6 +90,20 @@ const api: LauncherApi = {
     volumeUp: () => ipcRenderer.invoke('system:volumeUp'),
     volumeDown: () => ipcRenderer.invoke('system:volumeDown'),
     toggleMute: () => ipcRenderer.invoke('system:toggleMute')
+  },
+  globalInput: {
+    getMouseModeStatus: () => ipcRenderer.invoke('globalInput:getMouseModeStatus'),
+    toggleMouseMode: () => ipcRenderer.invoke('globalInput:toggleMouseMode'),
+    onMouseModeChanged: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, active: boolean): void => callback(active)
+      ipcRenderer.on('globalInput:mouseModeChanged', listener)
+      return () => ipcRenderer.removeListener('globalInput:mouseModeChanged', listener)
+    },
+    onOpenQuickMenu: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('globalInput:openQuickMenu', listener)
+      return () => ipcRenderer.removeListener('globalInput:openQuickMenu', listener)
+    }
   }
 }
 

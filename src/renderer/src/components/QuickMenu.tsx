@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavListener, useExclusiveNavListener } from '../input/useNavListener'
 import { useNavigationStore } from '../state/navigationStore'
 import type { GameEntry } from '@shared/steamTypes'
@@ -10,6 +10,7 @@ type ActionId =
   | 'volumeUp'
   | 'volumeDown'
   | 'toggleMute'
+  | 'toggleMouseMode'
   | 'sleep'
   | 'restart'
   | 'shutdown'
@@ -41,8 +42,18 @@ export function QuickMenu(): JSX.Element | null {
   const [confirmAction, setConfirmAction] = useState<'restart' | 'shutdown' | null>(null)
   const [confirmIndex, setConfirmIndex] = useState(0)
   const [mostRecentGame, setMostRecentGame] = useState<GameEntry | null>(null)
+  const [mouseModeActive, setMouseModeActive] = useState(false)
   const goTo = useNavigationStore((s) => s.goTo)
   const goHome = useNavigationStore((s) => s.goHome)
+
+  // Kept live regardless of whether the menu is open — the physical L1+R1+
+  // Back combo can toggle Mouse Mode without ever opening this menu at all,
+  // so the label has to reflect real state, not just what this menu itself
+  // last set it to.
+  useEffect(() => {
+    window.api.globalInput.getMouseModeStatus().then(setMouseModeActive).catch(() => {})
+    return window.api.globalInput.onMouseModeChanged(setMouseModeActive)
+  }, [])
 
   function buildOptions(): Option[] {
     const options: Option[] = []
@@ -52,6 +63,10 @@ export function QuickMenu(): JSX.Element | null {
     options.push({ id: 'volumeUp', label: '🔊 Volume Up' })
     options.push({ id: 'volumeDown', label: '🔉 Volume Down' })
     options.push({ id: 'toggleMute', label: '🔇 Mute' })
+    options.push({
+      id: 'toggleMouseMode',
+      label: mouseModeActive ? '🖱️ Disable Mouse Mode' : '🖱️ Enable Mouse Mode'
+    })
     options.push({ id: 'sleep', label: '💤 Sleep' })
     options.push({ id: 'restart', label: '🔁 Restart PC' })
     options.push({ id: 'shutdown', label: '⏻ Shut Down PC' })
@@ -104,6 +119,10 @@ export function QuickMenu(): JSX.Element | null {
         return
       case 'toggleMute':
         void window.api.system.toggleMute()
+        return
+      case 'toggleMouseMode':
+        void window.api.globalInput.toggleMouseMode()
+        closeMenu()
         return
       case 'sleep':
         void window.api.power.sleep()
