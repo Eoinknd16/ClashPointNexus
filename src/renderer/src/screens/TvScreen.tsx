@@ -204,6 +204,7 @@ export function TvScreen(): JSX.Element {
   const goHome = useNavigationStore((s) => s.goHome)
   const consumePendingContinue = useNavigationStore((s) => s.consumePendingContinue)
   const sourceRefs = useRef<Array<HTMLDivElement | null>>([])
+  const seasonRefs = useRef<Array<HTMLDivElement | null>>([])
   const episodeRefs = useRef<Array<HTMLDivElement | null>>([])
   const expandedRefs = useRef<Array<HTMLDivElement | null>>([])
   const rowRefs = useRef<Array<HTMLDivElement | null>>([])
@@ -353,6 +354,11 @@ export function TvScreen(): JSX.Element {
     if (zone !== 'episodes' || episodeSubZone !== 'list') return
     episodeRefs.current[episodeIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [zone, episodeSubZone, episodeIndex])
+
+  useEffect(() => {
+    if (zone !== 'episodes') return
+    seasonRefs.current[seasonIndex]?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
+  }, [zone, seasonIndex])
 
   useEffect(() => {
     if (zone !== 'expanded') return
@@ -756,6 +762,14 @@ export function TvScreen(): JSX.Element {
     }
   }
 
+  // Also updates the in-memory `progress` state, not just the on-disk save —
+  // without this, the Play button in the detail panel keeps showing whatever
+  // `progress` was fetched when the title was first opened (usually nothing)
+  // even after actually watching some of it. The progress-fetch effect is
+  // keyed on the selected title's id, which doesn't change when backing out
+  // of an episode into the same show's detail view, so it never re-fires to
+  // pick up what was just saved — this is the actual fix, not the save call,
+  // which already worked correctly.
   function persistProgress(finalize: boolean): void {
     if (!activePlayback) return
     const pos = baseOffset + (videoRef.current?.currentTime ?? 0)
@@ -764,19 +778,22 @@ export function TvScreen(): JSX.Element {
     if (activePlayback.kind === 'movie') {
       if (finished && finalize) {
         void window.api.progress.clear('movie', activePlayback.id)
+        setProgress(null)
         return
       }
-      void window.api.progress.save({
+      const entry: WatchProgress = {
         type: 'movie',
         id: activePlayback.id,
         positionSeconds: pos,
         durationSeconds: duration,
         updatedAt: Date.now()
-      })
+      }
+      void window.api.progress.save(entry)
+      setProgress(entry)
       return
     }
 
-    void window.api.progress.save({
+    const entry: WatchProgress = {
       type: 'series',
       id: activePlayback.seriesId,
       positionSeconds: pos,
@@ -785,7 +802,9 @@ export function TvScreen(): JSX.Element {
       episode: activePlayback.episode,
       episodeId: activePlayback.episodeId,
       updatedAt: Date.now()
-    })
+    }
+    void window.api.progress.save(entry)
+    setProgress(entry)
   }
 
   async function startPlaybackAt(
@@ -1586,16 +1605,17 @@ export function TvScreen(): JSX.Element {
 
         {inEpisodesView ? (
           <>
-            <div className="flex gap-3">
+            <div className="flex gap-3 overflow-x-hidden p-1">
               {seasonsList.map((s, i) => (
                 <div
                   key={s}
+                  ref={(el) => (seasonRefs.current[i] = el)}
                   onClick={() => {
                     setEpisodeSubZone('seasons')
                     setSeasonIndex(i)
                     setEpisodeIndex(0)
                   }}
-                  className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                  className={`scroll-m-8 shrink-0 cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
                     seasonIndex === i ? 'bg-accent text-white' : 'bg-surface text-muted'
                   } ${
                     episodeSubZone === 'seasons' && seasonIndex === i
