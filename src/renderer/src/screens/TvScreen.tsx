@@ -445,8 +445,8 @@ export function TvScreen(): JSX.Element {
   // just changed (an episode finished, a title was added/removed from the library).
   useEffect(() => {
     if (zone !== 'filters' && zone !== 'rows') return
-    window.api.library.list().then(setLibraryItems)
-    window.api.stremio.getContinueWatching('series').then(setContinueWatching)
+    window.api.library.list().then(setLibraryItems).catch(() => {})
+    window.api.stremio.getContinueWatching('series').then(setContinueWatching).catch(() => {})
   }, [zone])
 
   // Pulls a row per movie/series catalog declared by the user's own configured
@@ -457,9 +457,12 @@ export function TvScreen(): JSX.Element {
     if (requestedAddonTabsRef.current.has(tab)) return
     requestedAddonTabsRef.current.add(tab)
     let cancelled = false
-    window.api.stremio.getAddonCatalogs(tab).then((rows) => {
-      if (!cancelled) setAddonRowsByTab((prev) => ({ ...prev, [tab]: rows }))
-    })
+    window.api.stremio
+      .getAddonCatalogs(tab)
+      .then((rows) => {
+        if (!cancelled) setAddonRowsByTab((prev) => ({ ...prev, [tab]: rows }))
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -471,9 +474,12 @@ export function TvScreen(): JSX.Element {
       return
     }
     let cancelled = false
-    window.api.library.has(selectedItem.type, selectedItem.id).then((has) => {
-      if (!cancelled) setIsSelectedInLibrary(has)
-    })
+    window.api.library
+      .has(selectedItem.type, selectedItem.id)
+      .then((has) => {
+        if (!cancelled) setIsSelectedInLibrary(has)
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -889,7 +895,7 @@ export function TvScreen(): JSX.Element {
     setActivePlayback({ kind: 'movie', id: item.id })
     const offset = progress?.type === 'movie' && isResumable(progress) ? progress.positionSeconds : 0
     setResumeOffset(offset)
-    window.api.subtitles.getTracks('movie', item.id).then(setSubtitleTracks)
+    window.api.subtitles.getTracks('movie', item.id).then(setSubtitleTracks).catch(() => setSubtitleTracks([]))
 
     // Play = auto-play the top-ranked stream; the Source button (auto:false)
     // is the only path that still stops at the manual picker.
@@ -938,7 +944,7 @@ export function TvScreen(): JSX.Element {
       progress?.type === 'series' && progress.season === ep.season && progress.episode === ep.episode
     const offset = sameEpisode && isResumable(progress) ? progress.positionSeconds : 0
     setResumeOffset(offset)
-    window.api.subtitles.getTracks('series', ep.id).then(setSubtitleTracks)
+    window.api.subtitles.getTracks('series', ep.id).then(setSubtitleTracks).catch(() => setSubtitleTracks([]))
 
     // Episodes always auto-play the top stream — bingeing shouldn't stop to ask
     // which mirror to use. A bad stream can still be swapped mid-playback via

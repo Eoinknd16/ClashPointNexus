@@ -94,17 +94,23 @@ export function SettingsScreen(): JSX.Element {
   const rowRefs = useRef<Array<HTMLDivElement | null>>([])
 
   useEffect(() => {
-    window.api.settings.getSteam().then((s) => {
-      setSteamApiKey(s.apiKey)
-      setSteamId64(s.steamId64)
-    })
-    window.api.settings.getStremio().then((s) => {
-      setAddons(s.addons)
-      setLoggedIn(Boolean(s.authKey))
-      setStremioEmail(s.email ?? '')
-    })
-    window.api.updater.getVersion().then(setAppVersion)
-    window.api.updater.getStatus().then(setUpdateStatus)
+    window.api.settings
+      .getSteam()
+      .then((s) => {
+        setSteamApiKey(s.apiKey)
+        setSteamId64(s.steamId64)
+      })
+      .catch(() => {})
+    window.api.settings
+      .getStremio()
+      .then((s) => {
+        setAddons(s.addons)
+        setLoggedIn(Boolean(s.authKey))
+        setStremioEmail(s.email ?? '')
+      })
+      .catch(() => {})
+    window.api.updater.getVersion().then(setAppVersion).catch(() => {})
+    window.api.updater.getStatus().then(setUpdateStatus).catch(() => {})
     // Mirrors status changes into the footer too — the row label alone is
     // easy to not notice changing in place.
     return window.api.updater.onStatus((status) => {
@@ -213,10 +219,15 @@ export function SettingsScreen(): JSX.Element {
       setStremioPassword(value)
     } else if (field === 'newAddon' && value.trim()) {
       setMessage('Adding addon...')
-      window.api.settings.addStremioAddon(value.trim()).then((next) => {
-        setAddons(next)
-        setMessage(`Added "${next[next.length - 1]?.name}"`)
-      })
+      window.api.settings
+        .addStremioAddon(value.trim())
+        .then((next) => {
+          setAddons(next)
+          setMessage(`Added "${next[next.length - 1]?.name}"`)
+        })
+        .catch((error) => {
+          setMessage(`Couldn't add addon: ${error instanceof Error ? error.message : String(error)}`)
+        })
     }
   }
 

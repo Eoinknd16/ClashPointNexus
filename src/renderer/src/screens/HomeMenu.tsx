@@ -78,16 +78,21 @@ export function HomeMenu(): JSX.Element {
   const goTo = useNavigationStore((s) => s.goTo)
 
   useEffect(() => {
-    window.api.home.getContinueSuggestion().then(setContinueSuggestion)
-    window.api.weather.get().then(setWeather)
-    window.api.system.getStats().then(setSystemStats)
-    Promise.all([window.api.library.list(), window.api.steam.getLibrary()]).then(([library, steam]) => {
-      setLibraryStats({
-        movies: library.filter((e) => e.type === 'movie').length,
-        series: library.filter((e) => e.type === 'series').length,
-        games: steam.games.length
+    window.api.home
+      .getContinueSuggestion()
+      .then(setContinueSuggestion)
+      .catch(() => setContinueSuggestion(null))
+    window.api.weather.get().then(setWeather).catch(() => setWeather(null))
+    window.api.system.getStats().then(setSystemStats).catch(() => setSystemStats(null))
+    Promise.all([window.api.library.list(), window.api.steam.getLibrary()])
+      .then(([library, steam]) => {
+        setLibraryStats({
+          movies: library.filter((e) => e.type === 'movie').length,
+          series: library.filter((e) => e.type === 'series').length,
+          games: steam.games.length
+        })
       })
-    })
+      .catch(() => setLibraryStats(null))
   }, [])
 
   function activateContinue(suggestion: ContinueSuggestion): void {

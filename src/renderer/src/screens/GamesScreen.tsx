@@ -92,17 +92,23 @@ export function GamesScreen(): JSX.Element {
 
   useEffect(() => {
     let cancelled = false
-    window.api.steam.getLibrary().then((result) => {
-      if (cancelled) return
-      setAllGames(result.games)
-      if (result.needsApiKey) {
-        setMessage('Add a Steam Web API key to steam.config.json to browse your full library')
-      } else if (result.error) {
-        setMessage(`Steam Web API error: ${result.error}`)
-      } else {
-        setMessage('Ready')
-      }
-    })
+    window.api.steam
+      .getLibrary()
+      .then((result) => {
+        if (cancelled) return
+        setAllGames(result.games)
+        if (result.needsApiKey) {
+          setMessage('Add a Steam Web API key to steam.config.json to browse your full library')
+        } else if (result.error) {
+          setMessage(`Steam Web API error: ${result.error}`)
+        } else {
+          setMessage('Ready')
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setMessage(`Failed to load Steam library: ${error instanceof Error ? error.message : String(error)}`)
+      })
     return () => {
       cancelled = true
     }
