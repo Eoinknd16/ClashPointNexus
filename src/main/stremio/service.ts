@@ -85,15 +85,15 @@ export async function getStreamOptions(type: CatalogType, id: string): Promise<S
   const config = loadStremioConfig()
   const streamAddons = config.addons.filter((a) => a.resources.includes('stream'))
   if (streamAddons.length === 0) {
-    return { streams: [], hasAddonsConfigured: false, serverAvailable: false }
+    return { streams: [], hasAddonsConfigured: false, serverAvailable: false, serverUnavailableReason: null, addonErrors: [] }
   }
 
-  const serverAvailable = await ensureStremioServer()
+  const serverStatus = await ensureStremioServer()
 
   const perAddon = await Promise.all(
     streamAddons.map(async (addon) => ({
       addon,
-      raw: await fetchStreamsFromAddon(addon.url, type, id)
+      result: await fetchStreamsFromAddon(addon.url, type, id)
     }))
   )
 
@@ -101,13 +101,21 @@ export async function getStreamOptions(type: CatalogType, id: string): Promise<S
   // then that addon's own internal ranking) — this should mirror the real Stremio
   // app's stream list, not get reshuffled by any preference of ours.
   const streams: StreamResult['streams'] = []
-  for (const { addon, raw } of perAddon) {
-    for (const item of raw) {
-      streams.push(buildStreamOption(item, addon.name, serverAvailable))
+  const addonErrors: string[] = []
+  for (const { addon, result } of perAddon) {
+    if (result.error) addonErrors.push(`${addon.name}: ${result.error}`)
+    for (const item of result.raw) {
+      streams.push(buildStreamOption(item, addon.name, serverStatus.available))
     }
   }
 
-  return { streams, hasAddonsConfigured: true, serverAvailable }
+  return {
+    streams,
+    hasAddonsConfigured: true,
+    serverAvailable: serverStatus.available,
+    serverUnavailableReason: serverStatus.reason,
+    addonErrors
+  }
 }
 
 function buildStreamOption(

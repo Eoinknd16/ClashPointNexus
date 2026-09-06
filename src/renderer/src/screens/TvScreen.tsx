@@ -17,7 +17,7 @@ import type { SubtitleTrack } from '@shared/api'
 import type { LibraryEntry } from '@shared/libraryTypes'
 import type { WatchProgress } from '@shared/progressTypes'
 import { seasonSortKey } from '@shared/stremioTypes'
-import type { AddonCatalogRow, CatalogItem, CatalogType, EpisodeItem, StreamOption } from '@shared/stremioTypes'
+import type { AddonCatalogRow, CatalogItem, CatalogType, EpisodeItem, StreamOption, StreamResult } from '@shared/stremioTypes'
 
 type BrowseTab = 'movie' | 'series' | 'library'
 type Zone = 'filters' | 'rows' | 'detail' | 'episodes' | 'expanded' | 'sources' | 'player' | 'keyboard'
@@ -135,6 +135,19 @@ function sortEpisodes(episodes: EpisodeItem[]): EpisodeItem[] {
   return [...episodes].sort(
     (a, b) => seasonSortKey(a.season) - seasonSortKey(b.season) || a.episode - b.episode
   )
+}
+
+/** Builds the actual reason nothing played, instead of a generic "no streams
+ * found" that looks identical whether an addon genuinely had nothing or the
+ * whole pipeline is silently broken (a bad/stale local torrent-server path,
+ * every addon erroring, etc.) — the fallback string is chosen based on real
+ * plausibility, not an arbitrary default. */
+function describeStreamFailure(result: StreamResult, whatLabel: string): string {
+  const reasons: string[] = []
+  if (!result.serverAvailable && result.serverUnavailableReason) reasons.push(result.serverUnavailableReason)
+  reasons.push(...result.addonErrors)
+  if (reasons.length > 0) return `No playable streams for ${whatLabel}: ${reasons.join(' · ')}`
+  return `No playable streams found for ${whatLabel}`
 }
 
 export function TvScreen(): JSX.Element {
@@ -940,11 +953,7 @@ export function TvScreen(): JSX.Element {
     }
     const playable = result.streams.filter((s) => s.playableUrl)
     if (playable.length === 0) {
-      setMessage(
-        result.serverAvailable
-          ? 'No playable streams found for this title'
-          : "Couldn't start Stremio's streaming server"
-      )
+      setMessage(describeStreamFailure(result, 'this title'))
       return
     }
 
@@ -981,11 +990,7 @@ export function TvScreen(): JSX.Element {
     const playable = result.streams.filter((s) => s.playableUrl)
     const first = playable[0]
     if (!first?.playableUrl) {
-      setMessage(
-        result.serverAvailable
-          ? 'No playable streams found for this episode'
-          : "Couldn't start Stremio's streaming server"
-      )
+      setMessage(describeStreamFailure(result, 'this episode'))
       return
     }
 

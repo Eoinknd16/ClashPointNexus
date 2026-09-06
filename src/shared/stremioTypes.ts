@@ -27,6 +27,15 @@ export interface StreamResult {
   streams: StreamOption[]
   hasAddonsConfigured: boolean
   serverAvailable: boolean
+  /** Why the local torrent-streaming server isn't available, when it isn't —
+   * null whenever serverAvailable is true. Surfaced directly in the UI so a
+   * total "nothing plays" failure has an actual reason instead of a guess. */
+  serverUnavailableReason: string | null
+  /** One entry per stream addon that errored while being queried (network
+   * failure, non-2xx response, bad JSON) — an addon returning zero streams
+   * with no error is not included, since that's a normal "nothing found"
+   * result, not a failure. */
+  addonErrors: string[]
 }
 
 export interface AddonSummary {
