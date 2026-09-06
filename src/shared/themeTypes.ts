@@ -19,10 +19,14 @@ export interface ThemeDefinition {
 /** What a theme pack's theme.json must contain — image fields are plain
  * filenames relative to the pack's own folder (installThemeFromFolder
  * resolves + copies them into real file:// paths afterward), not the
- * resolved ThemeDefinition shape above. */
+ * resolved ThemeDefinition shape above. vars is entirely optional: omitting
+ * it (or just --color-accent/--color-accent-2 within it) falls back to
+ * sensible dark-UI defaults, with the two accent colors auto-extracted from
+ * the pack's own hero/tile images when possible — a minimal pack can be
+ * just images and a name. */
 export interface ThemePackManifest {
   name: string
-  vars: Record<string, string>
+  vars?: Record<string, string>
   heroImage?: string
   tileImages?: Record<string, string>
 }

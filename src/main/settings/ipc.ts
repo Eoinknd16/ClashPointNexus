@@ -70,7 +70,7 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('settings:getCustomThemes', (): ThemeDefinition[] => loadCustomThemes())
 
-  ipcMain.handle('settings:installTheme', (_event, folderPath: string): ThemeInstallResult =>
+  ipcMain.handle('settings:installTheme', (_event, folderPath: string): Promise<ThemeInstallResult> =>
     installThemeFromFolder(folderPath)
   )
 

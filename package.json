@@ -1,7 +1,7 @@
 {
   "name": "clashpoint-nexus",
   "productName": "ClashPoint Nexus",
-  "version": "0.2.38",
+  "version": "0.2.39",
   "description": "Controller-driven media center & game launcher for a couch gaming PC",
   "main": "./out/main/index.js",
   "private": true,
@@ -31,6 +31,7 @@
   "dependencies": {
     "electron-updater": "^6.8.9",
     "framer-motion": "^11.2.10",
+    "jimp": "^1.6.1",
     "lucide-react": "^1.41.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

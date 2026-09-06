@@ -122,7 +122,7 @@ export function FocusableCard({
       className={`relative flex w-full ${aspectClass} shrink-0 flex-col justify-end overflow-hidden rounded-2xl ring-1 transition-shadow duration-200 ${
         onClick ? 'cursor-pointer' : ''
       } ${
-        focused ? 'z-20 shadow-focus ring-white/10' : 'z-0 ring-white/5'
+        focused ? 'z-20 shadow-focus ring-2 ring-accent' : 'z-0 ring-accent/25'
       } ${showImage || showIcon ? 'bg-surface' : focused ? 'bg-surface-hi' : 'bg-surface'}`}
     >
       {showImage && (
