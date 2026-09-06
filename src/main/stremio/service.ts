@@ -1,13 +1,39 @@
 import type { AddonCatalogRow, CatalogItem, CatalogType, SeriesMeta, StreamResult } from '@shared/stremioTypes'
 import { getAllProgressForType } from '../progress/config'
+import { fetchAccountAddons } from './account'
 import { fetchAddonCatalog } from './addonCatalog'
 import { fetchBasicMeta, fetchCatalog, fetchReleaseDate, fetchSeriesMeta } from './cinemeta'
-import { loadStremioConfig } from './config'
+import { loadStremioConfig, saveStremioConfig, type StremioConfig } from './config'
 import { ensureStremioServer, localStreamUrl } from './server'
 import { extractLanguages, extractResolution } from './streamMeta'
 import { fetchStreamsFromAddon, type RawStreamResult } from './streamAddons'
 
 const CONTINUE_WATCHING_LIMIT = 25
+const ADDON_RESYNC_INTERVAL_MS = 3 * 60 * 60 * 1000
+
+/** Keeps the locally-cached addon collection from silently drifting out of
+ * sync with the real Stremio account — previously only refreshed by
+ * manually pressing "Re-sync" in Settings, which meant an addon fixed,
+ * replaced, or removed in the real Stremio app stayed stale here
+ * indefinitely (a real report: two long-dead Debridio addon URLs kept
+ * getting queried well after the user's actual account had presumably
+ * moved on — Nexus is supposed to mirror the account, not a one-time
+ * snapshot of it). Best-effort and silent: a failed refresh just means
+ * "try again next time", never blocking or breaking a stream lookup over
+ * a network hiccup on the sync itself. */
+async function ensureFreshAddons(config: StremioConfig): Promise<StremioConfig> {
+  if (!config.authKey) return config
+  const age = Date.now() - (config.lastAddonsSyncedAt ?? 0)
+  if (age < ADDON_RESYNC_INTERVAL_MS) return config
+  try {
+    const addons = await fetchAccountAddons(config.authKey)
+    const next: StremioConfig = { ...config, addons, lastAddonsSyncedAt: Date.now() }
+    saveStremioConfig(next)
+    return next
+  } catch {
+    return config
+  }
+}
 
 export async function getCatalog(
   type: CatalogType,
@@ -55,7 +81,7 @@ export async function searchCatalog(type: CatalogType, query: string): Promise<C
 /** Pulls one row per movie/series catalog declared by the user's own catalog-capable
  * addons — a bad/slow addon just drops its own row rather than failing the rest. */
 export async function getAddonCatalogs(type: CatalogType): Promise<AddonCatalogRow[]> {
-  const config = loadStremioConfig()
+  const config = await ensureFreshAddons(loadStremioConfig())
   const catalogAddons = config.addons.filter((a) => a.resources.includes('catalog'))
 
   const tasks = catalogAddons.flatMap((addon) =>
@@ -82,7 +108,7 @@ export async function getSeriesMeta(id: string): Promise<SeriesMeta> {
 
 /** Resolves playable stream URLs for a title via whatever of the user's addons can resolve streams. */
 export async function getStreamOptions(type: CatalogType, id: string): Promise<StreamResult> {
-  const config = loadStremioConfig()
+  const config = await ensureFreshAddons(loadStremioConfig())
   const streamAddons = config.addons.filter((a) => a.resources.includes('stream'))
   if (streamAddons.length === 0) {
     return { streams: [], hasAddonsConfigured: false, serverAvailable: false, serverUnavailableReason: null, addonErrors: [] }

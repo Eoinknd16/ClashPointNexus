@@ -47,6 +47,16 @@ function header(id: string, label: string): SettingsRow {
   return { id, kind: 'header', label }
 }
 
+function describeSyncAge(lastSyncedAt: number | null): string {
+  if (lastSyncedAt === null) return 'Never synced'
+  const minutes = Math.round((Date.now() - lastSyncedAt) / 60000)
+  if (minutes < 1) return 'Synced just now'
+  if (minutes < 60) return `Synced ${minutes} min ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `Synced ${hours}h ago`
+  return `Synced ${Math.round(hours / 24)}d ago`
+}
+
 function updateActionLabel(status: UpdateStatus | null): string {
   if (!status) return 'Check for Updates'
   switch (status.state) {
@@ -75,6 +85,7 @@ export function SettingsScreen(): JSX.Element {
   const [stremioEmail, setStremioEmail] = useState('')
   const [stremioPassword, setStremioPassword] = useState('')
   const [loggedIn, setLoggedIn] = useState(false)
+  const [lastAddonsSyncedAt, setLastAddonsSyncedAt] = useState<number | null>(null)
   const [addons, setAddons] = useState<AddonSummary[]>([])
   const [appVersion, setAppVersion] = useState('')
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
@@ -111,6 +122,7 @@ export function SettingsScreen(): JSX.Element {
         setAddons(s.addons)
         setLoggedIn(Boolean(s.authKey))
         setStremioEmail(s.email ?? '')
+        setLastAddonsSyncedAt(s.lastAddonsSyncedAt)
       })
       .catch(() => {})
     window.api.updater.getVersion().then(setAppVersion).catch(() => {})
@@ -236,6 +248,15 @@ export function SettingsScreen(): JSX.Element {
       kind: 'info',
       label: loggedIn ? `✓ Logged in as ${stremioEmail}` : 'Not logged in to Stremio'
     },
+    ...(loggedIn
+      ? [
+          {
+            id: 'stremioSyncAge',
+            kind: 'info' as const,
+            label: `Addon list: ${describeSyncAge(lastAddonsSyncedAt)} — auto-refreshes every few hours, or tap Re-sync below`
+          }
+        ]
+      : []),
     { id: 'stremioEmail', kind: 'field', label: 'Stremio Email', value: stremioEmail },
     { id: 'stremioPassword', kind: 'field', label: 'Stremio Password', value: stremioPassword, masked: true },
     {
@@ -358,6 +379,7 @@ export function SettingsScreen(): JSX.Element {
       setMessage(`Logged in — synced ${result.addonsSynced} addon(s), all of them, not just stream ones`)
       const updated = await window.api.settings.getStremio()
       setAddons(updated.addons)
+      setLastAddonsSyncedAt(updated.lastAddonsSyncedAt)
     } else {
       setMessage(`Login failed: ${result.error}`)
     }
@@ -386,6 +408,7 @@ export function SettingsScreen(): JSX.Element {
       setMessage(`Re-synced ${result.addonsSynced} addon(s)`)
       const updated = await window.api.settings.getStremio()
       setAddons(updated.addons)
+      setLastAddonsSyncedAt(updated.lastAddonsSyncedAt)
     } else {
       setMessage(`Re-sync failed: ${result.error}`)
     }

@@ -8,6 +8,10 @@ export interface StremioConfig {
   addons: AddonSummary[]
   authKey?: string
   email?: string
+  /** When the addon collection was last pulled from the account (login or a
+   * resync, manual or automatic) — lets service.ts refresh it opportunistically
+   * before it goes stale, rather than only on a manual "Re-sync" button press. */
+  lastAddonsSyncedAt?: number
 }
 
 const DEFAULT_CONFIG: StremioConfig = { addons: [] }

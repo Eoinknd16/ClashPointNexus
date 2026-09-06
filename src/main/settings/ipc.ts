@@ -41,7 +41,8 @@ export function registerSettingsIpc(): void {
     return {
       addons: config.addons,
       authKey: config.authKey ?? null,
-      email: config.email ?? null
+      email: config.email ?? null,
+      lastAddonsSyncedAt: config.lastAddonsSyncedAt ?? null
     }
   })
 
@@ -75,7 +76,7 @@ export function registerSettingsIpc(): void {
         const authKey = await stremioLogin(email, password)
         const addons = await fetchAccountAddons(authKey)
         const config = loadStremioConfig()
-        saveStremioConfig({ ...config, authKey, email, addons })
+        saveStremioConfig({ ...config, authKey, email, addons, lastAddonsSyncedAt: Date.now() })
         return { success: true, error: null, addonsSynced: addons.length }
       } catch (error) {
         return {
@@ -94,7 +95,7 @@ export function registerSettingsIpc(): void {
     }
     try {
       const addons = await fetchAccountAddons(config.authKey)
-      saveStremioConfig({ ...config, addons })
+      saveStremioConfig({ ...config, addons, lastAddonsSyncedAt: Date.now() })
       return { success: true, error: null, addonsSynced: addons.length }
     } catch (error) {
       return {

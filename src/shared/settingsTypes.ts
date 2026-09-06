@@ -9,6 +9,10 @@ export interface StremioSettings {
   addons: AddonSummary[]
   authKey: string | null
   email: string | null
+  /** When the addon collection was last pulled from the account — null if
+   * never synced. Auto-refreshed periodically (see stremio/service.ts), not
+   * just on a manual "Re-sync" press, so this is mostly informational. */
+  lastAddonsSyncedAt: number | null
 }
 
 export interface StremioLoginResult {
