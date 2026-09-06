@@ -19,6 +19,7 @@ import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
 import { useThemeStore } from '../state/themeStore'
 import { deriveThemeVars, hslToRgbTriplet, rgbTripletToHsl } from '../themes/colorUtils'
+import { openThemesFolder, rescanThemesFolder } from '../themes/themeFolderActions'
 import type { AddonSummary } from '@shared/stremioTypes'
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
@@ -578,29 +579,6 @@ export function SettingsScreen(): JSX.Element {
     setColorEditorTheme(null)
   }
 
-  function doOpenThemesFolder(): void {
-    void window.api.settings.openThemesFolder()
-  }
-
-  // Only ever adds themes (never updates/removes) — see scanThemesDropFolder's
-  // own docs for why a folder that's already installed is always a no-op, so
-  // it's safe to call this as often as the user likes.
-  async function doRescanThemesFolder(): Promise<void> {
-    setMessage('Scanning Themes folder...')
-    try {
-      const result = await window.api.settings.scanThemesFolder()
-      if (result.installed.length > 0) {
-        await refreshCustomThemes()
-        setMessage(`Installed ${result.installed.length} new theme(s): ${result.installed.join(', ')}`)
-      } else if (result.errors.length > 0) {
-        setMessage(`No new themes — ${result.errors.length} folder(s) had errors (missing/invalid theme.json)`)
-      } else {
-        setMessage('No new theme pack folders found')
-      }
-    } catch (error) {
-      setMessage(`Rescan failed: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
 
   function adjustColor(direction: 1 | -1): void {
     if (!colorEditorTheme) return
@@ -667,9 +645,9 @@ export function SettingsScreen(): JSX.Element {
     } else if (row.id === 'toggleStartup') {
       void doToggleStartup()
     } else if (row.id === 'openThemesFolder') {
-      doOpenThemesFolder()
+      openThemesFolder()
     } else if (row.id === 'rescanThemesFolder') {
-      void doRescanThemesFolder()
+      void rescanThemesFolder(refreshCustomThemes, setMessage)
     }
   }
 
