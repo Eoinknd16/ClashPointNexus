@@ -222,15 +222,23 @@ export function HomeMenu(): JSX.Element {
       </header>
 
       <div className="relative min-h-[220px] flex-1 overflow-hidden rounded-3xl bg-surface">
-        {continueSuggestion?.poster ? (
-          <div
-            className="absolute inset-0 scale-110 bg-cover bg-center opacity-60 blur-2xl"
-            style={{ backgroundImage: `url(${continueSuggestion.poster})` }}
-          />
-        ) : (
-          <div className="absolute inset-0" style={{ backgroundImage: 'var(--gradient-app-glow)' }} />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
+        {/* A small poster (a few hundred px) stretched across the whole hero
+            and blurred doesn't turn into a nice cinematic backdrop — CSS blur
+            operates on the already-upscaled, blocky pixels, so it comes out
+            as ugly color blobs instead (confirmed: a real screenshot showed
+            exactly that). A rich, theme-driven gradient reads as deliberate
+            regardless of theme, where a stretched-thumbnail backdrop never
+            would without a real high-resolution image behind it. */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(ellipse 90% 80% at 15% -10%, rgb(var(--color-accent) / 0.5), transparent 60%), ' +
+              'radial-gradient(ellipse 80% 70% at 100% 110%, rgb(var(--color-accent-2) / 0.45), transparent 60%), ' +
+              'radial-gradient(ellipse 60% 60% at 50% 50%, rgb(var(--color-surface-hi)), rgb(var(--color-bg)))'
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
         {continueSuggestion && (
           <div
