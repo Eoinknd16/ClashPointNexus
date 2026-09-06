@@ -13,8 +13,17 @@ import { loadCustomThemes, saveCustomThemes } from './themes'
 const { owner: REPO_OWNER, name: REPO_NAME, branch: REPO_BRANCH } = COMMUNITY_THEMES_REPO
 const MANIFEST_FILENAME = 'theme.json'
 
+// jsDelivr's public GitHub CDN/API, not api.github.com directly — the latter
+// caps ANONYMOUS requests at 60/hour *per IP*, shared with anything else on
+// that network (a browser, this app, a dev checking things by hand), which
+// is trivial to exhaust and then have this feature silently look empty with
+// no error surfaced anywhere. jsDelivr exists specifically to mirror public
+// repo content at CDN scale for free, anonymous, high-volume reads like
+// this — the one tradeoff is it can lag a few minutes behind a fresh push,
+// unlike raw.githubusercontent.com's near-instant reads, which is a much
+// better trade than a hard rate-limit wall.
 function rawUrl(folder: string, filename: string): string {
-  return `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`
+  return `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}@${REPO_BRANCH}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`
 }
 
 async function fetchManifest(folder: string): Promise<ThemePackManifest | null> {
@@ -28,24 +37,29 @@ async function fetchManifest(folder: string): Promise<ThemePackManifest | null> 
   }
 }
 
+interface JsDelivrEntry {
+  type: 'directory' | 'file'
+  name: string
+}
+
 /**
  * Lists every theme pack folder in the public community repo — there's no
  * server of our own here, just a GitHub repo the user reviews and merges
  * submissions into (see themeSubmission.ts for the "prepare a submission"
- * side); this only ever reads it anonymously. Best-effort throughout: an
+ * side); this only ever reads it anonymously, via jsDelivr's data API
+ * (same rate-limit reasoning as rawUrl above). Best-effort throughout: an
  * unreachable repo, an empty one, or one bad folder just means it (or that
  * one entry) is missing from the list, never a crash.
  */
 export async function listCommunityThemes(): Promise<CommunityThemeSummary[]> {
   try {
-    const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/`)
-    if (!response.ok) return []
-    const entries = (await response.json()) as unknown
-    if (!Array.isArray(entries)) return []
-    const folders = entries.filter(
-      (e): e is { name: string; type: string } =>
-        !!e && typeof e === 'object' && (e as { type?: unknown }).type === 'dir'
+    const response = await fetch(
+      `https://data.jsdelivr.com/v1/packages/gh/${REPO_OWNER}/${REPO_NAME}@${REPO_BRANCH}`
     )
+    if (!response.ok) return []
+    const data = (await response.json()) as { files?: unknown }
+    if (!Array.isArray(data.files)) return []
+    const folders = (data.files as JsDelivrEntry[]).filter((e) => e.type === 'directory')
 
     const summaries = await Promise.all(
       folders.map(async (folder): Promise<CommunityThemeSummary | null> => {
