@@ -128,20 +128,32 @@ export async function fetchBasicMeta(
   return { name: meta.name, poster: meta.poster ?? null }
 }
 
-/** Cast/director/runtime/IMDb rating — all already present on the same
- * Cinemeta meta response fetchReleaseDate uses, just not read before now.
+/** Cast/director/runtime/IMDb rating/description — all already present on
+ * the same Cinemeta meta response fetchReleaseDate uses, just not read
+ * before now. description is included so the detail panel can backfill it
+ * the same way it already backfills release date — some entry points
+ * (Continue Watching, Library, search results) never populate it on the
+ * CatalogItem passed in, but this same request has it regardless.
  * imdbId is usually just `id` itself (Cinemeta ids for movie/series already
  * are IMDb ids), but reads Cinemeta's own imdb_id when present in case that
  * ever isn't true, since it's what OMDb's ratings lookup needs. */
 export async function fetchCastAndCrew(
   type: CatalogType,
   id: string
-): Promise<{ cast: string[]; director: string[]; runtime: string | null; imdbRating: string | null; imdbId: string | null }> {
+): Promise<{
+  cast: string[]
+  director: string[]
+  runtime: string | null
+  imdbRating: string | null
+  imdbId: string | null
+  description: string | null
+}> {
   const meta = await fetchMetaRaw(type, id)
   return {
     cast: meta?.cast ?? [],
     director: meta?.director ?? [],
     runtime: meta?.runtime ?? null,
+    description: meta?.description ?? null,
     imdbRating: meta?.imdbRating ?? null,
     imdbId: meta?.imdb_id ?? id
   }

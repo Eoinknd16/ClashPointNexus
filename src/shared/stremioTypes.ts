@@ -82,6 +82,10 @@ export interface ExtendedMeta {
   runtime: string | null
   imdbRating: string | null
   externalRatings: Array<{ source: string; value: string }>
+  /** For backfilling a CatalogItem whose own description came back empty
+   * (Continue Watching, Library, search results all can) — same idea as the
+   * existing release-date backfill. */
+  description: string | null
 }
 
 /** Season/episode number order — season 0 ("Specials") sorts last, not first. */

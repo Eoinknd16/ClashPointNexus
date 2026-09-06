@@ -92,7 +92,8 @@ export async function getExtendedMeta(type: CatalogType, id: string): Promise<Ex
     director: meta.director,
     runtime: meta.runtime,
     imdbRating: meta.imdbRating,
-    externalRatings
+    externalRatings,
+    description: meta.description
   }
 }
 

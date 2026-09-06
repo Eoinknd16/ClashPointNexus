@@ -691,7 +691,13 @@ export function TvScreen(): JSX.Element {
     if (!item) return
     let cancelled = false
     window.api.stremio.getExtendedMeta(item.type, item.id).then((meta) => {
-      if (!cancelled) setExtendedMeta(meta)
+      if (cancelled) return
+      setExtendedMeta(meta)
+      if (!item.description && meta.description) {
+        setSelectedItem((current) =>
+          current && current.id === item.id ? { ...current, description: meta.description } : current
+        )
+      }
     })
     return () => {
       cancelled = true
