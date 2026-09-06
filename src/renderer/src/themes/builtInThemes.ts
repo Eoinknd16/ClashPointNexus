@@ -1,5 +1,18 @@
 import { deriveThemeVars } from '@shared/colorMath'
 import type { ThemeDefinition } from '@shared/themeTypes'
+import defaultThemeApps from '../assets/defaultTheme/apps.jpg'
+import defaultThemeArcade from '../assets/defaultTheme/arcade.jpg'
+import defaultThemeGames from '../assets/defaultTheme/games.jpg'
+import defaultThemeHero from '../assets/defaultTheme/hero.jpg'
+import defaultThemeTv from '../assets/defaultTheme/tv.jpg'
+
+interface BaseTheme {
+  id: string
+  name: string
+  vars: Record<string, string>
+  heroImage?: string
+  tileImages?: Record<string, string>
+}
 
 // Colors are space-separated RGB channels (e.g. "91 140 255"), not hex —
 // that's what lets Tailwind's rgb(var(--x) / <alpha-value>) pattern support
@@ -11,7 +24,34 @@ import type { ThemeDefinition } from '@shared/themeTypes'
 // theme pack's colors run through), so every built-in theme automatically
 // picks up any tweak to that formula instead of needing its derived values
 // hand-updated to match every time.
-const BASE_THEMES: Array<{ id: string; name: string; vars: Record<string, string> }> = [
+const BASE_THEMES: BaseTheme[] = [
+  {
+    // Ships with the app and is selected for every fresh install (see
+    // DEFAULT_THEME_ID below) — built from the same theme pack the user
+    // assembled and installed locally (own real photography, bundled here
+    // as actual renderer assets rather than left to only exist in that
+    // one install's userData/Themes folder), so it's a proper built-in
+    // like the others: edit its 7 base colors here and every derived
+    // value (glow, shadows) updates the same way theirs would.
+    id: 'default',
+    name: 'Default',
+    vars: {
+      '--color-bg': '10 10 16',
+      '--color-surface': '21 21 31',
+      '--color-surface-hi': '30 30 44',
+      '--color-surface-hover': '38 38 58',
+      '--color-accent': '91 140 255',
+      '--color-accent-2': '160 107 255',
+      '--color-muted': '143 143 163'
+    },
+    heroImage: defaultThemeHero,
+    tileImages: {
+      games: defaultThemeGames,
+      tv: defaultThemeTv,
+      apps: defaultThemeApps,
+      arcade: defaultThemeArcade
+    }
+  },
   {
     id: 'midnight',
     name: 'Midnight',
@@ -69,7 +109,9 @@ const BASE_THEMES: Array<{ id: string; name: string; vars: Record<string, string
 export const BUILT_IN_THEMES: ThemeDefinition[] = BASE_THEMES.map((theme) => ({
   id: theme.id,
   name: theme.name,
-  vars: deriveThemeVars(theme.vars)
+  vars: deriveThemeVars(theme.vars),
+  ...(theme.heroImage ? { heroImage: theme.heroImage } : {}),
+  ...(theme.tileImages ? { tileImages: theme.tileImages } : {})
 }))
 
-export const DEFAULT_THEME_ID = 'midnight'
+export const DEFAULT_THEME_ID = 'default'
