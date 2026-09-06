@@ -1634,7 +1634,11 @@ export function TvScreen(): JSX.Element {
               ))}
             </div>
 
-            <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+            {/* p-2: overflow-y-auto clips its own horizontal axis too (per
+                spec) — without this, a focused episode's shadow-focus glow
+                gets sliced off flush against this div's own edge, same bug
+                CategoryRow.tsx's px-4/py-5 padding exists to avoid. */}
+            <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
               {episodes.length === 0 && <span className="text-muted">Loading episodes...</span>}
               {episodesForSeason.map((ep, i) => (
                 <div

@@ -457,7 +457,11 @@ export function FileManagerScreen(): JSX.Element {
         </div>
       )}
 
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+      {/* p-2: overflow-y-auto clips its own horizontal axis too (per spec) —
+          without this, a focused row's shadow-focus glow gets sliced off
+          flush against this div's own edge, same bug CategoryRow.tsx's
+          px-4/py-5 padding exists to avoid. */}
+      <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
         {visibleEntries.length === 0 && (
           <span className="px-5 text-muted">{searchQuery ? 'No matches' : 'Empty folder'}</span>
         )}
