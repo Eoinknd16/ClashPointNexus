@@ -24,6 +24,10 @@ interface ThemeState {
    * in that file at all, so persistence silently no-ops for them (the UI
    * never offers this for a built-in theme in the first place). */
   updateThemeVars: (id: string, vars: Record<string, string>) => void
+  /** Removes a custom/installed theme — if it was the active one, falls
+   * back to DEFAULT_THEME_ID rather than leaving themeId pointing at a
+   * theme that no longer exists in allThemes. */
+  removeTheme: (id: string) => Promise<void>
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
@@ -86,5 +90,15 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     window.api.settings.updateThemeVars(id, vars).catch(() => {
       // best-effort persistence -- the live preview above already applied either way
     })
+  },
+
+  removeTheme: async (id) => {
+    await window.api.settings.removeTheme(id)
+    const wasActive = get().themeId === id
+    set((state) => ({
+      customThemes: state.customThemes.filter((t) => t.id !== id),
+      allThemes: state.allThemes.filter((t) => t.id !== id)
+    }))
+    if (wasActive) get().setTheme(DEFAULT_THEME_ID)
   }
 }))

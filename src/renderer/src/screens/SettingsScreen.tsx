@@ -7,6 +7,7 @@ import {
   Palette,
   RefreshCw,
   Settings as SettingsIcon,
+  Trash2,
   TriangleAlert,
   Tv,
   X,
@@ -138,7 +139,9 @@ export function SettingsScreen(): JSX.Element {
   const [startupSettings, setStartupSettings] = useState<StartupSettings | null>(null)
   const [themesFolderPath, setThemesFolderPath] = useState('')
 
-  const [zone, setZone] = useState<'sidebar' | 'content' | 'keyboard' | 'colorEditor'>('sidebar')
+  const [zone, setZone] = useState<'sidebar' | 'content' | 'keyboard' | 'colorEditor' | 'confirmRemoveTheme'>(
+    'sidebar'
+  )
   const [categoryIndex, setCategoryIndex] = useState(0)
   const [menuIndex, setMenuIndex] = useState(0)
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -149,6 +152,8 @@ export function SettingsScreen(): JSX.Element {
   const [colorEditorTheme, setColorEditorTheme] = useState<ThemeDefinition | null>(null)
   const [colorEditorKeyIndex, setColorEditorKeyIndex] = useState(0)
   const [colorEditorChannel, setColorEditorChannel] = useState(0)
+  const [themeToRemove, setThemeToRemove] = useState<ThemeDefinition | null>(null)
+  const [removeConfirmIndex, setRemoveConfirmIndex] = useState(0)
 
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
@@ -159,6 +164,7 @@ export function SettingsScreen(): JSX.Element {
   const setTheme = useThemeStore((s) => s.setTheme)
   const refreshCustomThemes = useThemeStore((s) => s.refreshCustomThemes)
   const updateThemeVars = useThemeStore((s) => s.updateThemeVars)
+  const removeTheme = useThemeStore((s) => s.removeTheme)
   const rowRefs = useRef<Array<HTMLDivElement | null>>([])
   const customThemeIds = new Set(customThemes.map((t) => t.id))
 
@@ -225,6 +231,13 @@ export function SettingsScreen(): JSX.Element {
           label: 'Fine-Tune Colors',
           category: 'appearance',
           icon: Palette
+        },
+        {
+          id: `removeTheme-${theme.id}`,
+          kind: 'action',
+          label: 'Remove Theme',
+          category: 'appearance',
+          icon: Trash2
         }
       ]
     }),
@@ -579,6 +592,32 @@ export function SettingsScreen(): JSX.Element {
     setColorEditorTheme(null)
   }
 
+  function openRemoveThemeConfirm(theme: ThemeDefinition): void {
+    setThemeToRemove(theme)
+    setRemoveConfirmIndex(0)
+    setZone('confirmRemoveTheme')
+  }
+
+  function closeRemoveThemeConfirm(): void {
+    setZone('content')
+    setThemeToRemove(null)
+  }
+
+  async function doRemoveTheme(): Promise<void> {
+    if (!themeToRemove) return
+    const { id, name } = themeToRemove
+    setZone('content')
+    setThemeToRemove(null)
+    setMessage(`Removing ${name}...`)
+    try {
+      await removeTheme(id)
+      setMessage(
+        `Removed ${name} — if it came from your Themes folder, remove it from there too or it'll reinstall next scan`
+      )
+    } catch (error) {
+      setMessage(`Couldn't remove ${name}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
 
   function adjustColor(direction: 1 | -1): void {
     if (!colorEditorTheme) return
@@ -623,6 +662,10 @@ export function SettingsScreen(): JSX.Element {
       const id = row.id.replace('editColors-', '')
       const theme = allThemes.find((t) => t.id === id)
       if (theme) openColorEditor(theme)
+    } else if (row.id.startsWith('removeTheme-')) {
+      const id = row.id.replace('removeTheme-', '')
+      const theme = allThemes.find((t) => t.id === id)
+      if (theme) openRemoveThemeConfirm(theme)
     } else if (row.kind === 'field') {
       openKeyboard(row.id, row.value ?? '')
     } else if (row.kind === 'addon') {
@@ -652,6 +695,25 @@ export function SettingsScreen(): JSX.Element {
   }
 
   useNavListener((action) => {
+    if (zone === 'confirmRemoveTheme') {
+      switch (action) {
+        case 'left':
+        case 'right':
+          setRemoveConfirmIndex((i) => (i === 0 ? 1 : 0))
+          return
+        case 'confirm':
+          if (removeConfirmIndex === 0) void doRemoveTheme()
+          else closeRemoveThemeConfirm()
+          return
+        case 'back':
+        case 'menu':
+          closeRemoveThemeConfirm()
+          return
+        default:
+          return
+      }
+    }
+
     if (zone === 'colorEditor') {
       switch (action) {
         case 'prevStream':
@@ -925,6 +987,38 @@ export function SettingsScreen(): JSX.Element {
             <p className="text-xs text-muted">
               L1/R1: switch color · Up/Down: switch H/S/L · Left/Right: adjust · Back: done
             </p>
+          </div>
+        </div>
+      )}
+
+      {zone === 'confirmRemoveTheme' && themeToRemove && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
+          <div className="flex w-96 flex-col gap-4 rounded-2xl bg-surface p-8">
+            <h2 className="text-lg font-semibold">Remove theme "{themeToRemove.name}"?</h2>
+            <p className="text-sm text-muted">
+              {themeToRemove.id === themeId
+                ? "This is your active theme — removing it switches you back to Default. "
+                : ''}
+              If it came from your Themes folder, remove it from there too, or it'll be reinstalled the
+              next time the app scans that folder.
+            </p>
+            <div className="flex gap-3">
+              {['Remove', 'Cancel'].map((label, i) => (
+                <div
+                  key={label}
+                  onClick={() => {
+                    setRemoveConfirmIndex(i)
+                    if (i === 0) void doRemoveTheme()
+                    else closeRemoveThemeConfirm()
+                  }}
+                  className={`flex-1 cursor-pointer rounded-xl px-5 py-3 text-center font-medium transition-colors ${
+                    removeConfirmIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted'
+                  }`}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

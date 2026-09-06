@@ -98,6 +98,12 @@ export interface LauncherApi {
     getThemesFolderPath: () => Promise<string>
     /** Opens the Themes drop folder in the OS file explorer. */
     openThemesFolder: () => Promise<void>
+    /** Custom/installed themes only — no-ops for a built-in id (Settings'
+     * UI never offers this action on one). Only deletes this app's own
+     * copied assets, not the original pack folder if it came from the
+     * Themes drop folder — that'll reinstall it on the next scan unless
+     * the user also removes/renames the source folder. */
+    removeTheme: (id: string) => Promise<void>
     getStartup: () => Promise<StartupSettings>
     /** No-ops in a dev build — see StartupSettings.supported. */
     setStartupEnabled: (enabled: boolean) => Promise<void>

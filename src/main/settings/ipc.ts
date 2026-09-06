@@ -15,7 +15,7 @@ import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../str
 import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
 import { importStremioHistory } from '../stremio/importHistory'
 import { getStartupSettings, setStartupEnabled } from './startup'
-import { installThemeFromFolder, scanThemesDropFolder } from './themeInstall'
+import { installThemeFromFolder, removeInstalledTheme, scanThemesDropFolder } from './themeInstall'
 import { loadCustomThemes, saveCustomThemes, themesDropRoot } from './themes'
 
 export function registerSettingsIpc(): void {
@@ -80,6 +80,13 @@ export function registerSettingsIpc(): void {
 
   ipcMain.handle('settings:openThemesFolder', async (): Promise<void> => {
     await shell.openPath(themesDropRoot())
+  })
+
+  // Only ever reachable for custom/installed themes — built-ins aren't in
+  // themes.config.json at all, so there's nothing here to remove for them
+  // (Settings' UI never offers this action on a built-in in the first place).
+  ipcMain.handle('settings:removeTheme', (_event, id: string): void => {
+    removeInstalledTheme(id)
   })
 
   // The in-app color picker (Settings > a custom theme > "Fine-Tune Colors")
