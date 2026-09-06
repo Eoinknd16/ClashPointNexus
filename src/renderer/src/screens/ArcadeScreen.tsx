@@ -23,9 +23,36 @@ const SPAWN_INTERVAL_START_MS = 950
 const SPAWN_INTERVAL_MIN_MS = 420
 const COIN_CHANCE = 0.28
 const PLAYER_Y_FRACTION = 0.82
-const HIT_ZONE_PX = 34
 const COUNTDOWN_MS = 1200
+// Matches the actual shapes drawn below — the ship's triangle spans
+// playerY-24 to playerY+18 vertically and playerX+/-20 horizontally; the
+// rock diamond and coin circle are both roughly +/-16px from their center.
+// Collision uses these directly (real bounding-box overlap against the
+// ship's actual rendered X, not just "same lane") rather than a coarse
+// same-lane + Y-proximity check, which could register a hit against the
+// destination lane before the ship's sprite had actually eased into it —
+// death while still mid-lane-switch, never having visually touched anything.
+const SHIP_HALF_WIDTH = 20
+const SHIP_TOP_OFFSET = 24
+const SHIP_BOTTOM_OFFSET = 18
+const OBSTACLE_HALF_SIZE = 16
 const MAX_HIGH_SCORES_SHOWN = 5
+
+/** Real bounding-box overlap between the ship's actual rendered position
+ * (shipX may be mid-slide between lanes, not snapped to a lane center) and
+ * an obstacle/coin's actual position — see the constants above for where
+ * these numbers come from. */
+function shipOverlaps(shipX: number, playerY: number, obsX: number, obsY: number): boolean {
+  const shipLeft = shipX - SHIP_HALF_WIDTH
+  const shipRight = shipX + SHIP_HALF_WIDTH
+  const shipTop = playerY - SHIP_TOP_OFFSET
+  const shipBottom = playerY + SHIP_BOTTOM_OFFSET
+  const obsLeft = obsX - OBSTACLE_HALF_SIZE
+  const obsRight = obsX + OBSTACLE_HALF_SIZE
+  const obsTop = obsY - OBSTACLE_HALF_SIZE
+  const obsBottom = obsY + OBSTACLE_HALF_SIZE
+  return shipLeft < obsRight && shipRight > obsLeft && shipTop < obsBottom && shipBottom > obsTop
+}
 
 function themeColor(varName: string, fallback: string): string {
   const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
@@ -202,7 +229,8 @@ export function ArcadeScreen(): JSX.Element {
       const stillObstacles: Obstacle[] = []
       for (const obs of game.obstacles) {
         obs.y += game.speed * dt
-        if (!obs.resolved && obs.lane === game.lane && Math.abs(obs.y - playerY) <= HIT_ZONE_PX) {
+        const obsX = laneWidth * (obs.lane + 0.5)
+        if (!obs.resolved && shipOverlaps(game.playerX, playerY, obsX, obs.y)) {
           obs.resolved = true
           if (obs.kind === 'coin') {
             coinsCollected += 1

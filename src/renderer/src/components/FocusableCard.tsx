@@ -160,7 +160,13 @@ export function FocusableCard({
         />
       )}
       {showChevron && (
-        <span className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/30 text-white/80 backdrop-blur-sm">
+        // No backdrop-blur — Home renders one of these per tile (7 at once),
+        // and backdrop-filter is one of the most expensive things a browser
+        // can composite; stacked that many times, it was the real cause of
+        // the D-pad tile navigation feeling laggy. A plain, slightly more
+        // opaque fill reads almost identically at this size without forcing
+        // a real-time blur sample behind every single tile on every repaint.
+        <span className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80">
           <ChevronRight className="h-4 w-4" />
         </span>
       )}
