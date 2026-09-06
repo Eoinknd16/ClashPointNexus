@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { File, Folder } from 'lucide-react'
 import { useNavListener } from '../input/useNavListener'
 import { useNavigationStore } from '../state/navigationStore'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
@@ -472,7 +473,7 @@ export function FileManagerScreen(): JSX.Element {
               focusIndex === i && zone === 'list' ? 'bg-surface-hi shadow-focus' : 'bg-surface'
             } ${clipboard?.path === entry.path && clipboard.mode === 'cut' ? 'opacity-50' : ''}`}
           >
-            <span className="text-xl">{entry.isDirectory ? '📁' : '📄'}</span>
+            {entry.isDirectory ? <Folder className="h-5 w-5 shrink-0" /> : <File className="h-5 w-5 shrink-0" />}
             <span className="flex-1 truncate font-medium">{entry.name}</span>
             {!isRoot && (
               <>

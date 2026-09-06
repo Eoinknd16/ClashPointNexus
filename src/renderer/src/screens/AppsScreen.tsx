@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Package2, Play, Star, X } from 'lucide-react'
 import { CardArt, FocusableCard, type CardItem } from '../components/FocusableCard'
 import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
@@ -14,7 +15,7 @@ function toCardItem(entry: AppEntry): CardItem {
     id: entry.id,
     title: entry.name,
     subtitle: entry.args || undefined,
-    icon: '📦',
+    icon: Package2,
     gradientDirection: 'bg-gradient-to-br',
     favorite: entry.favorite
   }
@@ -194,26 +195,26 @@ export function AppsScreen(): JSX.Element {
               <button
                 onClick={() => toggleFavorite(selectedApp)}
                 title={selectedApp.favorite ? 'Remove favorite' : 'Add favorite (Square)'}
-                className={`shrink-0 text-2xl transition-opacity ${
+                className={`shrink-0 transition-opacity ${
                   selectedApp.favorite ? 'opacity-100' : 'opacity-30 hover:opacity-70'
                 }`}
               >
-                ⭐
+                <Star className="h-6 w-6 text-yellow-400" fill="currentColor" />
               </button>
             </div>
             <p className="-mt-4 truncate text-sm text-muted">{selectedApp.executablePath}</p>
 
             <button
               onClick={() => launch(selectedApp)}
-              className="mt-auto rounded-xl bg-accent-gradient px-6 py-4 text-lg font-semibold text-white shadow-focus"
+              className="mt-auto flex items-center justify-center gap-2 rounded-xl bg-accent-gradient px-6 py-4 text-lg font-semibold text-white shadow-focus"
             >
-              ▶ Launch
+              <Play className="h-5 w-5" fill="currentColor" /> Launch
             </button>
             <button
               onClick={() => removeApp(selectedApp)}
-              className="rounded-xl bg-surface-hi px-6 py-3 text-sm font-medium text-muted hover:text-white"
+              className="flex items-center justify-center gap-2 rounded-xl bg-surface-hi px-6 py-3 text-sm font-medium text-muted hover:text-white"
             >
-              ✖ Remove (Share)
+              <X className="h-4 w-4" /> Remove (Share)
             </button>
           </motion.div>
         )}

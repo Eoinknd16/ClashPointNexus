@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Film, Gamepad2, Tv, type LucideIcon } from 'lucide-react'
 import { FocusableCard, type CardItem } from '../components/FocusableCard'
 import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
@@ -18,11 +19,24 @@ function filterLabel(f: Filter): string {
     case 'all':
       return 'All'
     case 'games':
-      return '🎮 Games'
+      return 'Games'
     case 'movies':
-      return '🎬 Movies'
+      return 'Movies'
     case 'series':
-      return '📺 Series'
+      return 'Series'
+  }
+}
+
+function filterIcon(f: Filter): LucideIcon | null {
+  switch (f) {
+    case 'games':
+      return Gamepad2
+    case 'movies':
+      return Film
+    case 'series':
+      return Tv
+    default:
+      return null
   }
 }
 
@@ -43,7 +57,7 @@ function toCardItem(item: LibraryItem): CardItem {
       subtitle: g.installed ? 'Installed' : 'Not installed',
       imageUrl: g.imageDataUrl ?? steamCandidates[0],
       imageFallbacks: g.imageDataUrl ? undefined : steamCandidates.slice(1),
-      icon: '🎮',
+      icon: Gamepad2,
       gradientDirection: 'bg-gradient-to-br',
       favorite: g.favorite
     }
@@ -54,7 +68,7 @@ function toCardItem(item: LibraryItem): CardItem {
     title: e.name,
     subtitle: e.type === 'movie' ? 'Movie' : 'Series',
     imageUrl: e.poster ?? undefined,
-    icon: e.type === 'movie' ? '🎬' : '📺',
+    icon: e.type === 'movie' ? Film : Tv,
     gradientDirection: 'bg-gradient-to-bl'
   }
 }
@@ -244,22 +258,26 @@ export function LibraryScreen(): JSX.Element {
       </header>
 
       <div className="flex gap-3">
-        {FILTERS.map((f, i) => (
-          <div
-            key={f}
-            onClick={() => {
-              setZone('filters')
-              setFilterIndex(i)
-              setFilter(f)
-              setGridIndex(0)
-            }}
-            className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-              filter === f ? 'bg-accent text-white' : 'bg-surface text-muted'
-            } ${zone === 'filters' && filterIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
-          >
-            {filterLabel(f)}
-          </div>
-        ))}
+        {FILTERS.map((f, i) => {
+          const Icon = filterIcon(f)
+          return (
+            <div
+              key={f}
+              onClick={() => {
+                setZone('filters')
+                setFilterIndex(i)
+                setFilter(f)
+                setGridIndex(0)
+              }}
+              className={`flex cursor-pointer items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                filter === f ? 'bg-accent text-white' : 'bg-surface text-muted'
+              } ${zone === 'filters' && filterIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
+            >
+              {Icon && <Icon className="h-4 w-4" />}
+              {filterLabel(f)}
+            </div>
+          )
+        })}
       </div>
 
       <div className="grid flex-1 auto-rows-min grid-cols-5 gap-10 overflow-y-auto p-5">

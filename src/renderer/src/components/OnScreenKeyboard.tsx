@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { ArrowBigUp, Delete } from 'lucide-react'
 import { KEY_ROWS } from './onScreenKeyboardLayout'
 
 interface OnScreenKeyboardProps {
@@ -16,10 +17,12 @@ interface OnScreenKeyboardProps {
 
 const KEY_GLYPHS: Record<string, string> = {
   SPACE: '␣',
-  BACKSPACE: '⌫',
-  SHIFT: '⇧',
   CLEAR: 'Clear',
   DONE: 'Done'
+}
+const KEY_ICONS: Record<string, typeof Delete> = {
+  BACKSPACE: Delete,
+  SHIFT: ArrowBigUp
 }
 
 export function OnScreenKeyboard({
@@ -70,6 +73,7 @@ export function OnScreenKeyboard({
               {row.map((key, c) => {
                 const focused = r === focusedRow && c === focusedCol
                 const isWide = key.length > 1
+                const Icon = KEY_ICONS[key]
                 const glyph = KEY_GLYPHS[key] ?? (shift ? key.toUpperCase() : key)
                 return (
                   <button
@@ -80,7 +84,7 @@ export function OnScreenKeyboard({
                       isWide ? 'px-4' : 'w-10'
                     } ${focused ? 'bg-accent text-white' : 'bg-surface-hi text-white'}`}
                   >
-                    {glyph}
+                    {Icon ? <Icon className="h-5 w-5" /> : glyph}
                   </button>
                 )
               })}

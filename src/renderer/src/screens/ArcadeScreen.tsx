@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, Trophy } from 'lucide-react'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
@@ -57,7 +58,7 @@ function freshGameState(): {
  * A controller-first arcade minigame built into the launcher itself, per a
  * direct request rather than anything on the wider roadmap. 3-lane dodge —
  * left/right (dpad/stick, same NavAction the rest of the app uses) to switch
- * lanes, avoid 🪨, collect ⭐. High scores are local-only for now (see
+ * lanes, avoid rocks, collect coins. High scores are local-only for now (see
  * arcadeTypes.ts) — a real cross-machine "global" leaderboard needs a
  * backend somewhere, which needs an account only the user can set up.
  *
@@ -158,7 +159,8 @@ export function ArcadeScreen(): JSX.Element {
     const colors = {
       bg: themeColor('--color-surface', 'rgb(21,21,31)'),
       lane: themeColor('--color-surface-hi', 'rgb(30,30,44)'),
-      text: themeColor('--color-muted', 'rgb(143,143,163)')
+      text: themeColor('--color-muted', 'rgb(143,143,163)'),
+      accent: themeColor('--color-accent', 'rgb(91,140,255)')
     }
 
     let rafId: number
@@ -233,16 +235,42 @@ export function ArcadeScreen(): JSX.Element {
         ctx.stroke()
       }
 
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.font = '40px sans-serif'
+      // Plain canvas-drawn shapes rather than emoji glyphs -- fillText with an
+      // emoji is text rendering, not an icon component, so there's no SVG
+      // equivalent to drop in here the way the rest of the app's emoji got
+      // replaced; real shapes are the idiomatic way to draw game sprites on
+      // a 2D canvas anyway.
       for (const obs of game.obstacles) {
         const x = laneWidth * (obs.lane + 0.5)
-        ctx.fillText(obs.kind === 'coin' ? '⭐' : '🪨', x, obs.y)
+        if (obs.kind === 'coin') {
+          ctx.beginPath()
+          ctx.arc(x, obs.y, 15, 0, Math.PI * 2)
+          ctx.fillStyle = '#facc15'
+          ctx.fill()
+          ctx.lineWidth = 2
+          ctx.strokeStyle = '#ca8a04'
+          ctx.stroke()
+        } else {
+          const size = 32
+          ctx.fillStyle = '#78716c'
+          ctx.beginPath()
+          ctx.moveTo(x, obs.y - size / 2)
+          ctx.lineTo(x + size / 2, obs.y)
+          ctx.lineTo(x, obs.y + size / 2)
+          ctx.lineTo(x - size / 2, obs.y)
+          ctx.closePath()
+          ctx.fill()
+        }
       }
 
-      ctx.font = '48px sans-serif'
-      ctx.fillText('🚀', game.playerX, playerY)
+      ctx.fillStyle = colors.accent
+      ctx.beginPath()
+      ctx.moveTo(game.playerX, playerY - 24)
+      ctx.lineTo(game.playerX + 20, playerY + 18)
+      ctx.lineTo(game.playerX, playerY + 8)
+      ctx.lineTo(game.playerX - 20, playerY + 18)
+      ctx.closePath()
+      ctx.fill()
 
       if (gameOver) {
         endGame(Math.floor(game.score))
@@ -378,7 +406,10 @@ export function ArcadeScreen(): JSX.Element {
         <div className="absolute inset-0 flex items-center justify-center bg-black/70">
           <div className="flex w-96 flex-col items-center gap-5 rounded-2xl bg-surface p-8 text-center">
             <h1 className="bg-accent-gradient bg-clip-text text-3xl font-bold text-transparent">Nexus Dash</h1>
-            <p className="text-sm text-muted">←/→ or D-Pad to dodge · Collect ⭐ · Avoid 🪨</p>
+            <p className="flex items-center justify-center gap-1 text-sm text-muted">
+              <ArrowLeft className="h-3.5 w-3.5" />/<ArrowRight className="h-3.5 w-3.5" /> or D-Pad to dodge ·
+              Collect coins · Avoid rocks
+            </p>
             {topScores.length > 0 && (
               <div className="flex w-full flex-col gap-1 border-t border-white/5 pt-4 text-sm">
                 <span className="text-xs uppercase tracking-wide text-muted">Top Scores</span>
@@ -403,7 +434,9 @@ export function ArcadeScreen(): JSX.Element {
             <h2 className="text-2xl font-bold">Game Over</h2>
             <p className="text-4xl font-bold tabular-nums">{lastResult?.score ?? 0}</p>
             {lastResult?.rank != null && (
-              <p className="font-semibold text-accent">🏆 New High Score — #{lastResult.rank + 1}!</p>
+              <p className="flex items-center justify-center gap-2 font-semibold text-accent">
+                <Trophy className="h-5 w-5" /> New High Score — #{lastResult.rank + 1}!
+              </p>
             )}
             {topScores.length > 0 && (
               <div className="flex w-full flex-col gap-1 border-t border-white/5 pt-4 text-sm">

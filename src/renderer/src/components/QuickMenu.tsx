@@ -1,4 +1,19 @@
 import { useEffect, useState } from 'react'
+import {
+  Home,
+  Monitor,
+  Moon,
+  Mouse,
+  Play,
+  Power,
+  RotateCcw,
+  Settings,
+  Volume1,
+  Volume2,
+  VolumeX,
+  X,
+  type LucideIcon
+} from 'lucide-react'
 import { useNavListener, useExclusiveNavListener } from '../input/useNavListener'
 import { useNavigationStore } from '../state/navigationStore'
 import type { GameEntry } from '@shared/steamTypes'
@@ -19,6 +34,7 @@ type ActionId =
 interface Option {
   id: ActionId
   label: string
+  icon: LucideIcon
 }
 
 /**
@@ -58,21 +74,24 @@ export function QuickMenu(): JSX.Element | null {
 
   function buildOptions(): Option[] {
     const options: Option[] = []
-    if (mostRecentGame) options.push({ id: 'resumeGame', label: `▶ Resume "${mostRecentGame.name}"` })
-    options.push({ id: 'home', label: '🏠 Home' })
-    options.push({ id: 'settings', label: '⚙️ Settings' })
-    options.push({ id: 'volumeUp', label: '🔊 Volume Up' })
-    options.push({ id: 'volumeDown', label: '🔉 Volume Down' })
-    options.push({ id: 'toggleMute', label: '🔇 Mute' })
+    if (mostRecentGame) {
+      options.push({ id: 'resumeGame', label: `Resume "${mostRecentGame.name}"`, icon: Play })
+    }
+    options.push({ id: 'home', label: 'Home', icon: Home })
+    options.push({ id: 'settings', label: 'Settings', icon: Settings })
+    options.push({ id: 'volumeUp', label: 'Volume Up', icon: Volume2 })
+    options.push({ id: 'volumeDown', label: 'Volume Down', icon: Volume1 })
+    options.push({ id: 'toggleMute', label: 'Mute', icon: VolumeX })
     options.push({
       id: 'toggleMouseMode',
-      label: mouseModeActive ? '🖱️ Disable Mouse Mode' : '🖱️ Enable Mouse Mode'
+      label: mouseModeActive ? 'Disable Mouse Mode' : 'Enable Mouse Mode',
+      icon: Mouse
     })
-    options.push({ id: 'goToDesktop', label: '🖥️ Show Desktop' })
-    options.push({ id: 'sleep', label: '💤 Sleep' })
-    options.push({ id: 'restart', label: '🔁 Restart PC' })
-    options.push({ id: 'shutdown', label: '⏻ Shut Down PC' })
-    options.push({ id: 'quit', label: '✖ Quit ClashPoint Nexus' })
+    options.push({ id: 'goToDesktop', label: 'Show Desktop', icon: Monitor })
+    options.push({ id: 'sleep', label: 'Sleep', icon: Moon })
+    options.push({ id: 'restart', label: 'Restart PC', icon: RotateCcw })
+    options.push({ id: 'shutdown', label: 'Shut Down PC', icon: Power })
+    options.push({ id: 'quit', label: 'Quit ClashPoint Nexus', icon: X })
     return options
   }
 
@@ -247,10 +266,11 @@ export function QuickMenu(): JSX.Element | null {
                     setIndex(i)
                     runAction(option.id)
                   }}
-                  className={`cursor-pointer rounded-xl px-5 py-3 font-medium transition-colors ${
+                  className={`flex cursor-pointer items-center gap-3 rounded-xl px-5 py-3 font-medium transition-colors ${
                     index === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted'
                   }`}
                 >
+                  <option.icon className="h-5 w-5 shrink-0" />
                   {option.label}
                 </div>
               ))}

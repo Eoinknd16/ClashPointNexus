@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Check, Palette, TriangleAlert, X, type LucideIcon } from 'lucide-react'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
@@ -38,6 +39,7 @@ interface SettingsRow {
   /** "R G B" space-separated, for the theme picker's swatch dot. */
   swatch?: string
   active?: boolean
+  icon?: LucideIcon
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -80,7 +82,7 @@ function updateActionLabel(status: UpdateStatus | null): string {
     case 'checking':
       return 'Checking for updates...'
     case 'not-available':
-      return '✓ Up to date'
+      return 'Up to date'
     case 'downloading':
       return status.progressPercent != null
         ? `Downloading update... ${status.progressPercent}%`
@@ -186,20 +188,27 @@ export function SettingsScreen(): JSX.Element {
       // stay fixed reference points, and aren't tracked in
       // themes.config.json at all for this to persist against anyway.
       if (!customThemeIds.has(theme.id)) return [themeRow]
-      return [themeRow, { id: `editColors-${theme.id}`, kind: 'action', label: '🎨 Fine-Tune Colors' }]
+      return [
+        themeRow,
+        { id: `editColors-${theme.id}`, kind: 'action', label: 'Fine-Tune Colors', icon: Palette }
+      ]
     }),
 
     header('app', 'App'),
     { id: 'appVersion', kind: 'info', label: `Version ${appVersion}` },
-    { id: 'checkForUpdates', kind: 'action', label: updateActionLabel(updateStatus) },
+    {
+      id: 'checkForUpdates',
+      kind: 'action',
+      label: updateActionLabel(updateStatus),
+      icon: updateStatus?.state === 'not-available' ? Check : undefined
+    },
     ...(startupSettings?.supported
       ? [
           {
             id: 'toggleStartup',
             kind: 'action' as const,
-            label: startupSettings.enabled
-              ? '✓ Launch at Windows Startup'
-              : 'Launch at Windows Startup'
+            label: 'Launch at Windows Startup',
+            icon: startupSettings.enabled ? Check : undefined
           }
         ]
       : [
@@ -221,8 +230,9 @@ export function SettingsScreen(): JSX.Element {
       id: 'globalInputHelper',
       kind: 'info',
       label: globalInputStatus?.helperRunning
-        ? '✓ Background listener running'
-        : '✗ Not running (packaged builds only, not npm run dev)'
+        ? 'Background listener running'
+        : 'Not running (packaged builds only, not npm run dev)',
+      icon: globalInputStatus?.helperRunning ? Check : X
     },
     ...(globalInputStatus?.helperRunning
       ? [
@@ -231,10 +241,16 @@ export function SettingsScreen(): JSX.Element {
             kind: 'info' as const,
             label:
               globalInputStatus.controllerConnected === true
-                ? '✓ Controller detected'
+                ? 'Controller detected'
                 : globalInputStatus.controllerConnected === false
-                  ? '✗ No controller detected — check it\'s connected and Windows recognizes it as a game controller'
-                  : 'Waiting for a reading...'
+                  ? "No controller detected — check it's connected and Windows recognizes it as a game controller"
+                  : 'Waiting for a reading...',
+            icon:
+              globalInputStatus.controllerConnected === true
+                ? Check
+                : globalInputStatus.controllerConnected === false
+                  ? X
+                  : undefined
           }
         ]
       : []),
@@ -244,10 +260,11 @@ export function SettingsScreen(): JSX.Element {
             id: 'hidPsButton',
             kind: 'info' as const,
             label: globalInputStatus.hidPsButtonCaptureLive
-              ? '✓ PS Button capture active'
+              ? 'PS Button capture active'
               : globalInputStatus.hidPsButtonDiagnostic
                 ? `PS Button capture: ${globalInputStatus.hidPsButtonDiagnostic}`
-                : 'PS Button capture: waiting for controller data...'
+                : 'PS Button capture: waiting for controller data...',
+            icon: globalInputStatus.hidPsButtonCaptureLive ? Check : undefined
           }
         ]
       : []),
@@ -256,7 +273,8 @@ export function SettingsScreen(): JSX.Element {
           {
             id: 'globalInputRestarts',
             kind: 'info' as const,
-            label: `⚠ Background listener has restarted ${globalInputStatus.restartCount} time(s) this session`
+            label: `Background listener has restarted ${globalInputStatus.restartCount} time(s) this session`,
+            icon: TriangleAlert
           }
         ]
       : []),
@@ -270,7 +288,8 @@ export function SettingsScreen(): JSX.Element {
     {
       id: 'steamIdStatus',
       kind: 'info',
-      label: steamId64 ? `✓ Linked to SteamID ${steamId64}` : 'Not linked to a Steam account'
+      label: steamId64 ? `Linked to SteamID ${steamId64}` : 'Not linked to a Steam account',
+      icon: steamId64 ? Check : undefined
     },
     { id: 'steamSignIn', kind: 'action', label: steamId64 ? 'Re-link Steam Account' : 'Sign In With Steam' },
     { id: 'steamId64', kind: 'field', label: 'Steam ID64 (manual entry)', value: steamId64 },
@@ -279,7 +298,8 @@ export function SettingsScreen(): JSX.Element {
     {
       id: 'stremioStatus',
       kind: 'info',
-      label: loggedIn ? `✓ Logged in as ${stremioEmail}` : 'Not logged in to Stremio'
+      label: loggedIn ? `Logged in as ${stremioEmail}` : 'Not logged in to Stremio',
+      icon: loggedIn ? Check : undefined
     },
     ...(loggedIn
       ? [
@@ -683,8 +703,9 @@ export function SettingsScreen(): JSX.Element {
                     style={{ backgroundColor: `rgb(${row.swatch})` }}
                   />
                 )}
+                {row.icon && <row.icon className="h-4 w-4 shrink-0" />}
                 {row.label}
-                {row.kind === 'theme' && row.active && <span className="text-accent">✓</span>}
+                {row.kind === 'theme' && row.active && <Check className="h-4 w-4 text-accent" />}
               </span>
               {row.kind === 'field' && (
                 <span className="text-muted">

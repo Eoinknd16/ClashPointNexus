@@ -130,7 +130,7 @@ export function StoreScreen(): JSX.Element {
     <div className="flex h-screen flex-col bg-bg">
       <header className="flex items-center justify-between border-b border-white/5 px-10 py-5">
         <h1 className="text-2xl font-bold tracking-tight">Store</h1>
-        <span className="text-xs text-muted">◀ Back/Forward: L1/R1 · Square: Home · Confirm: Click</span>
+        <span className="text-xs text-muted">Back/Forward: L1/R1 · Square: Home · Confirm: Click</span>
       </header>
       <div ref={viewportRef} className="relative flex-1">
         {/* eslint-disable-next-line react/no-unknown-property */}

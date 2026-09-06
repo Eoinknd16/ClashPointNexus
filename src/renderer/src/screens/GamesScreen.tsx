@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowUp, Calendar, Download, Gamepad2, Play, Search, Star, Trophy, type LucideIcon } from 'lucide-react'
 import { CardArt, FocusableCard, type CardItem } from '../components/FocusableCard'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
@@ -21,9 +22,20 @@ function filterLabel(f: Filter): string {
     case 'all':
       return 'All Games'
     case 'favorites':
-      return '⭐ Favorites'
+      return 'Favorites'
     case 'controllerFriendly':
-      return '🎮 Controller Friendly'
+      return 'Controller Friendly'
+  }
+}
+
+function filterIcon(f: Filter): LucideIcon | null {
+  switch (f) {
+    case 'favorites':
+      return Star
+    case 'controllerFriendly':
+      return Gamepad2
+    default:
+      return null
   }
 }
 // filterIndex ranges 0..FILTERS.length inclusive — FILTERS.length itself is a
@@ -51,8 +63,14 @@ function formatLastPlayed(lastPlayed: number): string {
 }
 
 function gameStatusLabel(game: GameEntry): string | null {
-  if (game.downloadProgressPercent != null) return `⬇ Downloading ${game.downloadProgressPercent}%`
-  if (game.updatePending) return '⬆ Update available'
+  if (game.downloadProgressPercent != null) return `Downloading ${game.downloadProgressPercent}%`
+  if (game.updatePending) return 'Update available'
+  return null
+}
+
+function gameStatusIcon(game: GameEntry): LucideIcon | null {
+  if (game.downloadProgressPercent != null) return Download
+  if (game.updatePending) return ArrowUp
   return null
 }
 
@@ -65,7 +83,7 @@ function toCardItem(game: GameEntry): CardItem {
     subtitle: status ?? (game.installed ? formatPlaytime(game.playtimeForeverMinutes) : 'Not installed'),
     imageUrl: game.imageDataUrl ?? steamCandidates[0],
     imageFallbacks: game.imageDataUrl ? undefined : steamCandidates.slice(1),
-    icon: '🎮',
+    icon: Gamepad2,
     gradientDirection: 'bg-gradient-to-br',
     favorite: game.favorite
   }
@@ -459,30 +477,34 @@ export function GamesScreen(): JSX.Element {
         </header>
 
         <div className="flex gap-3">
-          {FILTERS.map((f, i) => (
-            <div
-              key={f}
-              onClick={() => {
-                setZone('filters')
-                setFilterIndex(i)
-                setFilter(f)
-                setSearchQuery('')
-                setGridIndex(0)
-              }}
-              className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-                filter === f && !searchQuery ? 'bg-accent text-white' : 'bg-surface text-muted'
-              } ${zone === 'filters' && filterIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
-            >
-              {filterLabel(f)}
-            </div>
-          ))}
+          {FILTERS.map((f, i) => {
+            const Icon = filterIcon(f)
+            return (
+              <div
+                key={f}
+                onClick={() => {
+                  setZone('filters')
+                  setFilterIndex(i)
+                  setFilter(f)
+                  setSearchQuery('')
+                  setGridIndex(0)
+                }}
+                className={`flex cursor-pointer items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                  filter === f && !searchQuery ? 'bg-accent text-white' : 'bg-surface text-muted'
+                } ${zone === 'filters' && filterIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
+              >
+                {Icon && <Icon className="h-4 w-4" />}
+                {filterLabel(f)}
+              </div>
+            )
+          })}
           <div
             onClick={() => {
               setZone('filters')
               setFilterIndex(FILTERS.length)
               openKeyboard(searchQuery)
             }}
-            className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+            className={`flex cursor-pointer items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
               searchQuery ? 'bg-accent text-white' : 'bg-surface text-muted'
             } ${
               zone === 'filters' && filterIndex === FILTERS.length
@@ -490,7 +512,8 @@ export function GamesScreen(): JSX.Element {
                 : ''
             }`}
           >
-            {searchQuery ? `🔍 "${searchQuery}"` : '🔍 Search'}
+            <Search className="h-4 w-4" />
+            {searchQuery ? `"${searchQuery}"` : 'Search'}
           </div>
         </div>
 
@@ -560,11 +583,11 @@ export function GamesScreen(): JSX.Element {
               <button
                 onClick={() => toggleFavorite(selectedGame)}
                 title={selectedGame.favorite ? 'Remove favorite' : 'Add favorite (Square)'}
-                className={`shrink-0 text-2xl transition-opacity ${
+                className={`shrink-0 transition-opacity ${
                   selectedGame.favorite ? 'opacity-100' : 'opacity-30 hover:opacity-70'
                 }`}
               >
-                ⭐
+                <Star className="h-6 w-6 text-yellow-400" fill="currentColor" />
               </button>
             </div>
             <div className="-mt-4 flex flex-col gap-1">
@@ -574,13 +597,20 @@ export function GamesScreen(): JSX.Element {
                   : 'Not installed'}
               </p>
               <p className="text-sm text-muted">{formatLastPlayed(selectedGame.lastPlayed)}</p>
-              {gameStatusLabel(selectedGame) && (
-                <p className="text-sm font-medium text-accent">{gameStatusLabel(selectedGame)}</p>
-              )}
+              {gameStatusLabel(selectedGame) &&
+                (() => {
+                  const StatusIcon = gameStatusIcon(selectedGame)
+                  return (
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-accent">
+                      {StatusIcon && <StatusIcon className="h-4 w-4" />}
+                      {gameStatusLabel(selectedGame)}
+                    </p>
+                  )
+                })()}
               {achievements && (
                 <div className="mt-2 flex flex-col gap-1">
-                  <p className="text-sm text-muted">
-                    🏆 {achievements.unlocked}/{achievements.total} achievements
+                  <p className="flex items-center gap-1.5 text-sm text-muted">
+                    <Trophy className="h-4 w-4" /> {achievements.unlocked}/{achievements.total} achievements
                   </p>
                   <div className="h-1.5 w-full rounded-full bg-white/10">
                     <div
@@ -598,15 +628,20 @@ export function GamesScreen(): JSX.Element {
                   <p className="text-xs uppercase tracking-wide text-accent">{storeInfo.genres.join(' · ')}</p>
                 )}
                 {storeInfo.controllerSupport !== 'none' && (
-                  <p className="text-xs font-medium text-muted">
-                    🎮 {storeInfo.controllerSupport === 'full' ? 'Full' : 'Partial'} Controller Support
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <Gamepad2 className="h-3.5 w-3.5" />
+                    {storeInfo.controllerSupport === 'full' ? 'Full' : 'Partial'} Controller Support
                   </p>
                 )}
                 {storeInfo.description && (
                   <p className="line-clamp-4 text-sm text-muted">{storeInfo.description}</p>
                 )}
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-                  {storeInfo.releaseDate && <span>📅 {storeInfo.releaseDate}</span>}
+                  {storeInfo.releaseDate && (
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" /> {storeInfo.releaseDate}
+                    </span>
+                  )}
                   {storeInfo.metacriticScore != null && <span>Metacritic {storeInfo.metacriticScore}</span>}
                 </div>
                 {storeInfo.developers.length > 0 && (
@@ -621,9 +656,17 @@ export function GamesScreen(): JSX.Element {
 
             <button
               onClick={() => launchOrInstall(selectedGame, setMessage)}
-              className="mt-auto rounded-xl bg-accent-gradient px-6 py-4 text-lg font-semibold text-white shadow-focus"
+              className="mt-auto flex items-center justify-center gap-2 rounded-xl bg-accent-gradient px-6 py-4 text-lg font-semibold text-white shadow-focus"
             >
-              {selectedGame.installed ? '▶ Play' : '⬇ Install'}
+              {selectedGame.installed ? (
+                <>
+                  <Play className="h-5 w-5" fill="currentColor" /> Play
+                </>
+              ) : (
+                <>
+                  <Download className="h-5 w-5" /> Install
+                </>
+              )}
             </button>
           </motion.div>
         )}

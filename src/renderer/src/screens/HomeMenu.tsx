@@ -1,5 +1,31 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import {
+  BookOpen,
+  Circle,
+  CloudDrizzle,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  FolderOpen,
+  Film,
+  Gamepad2,
+  Globe,
+  Home,
+  Joystick,
+  Menu,
+  Monitor,
+  Package2,
+  Play,
+  Settings as SettingsIcon,
+  ShoppingCart,
+  Sun,
+  Thermometer,
+  User,
+  type LucideIcon
+} from 'lucide-react'
 import { FocusableCard } from '../components/FocusableCard'
 import { Clock } from '../components/Clock'
 import { useNavListener } from '../input/useNavListener'
@@ -13,30 +39,75 @@ import type { SystemStats } from '@shared/systemTypes'
 // iconColors override) instead of every tile deriving from the same theme
 // accent color — the latter is what made every tile look like the same flat
 // brown/orange blob regardless of theme, per a real screenshot.
+//
+// Most tiles navigate to a real screen (`screen`); "Desktop" instead runs an
+// action (minimize Nexus, same as the physical Show Desktop combo/Quick Menu
+// entry) — it has no `screen` of its own, so activation checks for `action`
+// first.
 const TILES: Array<{
-  id: ScreenId
+  id: string
   title: string
   subtitle: string
-  icon: string
+  icon: LucideIcon
   iconColors: [string, string]
+  screen?: ScreenId
+  action?: () => void
 }> = [
-  { id: 'games', title: 'Games', subtitle: 'Steam library', icon: '🎮', iconColors: ['#1e3a8a', '#7c3aed'] },
+  {
+    id: 'games',
+    title: 'Games',
+    subtitle: 'Steam library',
+    icon: Gamepad2,
+    iconColors: ['#1e3a8a', '#7c3aed'],
+    screen: 'games'
+  },
   {
     id: 'tv',
     title: 'TV',
     subtitle: 'YouTube, Stremio & streaming',
-    icon: '🎬',
-    iconColors: ['#7f1d1d', '#c2410c']
+    icon: Film,
+    iconColors: ['#7f1d1d', '#c2410c'],
+    screen: 'tv'
   },
-  { id: 'browse', title: 'Browse', subtitle: 'Web browser', icon: '🌐', iconColors: ['#0e7490', '#2563eb'] },
-  { id: 'files', title: 'Files', subtitle: 'This PC', icon: '🗂️', iconColors: ['#b45309', '#1e40af'] },
-  { id: 'apps', title: 'Apps', subtitle: 'Launch anything', icon: '📦', iconColors: ['#6d28d9', '#db2777'] },
+  {
+    id: 'browse',
+    title: 'Browse',
+    subtitle: 'Web browser',
+    icon: Globe,
+    iconColors: ['#0e7490', '#2563eb'],
+    screen: 'browse'
+  },
+  {
+    id: 'files',
+    title: 'Files',
+    subtitle: 'This PC',
+    icon: FolderOpen,
+    iconColors: ['#b45309', '#1e40af'],
+    screen: 'files'
+  },
+  {
+    id: 'apps',
+    title: 'Apps',
+    subtitle: 'Launch anything',
+    icon: Package2,
+    iconColors: ['#6d28d9', '#db2777'],
+    screen: 'apps'
+  },
   {
     id: 'arcade',
     title: 'Arcade',
     subtitle: 'Nexus Dash · High Scores',
-    icon: '🕹️',
-    iconColors: ['#a21caf', '#0891b2']
+    icon: Joystick,
+    iconColors: ['#a21caf', '#0891b2'],
+    screen: 'arcade'
+  },
+  {
+    id: 'desktop',
+    title: 'Desktop',
+    subtitle: 'Minimize & show Windows',
+    icon: Monitor,
+    iconColors: ['#334155', '#0f172a'],
+    action: () => void window.api.globalInput.goToDesktop()
   }
   // Settings deliberately not a tile here anymore — it's already reachable
   // from the top nav, and having it twice was redundant.
@@ -46,11 +117,11 @@ const TILES: Array<{
 // the tile grid below — Library ("your stuff": owned games + movies/shows)
 // and Store (discover/buy new games) are new top-level screens, distinct
 // from the Games/TV tiles which stay focused on Steam/streaming specifically.
-const TOP_NAV: Array<{ id: ScreenId; label: string; icon: string }> = [
-  { id: 'home', label: 'Home', icon: '⌂' },
-  { id: 'library', label: 'Library', icon: '📚' },
-  { id: 'store', label: 'Store', icon: '🛒' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' }
+const TOP_NAV: Array<{ id: ScreenId; label: string; icon: LucideIcon }> = [
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'library', label: 'Library', icon: BookOpen },
+  { id: 'store', label: 'Store', icon: ShoppingCart },
+  { id: 'settings', label: 'Settings', icon: SettingsIcon }
 ]
 
 interface LibraryStats {
@@ -64,16 +135,16 @@ interface LibraryStats {
 // an actual Continue card to land on.
 type Zone = 'topnav' | 'hero' | 'tiles'
 
-function weatherEmoji(code: number): string {
-  if (code === 0) return '☀️'
-  if (code <= 3) return '⛅'
-  if (code === 45 || code === 48) return '🌫️'
-  if (code >= 51 && code <= 67) return '🌦️'
-  if (code >= 71 && code <= 77) return '🌨️'
-  if (code >= 80 && code <= 82) return '🌧️'
-  if (code >= 85 && code <= 86) return '🌨️'
-  if (code >= 95) return '⛈️'
-  return '🌡️'
+function weatherIcon(code: number): LucideIcon {
+  if (code === 0) return Sun
+  if (code <= 3) return CloudSun
+  if (code === 45 || code === 48) return CloudFog
+  if (code >= 51 && code <= 67) return CloudDrizzle
+  if (code >= 71 && code <= 77) return CloudSnow
+  if (code >= 80 && code <= 82) return CloudRain
+  if (code >= 85 && code <= 86) return CloudSnow
+  if (code >= 95) return CloudLightning
+  return Thermometer
 }
 
 export function HomeMenu(): JSX.Element {
@@ -113,6 +184,11 @@ export function HomeMenu(): JSX.Element {
     } else {
       goTo('tv', { kind: 'tv', tab: suggestion.tab, item: suggestion.item })
     }
+  }
+
+  function activateTile(tile: (typeof TILES)[number]): void {
+    if (tile.action) tile.action()
+    else if (tile.screen) goTo(tile.screen)
   }
 
   useNavListener((action) => {
@@ -171,12 +247,14 @@ export function HomeMenu(): JSX.Element {
         setTileIndex((i) => Math.min(TILES.length - 1, i + 1))
         return
       case 'confirm':
-        goTo(TILES[tileIndex].id)
+        activateTile(TILES[tileIndex])
         return
       default:
         return
     }
   }, 'home')
+
+  const WeatherIcon = weather ? weatherIcon(weather.weatherCode) : null
 
   return (
     <div className="relative flex h-screen flex-col gap-5 overflow-hidden px-10 py-6">
@@ -250,7 +328,9 @@ export function HomeMenu(): JSX.Element {
       </div>
 
       <header className="grid shrink-0 grid-cols-3 items-center">
-        <div />
+        <h1 className="justify-self-start text-xl font-bold tracking-tight">
+          ClashPoint <span className="text-accent">Nexus</span>
+        </h1>
         <nav className="flex justify-self-center gap-1 rounded-full bg-surface/70 p-1.5 ring-1 ring-white/10 backdrop-blur-md">
           {TOP_NAV.map((item, i) => (
             <div
@@ -268,16 +348,16 @@ export function HomeMenu(): JSX.Element {
                   : ''
               }`}
             >
-              <span>{item.icon}</span>
+              <item.icon className="h-4 w-4" />
               <span>{item.label}</span>
             </div>
           ))}
         </nav>
 
         <div className="flex items-center justify-self-end gap-4">
-          {weather && (
+          {weather && WeatherIcon && (
             <div className="flex items-center gap-2 rounded-full bg-surface/70 px-4 py-2 backdrop-blur-md">
-              <span className="text-lg">{weatherEmoji(weather.weatherCode)}</span>
+              <WeatherIcon className="h-5 w-5" />
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
                 {weather.city && <span className="text-xs text-muted">{weather.city}</span>}
@@ -287,9 +367,9 @@ export function HomeMenu(): JSX.Element {
           <Clock />
           <div
             onClick={() => goTo('settings')}
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-surface/70 text-lg backdrop-blur-md"
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-surface/70 backdrop-blur-md"
           >
-            👤
+            <User className="h-5 w-5" />
           </div>
         </div>
       </header>
@@ -312,7 +392,7 @@ export function HomeMenu(): JSX.Element {
                 className="h-16 w-16 shrink-0 rounded-xl object-cover"
               />
             ) : (
-              <span className="text-3xl">▶️</span>
+              <Play className="h-8 w-8 shrink-0" />
             )}
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <span className="truncate text-lg font-semibold">{continueSuggestion.title}</span>
@@ -326,14 +406,14 @@ export function HomeMenu(): JSX.Element {
                 </div>
               )}
             </div>
-            <span className="shrink-0 text-2xl">▶</span>
+            <Play className="h-6 w-6 shrink-0" fill="currentColor" />
           </div>
         )}
 
         <div className="absolute right-6 top-6 flex flex-col gap-3">
-          {weather && (
+          {weather && WeatherIcon && (
             <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
-              <span className="text-2xl">{weatherEmoji(weather.weatherCode)}</span>
+              <WeatherIcon className="h-7 w-7" />
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
                 {weather.city && <span className="text-xs text-muted">{weather.city}</span>}
@@ -342,7 +422,7 @@ export function HomeMenu(): JSX.Element {
           )}
           {libraryStats && (
             <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
-              <span className="text-2xl">🎮</span>
+              <Gamepad2 className="h-7 w-7" />
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{libraryStats.games}</span>
                 <span className="text-xs text-muted">Active Games</span>
@@ -380,7 +460,7 @@ export function HomeMenu(): JSX.Element {
 
       <div className="shrink-0">
         <h2 className="mb-3 text-lg font-semibold">Your Apps</h2>
-        <div className="grid grid-cols-6 gap-6">
+        <div className="grid grid-cols-7 gap-6">
           {TILES.map((tile, i) => (
             <motion.div
               key={tile.id}
@@ -403,7 +483,7 @@ export function HomeMenu(): JSX.Element {
                 onClick={() => {
                   setZone('tiles')
                   setTileIndex(i)
-                  goTo(tile.id)
+                  activateTile(tile)
                 }}
               />
             </motion.div>
@@ -421,8 +501,12 @@ export function HomeMenu(): JSX.Element {
       </div>
 
       <div className="pointer-events-none fixed bottom-6 right-8 flex items-center gap-4 text-xs text-muted">
-        <span>🎮 Select</span>
-        <span>☰ Menu</span>
+        <span className="flex items-center gap-1.5">
+          <Circle className="h-3.5 w-3.5" /> Select
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Menu className="h-3.5 w-3.5" /> Menu
+        </span>
       </div>
     </div>
   )

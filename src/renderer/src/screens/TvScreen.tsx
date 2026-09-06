@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Check, Film, Play, Search, SkipForward, Tv } from 'lucide-react'
 import { CategoryRow } from '../components/CategoryRow'
 import type { CardItem } from '../components/FocusableCard'
 import { CardArt, FocusableCard } from '../components/FocusableCard'
@@ -81,7 +82,7 @@ function toCardItem(item: CatalogItem): CardItem {
     title: item.name,
     subtitle: item.year ?? undefined,
     imageUrl: item.poster ?? undefined,
-    icon: item.type === 'movie' ? '🎬' : '📺',
+    icon: item.type === 'movie' ? Film : Tv,
     gradientDirection: 'bg-gradient-to-br'
   }
 }
@@ -1517,9 +1518,9 @@ export function TvScreen(): JSX.Element {
               {activePlayback?.kind === 'series' && (
                 <button
                   onClick={skipToNextEpisode}
-                  className="rounded-lg bg-white/10 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-white/20"
+                  className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-white/20"
                 >
-                  Next Episode ⏭
+                  Next Episode <SkipForward className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -1588,15 +1589,15 @@ export function TvScreen(): JSX.Element {
   const releaseDate = selectedItem ? formatReleaseDate(selectedItem.released) : null
 
   const playLabel = (() => {
-    if (!selectedItem) return '▶ Play'
+    if (!selectedItem) return 'Play'
     if (selectedItem.type === 'movie') {
-      return isResumable(progress) ? `▶ Resume at ${formatTime(progress.positionSeconds)}` : '▶ Play'
+      return isResumable(progress) ? `Resume at ${formatTime(progress.positionSeconds)}` : 'Play'
     }
     if (isResumable(progress) && progress.season != null && progress.episode != null) {
-      return `▶ Resume S${progress.season}E${progress.episode}`
+      return `Resume S${progress.season}E${progress.episode}`
     }
     const first = episodes.length > 0 ? sortEpisodes(episodes)[0] : null
-    return first ? `▶ Play S${first.season}E${first.episode}` : '▶ Play'
+    return first ? `Play S${first.season}E${first.episode}` : 'Play'
   })()
 
   return (
@@ -1648,16 +1649,14 @@ export function TvScreen(): JSX.Element {
                     episodeSubZone === 'list' && episodeIndex === i ? 'bg-surface-hi shadow-focus' : 'bg-surface'
                   }`}
                 >
-                  <span className="w-12 shrink-0 text-sm font-semibold text-muted">
+                  <span className="flex w-14 shrink-0 items-center gap-1 text-sm font-semibold text-muted">
                     {progress?.type === 'series' &&
-                    progress.season === ep.season &&
-                    progress.episode === ep.episode
-                      ? '▶ '
-                      : ''}
+                      progress.season === ep.season &&
+                      progress.episode === ep.episode && <Play className="h-3 w-3" fill="currentColor" />}
                     E{ep.episode}
                   </span>
                   <CardArt
-                    item={{ id: ep.id, title: ep.name, imageUrl: ep.thumbnail ?? undefined, icon: '🎬' }}
+                    item={{ id: ep.id, title: ep.name, imageUrl: ep.thumbnail ?? undefined, icon: Film }}
                     className="h-16 w-28 shrink-0 rounded-lg"
                   />
                   <div className="flex flex-1 flex-col overflow-hidden">
@@ -1694,7 +1693,7 @@ export function TvScreen(): JSX.Element {
                   setTabIndex(TABS.length)
                   openKeyboard(searchQuery)
                 }}
-                className={`cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                className={`flex cursor-pointer items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
                   searchQuery ? 'bg-accent text-white' : 'bg-surface text-muted'
                 } ${
                   zone === 'filters' && tabIndex === TABS.length
@@ -1702,7 +1701,8 @@ export function TvScreen(): JSX.Element {
                     : ''
                 }`}
               >
-                {searchQuery ? `🔍 "${searchQuery}"` : '🔍 Search'}
+                <Search className="h-4 w-4" />
+                {searchQuery ? `"${searchQuery}"` : 'Search'}
               </div>
             </div>
 
@@ -1767,11 +1767,11 @@ export function TvScreen(): JSX.Element {
                   if (selectedItem.type === 'series') playSeriesFromDetail()
                   else void playMovie(selectedItem, { auto: true })
                 }}
-                className={`rounded-xl bg-accent-gradient px-6 py-4 text-lg font-semibold text-white shadow-focus transition-shadow ${
+                className={`flex items-center justify-center gap-2 rounded-xl bg-accent-gradient px-6 py-4 text-lg font-semibold text-white shadow-focus transition-shadow ${
                   detailFocusIndex === 0 ? 'ring-2 ring-white/50 ring-offset-2 ring-offset-bg' : ''
                 }`}
               >
-                {playLabel}
+                <Play className="h-5 w-5" fill="currentColor" /> {playLabel}
               </button>
               <div className="flex gap-3">
                 <button
@@ -1795,11 +1795,17 @@ export function TvScreen(): JSX.Element {
                     setDetailFocusIndex(2)
                     toggleLibrary()
                   }}
-                  className={`flex-1 rounded-xl px-5 py-3 text-sm font-semibold transition-colors ${
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-5 py-3 text-sm font-semibold transition-colors ${
                     isSelectedInLibrary ? 'bg-accent/20 text-accent' : 'bg-surface-hi text-muted hover:text-white'
                   } ${detailFocusIndex === 2 ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
                 >
-                  {isSelectedInLibrary ? '✓ In Library' : '+ Library'}
+                  {isSelectedInLibrary ? (
+                    <>
+                      <Check className="h-4 w-4" /> In Library
+                    </>
+                  ) : (
+                    '+ Library'
+                  )}
                 </button>
               </div>
             </div>

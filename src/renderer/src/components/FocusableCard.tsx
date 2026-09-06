@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { ChevronRight, Star, type LucideIcon } from 'lucide-react'
 
 export interface CardItem {
   id: string
@@ -15,7 +16,7 @@ export interface CardItem {
    * use this instead of real artwork (which doesn't exist for "Games"/
    * "Settings"/etc.), and it's also the last resort for any card whose
    * poster/box-art never loads, so nothing ever renders as a blank tile. */
-  icon?: string
+  icon?: LucideIcon
   /** Tailwind gradient-direction class (e.g. "bg-gradient-to-br"), varied per
    * tile so a row of icon cards doesn't look identical — always blended with
    * the theme's own accent color, never a hardcoded one, so it still matches
@@ -66,6 +67,7 @@ export function CardArt({ item, className }: { item: CardItem; className?: strin
   const currentUrl = candidates[candidateIndex]
   const showImage = Boolean(currentUrl)
   const showIcon = !showImage && Boolean(item.icon)
+  const Icon = item.icon
 
   return (
     <div className={`relative overflow-hidden ${className ?? ''}`}>
@@ -77,7 +79,7 @@ export function CardArt({ item, className }: { item: CardItem; className?: strin
           className="h-full w-full object-cover"
         />
       )}
-      {showIcon && (
+      {showIcon && Icon && (
         <div
           className={`flex h-full w-full items-center justify-center ${
             item.iconColors ? '' : `${item.gradientDirection ?? 'bg-gradient-to-br'} from-accent/25 via-surface to-surface`
@@ -88,7 +90,7 @@ export function CardArt({ item, className }: { item: CardItem; className?: strin
               : undefined
           }
         >
-          <span className="text-6xl opacity-40">{item.icon}</span>
+          <Icon className="h-16 w-16 opacity-40" strokeWidth={1.5} />
         </div>
       )}
     </div>
@@ -108,6 +110,7 @@ export function FocusableCard({
   const currentUrl = candidates[candidateIndex]
   const showImage = Boolean(currentUrl)
   const showIcon = !showImage && Boolean(item.icon)
+  const Icon = item.icon
   const aspectClass = size === 'large' ? ASPECT_CLASSES.large : ASPECT_CLASSES[aspect]
 
   return (
@@ -133,7 +136,7 @@ export function FocusableCard({
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
         </>
       )}
-      {showIcon && (
+      {showIcon && Icon && (
         <div
           className={`absolute inset-0 transition-opacity ${
             item.iconColors ? '' : `${item.gradientDirection ?? 'bg-gradient-to-br'} from-accent/25 via-surface to-surface`
@@ -144,17 +147,21 @@ export function FocusableCard({
               : undefined
           }
         >
-          <span className="absolute -bottom-4 -right-4 text-[6rem] leading-none opacity-25">
-            {item.icon}
-          </span>
+          <Icon
+            className="absolute -bottom-4 -right-4 h-24 w-24 opacity-25"
+            strokeWidth={1.25}
+          />
         </div>
       )}
       {item.favorite && (
-        <span className="absolute right-3 top-3 z-10 text-lg leading-none drop-shadow">⭐</span>
+        <Star
+          className="absolute right-3 top-3 z-10 h-5 w-5 text-yellow-400 drop-shadow"
+          fill="currentColor"
+        />
       )}
       {showChevron && (
-        <span className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/30 text-sm text-white/80 backdrop-blur-sm">
-          ›
+        <span className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/30 text-white/80 backdrop-blur-sm">
+          <ChevronRight className="h-4 w-4" />
         </span>
       )}
       <div className="relative p-4">

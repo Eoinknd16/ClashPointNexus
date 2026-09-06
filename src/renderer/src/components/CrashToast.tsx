@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { TriangleAlert } from 'lucide-react'
 import { useCrashLogStore } from '../state/crashLogStore'
 
 const AUTO_DISMISS_MS = 20000
@@ -26,7 +27,7 @@ export function CrashToast(): JSX.Element | null {
   return (
     <div className="fixed inset-x-0 bottom-0 z-[60] flex justify-center p-4">
       <div className="flex max-w-2xl items-start gap-3 rounded-xl bg-red-950/95 px-5 py-4 text-sm text-red-100 shadow-panel ring-1 ring-red-500/40">
-        <span className="mt-0.5 shrink-0">⚠️</span>
+        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
         <pre className="max-h-40 flex-1 overflow-y-auto whitespace-pre-wrap break-words font-sans">
           {lastError}
         </pre>

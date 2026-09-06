@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
+import { ChevronRight } from 'lucide-react'
 import { ASPECT_CLASSES, FocusableCard, type CardItem } from './FocusableCard'
 
 interface CategoryRowProps {
@@ -94,7 +95,9 @@ export function CategoryRow({
                 : 'border-white/10 text-muted'
             }`}
           >
-            <span className="text-sm font-semibold">See All →</span>
+            <span className="flex items-center gap-1 text-sm font-semibold">
+              See All <ChevronRight className="h-4 w-4" />
+            </span>
           </div>
         )}
       </div>

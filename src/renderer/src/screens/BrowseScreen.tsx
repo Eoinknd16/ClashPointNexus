@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
+import { ChevronLeft, ChevronRight, Home as HomeIcon, RotateCw, type LucideIcon } from 'lucide-react'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
@@ -15,11 +16,11 @@ const CURSOR_SPEED = 16
 const CURSOR_DEADZONE = 0.15
 const CURSOR_RADIUS = 12
 
-const TOOLBAR_LABELS: Record<Exclude<ToolbarItem, 'address'>, string> = {
-  back: '◀',
-  forward: '▶',
-  reload: '⟳',
-  home: '⌂'
+const TOOLBAR_ICONS: Record<Exclude<ToolbarItem, 'address'>, LucideIcon> = {
+  back: ChevronLeft,
+  forward: ChevronRight,
+  reload: RotateCw,
+  home: HomeIcon
 }
 
 /** Anything without a space that contains a dot looks like a domain; everything
@@ -294,25 +295,28 @@ export function BrowseScreen(): JSX.Element {
   return (
     <div className="flex h-screen flex-col bg-bg">
       <div className="flex items-center gap-3 border-b border-white/5 bg-surface px-6 py-4">
-        {(['back', 'forward', 'reload', 'home'] as const).map((item, i) => (
-          <button
-            key={item}
-            onClick={() => {
-              setZone('address')
-              setToolbarIndex(i)
-              activateToolbar(item)
-            }}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg transition-colors ${
-              (item === 'back' && !canGoBack) || (item === 'forward' && !canGoForward)
-                ? 'opacity-30'
-                : ''
-            } ${
-              zone === 'address' && toolbarIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-white'
-            }`}
-          >
-            {TOOLBAR_LABELS[item]}
-          </button>
-        ))}
+        {(['back', 'forward', 'reload', 'home'] as const).map((item, i) => {
+          const Icon = TOOLBAR_ICONS[item]
+          return (
+            <button
+              key={item}
+              onClick={() => {
+                setZone('address')
+                setToolbarIndex(i)
+                activateToolbar(item)
+              }}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                (item === 'back' && !canGoBack) || (item === 'forward' && !canGoForward)
+                  ? 'opacity-30'
+                  : ''
+              } ${
+                zone === 'address' && toolbarIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-white'
+              }`}
+            >
+              <Icon className="h-5 w-5" />
+            </button>
+          )
+        })}
         <div
           onClick={() => {
             setZone('address')
