@@ -22,7 +22,6 @@ import { useNavigationStore } from '../state/navigationStore'
 import { useThemeStore } from '../state/themeStore'
 import { deriveThemeVars, hslToRgbTriplet, rgbTripletToHsl } from '../themes/colorUtils'
 import { openThemesFolder, rescanThemesFolder } from '../themes/themeFolderActions'
-import type { AddonSummary } from '@shared/stremioTypes'
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
 import type { StartupSettings } from '@shared/settingsTypes'
@@ -54,7 +53,7 @@ const CATEGORIES: Array<{ id: string; label: string; icon: LucideIcon }> = [
   { id: 'stremio', label: 'Stremio', icon: Tv }
 ]
 
-type RowKind = 'header' | 'field' | 'action' | 'addon' | 'info' | 'theme'
+type RowKind = 'header' | 'field' | 'action' | 'info' | 'theme'
 
 interface SettingsRow {
   id: string
@@ -74,20 +73,7 @@ const FIELD_LABELS: Record<string, string> = {
   steamApiKey: 'Steam API Key',
   steamId64: 'Steam ID64',
   stremioEmail: 'Stremio Email',
-  stremioPassword: 'Stremio Password',
-  newAddon: 'Addon URL'
-}
-
-const CAPABILITY_LABELS: Record<string, string> = {
-  stream: 'Stream',
-  catalog: 'Catalog',
-  meta: 'Meta',
-  subtitles: 'Subtitles',
-  addon_catalog: 'Addon Catalog'
-}
-
-function describeCapabilities(resources: string[]): string {
-  return resources.map((r) => CAPABILITY_LABELS[r] ?? r).join(', ')
+  stremioPassword: 'Stremio Password'
 }
 
 function header(id: string, label: string, category: string): SettingsRow {
@@ -133,7 +119,6 @@ export function SettingsScreen(): JSX.Element {
   const [stremioPassword, setStremioPassword] = useState('')
   const [loggedIn, setLoggedIn] = useState(false)
   const [lastAddonsSyncedAt, setLastAddonsSyncedAt] = useState<number | null>(null)
-  const [addons, setAddons] = useState<AddonSummary[]>([])
   const [appVersion, setAppVersion] = useState('')
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [globalInputStatus, setGlobalInputStatus] = useState<GlobalInputStatus | null>(null)
@@ -184,7 +169,6 @@ export function SettingsScreen(): JSX.Element {
     window.api.settings
       .getStremio()
       .then((s) => {
-        setAddons(s.addons)
         setLoggedIn(Boolean(s.authKey))
         setStremioEmail(s.email ?? '')
         setLastAddonsSyncedAt(s.lastAddonsSyncedAt)
@@ -427,17 +411,12 @@ export function SettingsScreen(): JSX.Element {
         ]
       : []),
 
-    header('stremioAddons', 'Stremio Addons', 'stremio'),
-    ...addons.map(
-      (addon, i): SettingsRow => ({
-        id: `addon-${i}`,
-        kind: 'addon',
-        category: 'stremio',
-        label: addon.name,
-        value: describeCapabilities(addon.resources)
-      })
-    ),
-    { id: 'addAddon', kind: 'action', label: '+ Add Addon URL', category: 'stremio' }
+    {
+      id: 'addonsMoved',
+      kind: 'info',
+      category: 'stremio',
+      label: 'Manage individual addons (Torrentio, Debridio, etc.) from the TV screen\'s own Addons tab'
+    }
   ]
 
   const activeCategory = CATEGORIES[categoryIndex]
@@ -484,17 +463,6 @@ export function SettingsScreen(): JSX.Element {
       setStremioEmail(value)
     } else if (field === 'stremioPassword') {
       setStremioPassword(value)
-    } else if (field === 'newAddon' && value.trim()) {
-      setMessage('Adding addon...')
-      window.api.settings
-        .addStremioAddon(value.trim())
-        .then((next) => {
-          setAddons(next)
-          setMessage(`Added "${next[next.length - 1]?.name}"`)
-        })
-        .catch((error) => {
-          setMessage(`Couldn't add addon: ${error instanceof Error ? error.message : String(error)}`)
-        })
     }
   }
 
@@ -535,7 +503,6 @@ export function SettingsScreen(): JSX.Element {
       setStremioPassword('')
       setMessage(`Logged in — synced ${result.addonsSynced} addon(s), all of them, not just stream ones`)
       const updated = await window.api.settings.getStremio()
-      setAddons(updated.addons)
       setLastAddonsSyncedAt(updated.lastAddonsSyncedAt)
     } else {
       setMessage(`Login failed: ${result.error}`)
@@ -564,7 +531,6 @@ export function SettingsScreen(): JSX.Element {
     if (result.success) {
       setMessage(`Re-synced ${result.addonsSynced} addon(s)`)
       const updated = await window.api.settings.getStremio()
-      setAddons(updated.addons)
       setLastAddonsSyncedAt(updated.lastAddonsSyncedAt)
     } else {
       setMessage(`Re-sync failed: ${result.error}`)
@@ -694,14 +660,6 @@ export function SettingsScreen(): JSX.Element {
       if (theme) openRemoveThemeConfirm(theme)
     } else if (row.kind === 'field') {
       openKeyboard(row.id, row.value ?? '')
-    } else if (row.kind === 'addon') {
-      const index = Number(row.id.replace('addon-', ''))
-      const next = addons.filter((_, i) => i !== index)
-      setAddons(next)
-      window.api.settings.setStremioAddons(next)
-      setMessage('Addon removed')
-    } else if (row.id === 'addAddon') {
-      openKeyboard('newAddon', '')
     } else if (row.id === 'steamSignIn') {
       void doSteamSignIn()
     } else if (row.id === 'stremioLogin') {
@@ -953,7 +911,6 @@ export function SettingsScreen(): JSX.Element {
                       : 'Not set'}
                   </span>
                 )}
-                {row.kind === 'addon' && <span className="pl-4 text-xs text-muted">{row.value}</span>}
               </div>
             )
           })}
