@@ -270,7 +270,7 @@ export function StoreScreen(): JSX.Element {
         <p className="text-sm text-muted">Buy games, and browse or apply the themes on this machine.</p>
       </header>
 
-      <div className="flex flex-1 flex-col gap-8 overflow-y-auto p-2">
+      <div className="flex flex-1 flex-col gap-8 overflow-y-auto p-5">
         <div ref={(el) => (rowRefs.current[0] = el)} className="w-96">
           <FocusableCard
             item={{
@@ -288,7 +288,7 @@ export function StoreScreen(): JSX.Element {
 
         <div ref={(el) => (rowRefs.current[1] = el)}>
           <CategoryRow
-            label="Themes"
+            label="My Themes"
             items={themeCards}
             focused={clampedRowIndex === 1}
             focusedIndex={clampedRowIndex === 1 ? clampedColIndex : 0}

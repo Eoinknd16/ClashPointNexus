@@ -782,7 +782,7 @@ export function SettingsScreen(): JSX.Element {
             glow gets sliced off flush against this container's boundary
             (see CategoryRow.tsx's identical fix for the original instance
             of this). */}
-        <nav className="flex w-60 shrink-0 flex-col gap-1.5 p-2">
+        <nav className="flex w-60 shrink-0 flex-col gap-1.5 p-5">
           {CATEGORIES.map((cat, i) => {
             const isCurrentCategory = i === categoryIndex
             const isFocused = zone === 'sidebar' && isCurrentCategory
@@ -811,7 +811,7 @@ export function SettingsScreen(): JSX.Element {
 
         <div className="w-px shrink-0 bg-surface-hover" />
 
-        <div className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
+        <div className="flex flex-1 flex-col gap-1 overflow-y-auto p-5">
           <h2 className="mb-2 px-1 text-lg font-bold tracking-tight">{activeCategory.label}</h2>
           {categoryRows.map((row, i) => {
             if (row.kind === 'header') {

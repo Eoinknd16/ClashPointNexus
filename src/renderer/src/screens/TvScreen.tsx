@@ -1645,7 +1645,7 @@ export function TvScreen(): JSX.Element {
                 spec) — without this, a focused episode's shadow-focus glow
                 gets sliced off flush against this div's own edge, same bug
                 CategoryRow.tsx's px-4/py-5 padding exists to avoid. */}
-            <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
+            <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-5">
               {episodes.length === 0 && <span className="text-muted">Loading episodes...</span>}
               {episodesForSeason.map((ep, i) => (
                 <div
@@ -1779,7 +1779,7 @@ export function TvScreen(): JSX.Element {
                   else void playMovie(selectedItem, { auto: true })
                 }}
                 className={`flex items-center justify-center gap-2 rounded-xl bg-accent-gradient px-6 py-4 text-lg font-semibold text-white shadow-focus transition-shadow ${
-                  detailFocusIndex === 0 ? 'ring-2 ring-white/50 ring-offset-2 ring-offset-bg' : ''
+                  detailFocusIndex === 0 ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''
                 }`}
               >
                 <Play className="h-5 w-5" fill="currentColor" /> {playLabel}
