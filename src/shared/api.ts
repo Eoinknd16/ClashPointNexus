@@ -24,7 +24,13 @@ import type {
   SeriesMeta,
   StreamResult
 } from './stremioTypes'
-import type { ThemeDefinition, ThemeInstallResult, ThemeScanResult } from './themeTypes'
+import type {
+  CommunityThemeSummary,
+  ThemeDefinition,
+  ThemeInstallResult,
+  ThemeScanResult,
+  ThemeSubmissionResult
+} from './themeTypes'
 import type { UpdateStatus } from './updateTypes'
 import type { WeatherData } from './weatherTypes'
 
@@ -104,6 +110,17 @@ export interface LauncherApi {
      * Themes drop folder — that'll reinstall it on the next scan unless
      * the user also removes/renames the source folder. */
     removeTheme: (id: string) => Promise<void>
+    /** Lists what's currently in the public community theme repo — read-only,
+     * anonymous, best-effort (an unreachable repo just means an empty list). */
+    listCommunityThemes: () => Promise<CommunityThemeSummary[]>
+    /** Downloads and installs one theme from the community repo by its
+     * folder name — a no-op returning the existing theme if it's already
+     * installed (id is deterministic from the folder name). */
+    installCommunityTheme: (folder: string) => Promise<ThemeInstallResult>
+    /** Packages a custom/installed theme into a shareable folder (colors +
+     * images, shaped like a Themes drop-folder pack) and opens it in the OS
+     * file explorer — the user uploads it to the community repo themselves. */
+    prepareThemeSubmission: (id: string) => Promise<ThemeSubmissionResult>
     getStartup: () => Promise<StartupSettings>
     /** No-ops in a dev build — see StartupSettings.supported. */
     setStartupEnabled: (enabled: boolean) => Promise<void>

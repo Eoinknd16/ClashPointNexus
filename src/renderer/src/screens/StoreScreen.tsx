@@ -8,7 +8,7 @@ import { useNavigationStore } from '../state/navigationStore'
 import { useStatusStore } from '../state/statusStore'
 import { useThemeStore } from '../state/themeStore'
 import { openThemesFolder, rescanThemesFolder } from '../themes/themeFolderActions'
-import type { ThemeDefinition } from '@shared/themeTypes'
+import { COMMUNITY_THEMES_REPO, type CommunityThemeSummary, type ThemeDefinition } from '@shared/themeTypes'
 
 const STORE_URL = 'https://store.steampowered.com'
 const SCROLL_STEP = 160
@@ -33,6 +33,17 @@ function themeToCardItem(theme: ThemeDefinition, activeThemeId: string): CardIte
   }
 }
 
+function communityThemeToCardItem(theme: CommunityThemeSummary): CardItem {
+  return {
+    id: `community:${theme.folder}`,
+    title: theme.name,
+    subtitle: 'Tap to Install',
+    imageUrl: theme.previewUrl ?? undefined,
+    icon: Palette,
+    gradientDirection: 'bg-gradient-to-br'
+  }
+}
+
 // Quick-action pills below the Themes row — not FocusableCards (there's no
 // artwork to show), just simple focusable pills like Home's top nav.
 type ActionId = 'openThemesFolder' | 'rescanThemesFolder'
@@ -42,8 +53,8 @@ const ACTIONS: Array<{ id: ActionId; label: string; icon: typeof FolderOpen }> =
 ]
 
 type View = 'hub' | 'steamStore'
-type HubRow = 'steam' | 'themes' | 'actions'
-const HUB_ROWS: HubRow[] = ['steam', 'themes', 'actions']
+type HubRow = 'steam' | 'themes' | 'community' | 'actions'
+const HUB_ROWS: HubRow[] = ['steam', 'themes', 'community', 'actions']
 
 /**
  * The mockup's "Store" nav item, rebuilt as its own real page instead of
@@ -69,6 +80,7 @@ export function StoreScreen(): JSX.Element {
   const [view, setView] = useState<View>('hub')
   const [rowIndex, setRowIndex] = useState(0)
   const [colIndex, setColIndex] = useState(0)
+  const [communityThemes, setCommunityThemes] = useState<CommunityThemeSummary[]>([])
   const rowRefs = useRef<Array<HTMLDivElement | null>>([])
 
   const webviewRef = useRef<WebviewTag | null>(null)
@@ -78,13 +90,16 @@ export function StoreScreen(): JSX.Element {
 
   useEffect(() => {
     void refreshCustomThemes()
+    window.api.settings.listCommunityThemes().then(setCommunityThemes).catch(() => setCommunityThemes([]))
   }, [])
 
   const themeCards = allThemes.map((theme) => themeToCardItem(theme, themeId))
+  const communityThemeCards = communityThemes.map(communityThemeToCardItem)
 
   const rowLength = (row: HubRow): number => {
     if (row === 'steam') return 1
     if (row === 'themes') return themeCards.length
+    if (row === 'community') return communityThemeCards.length
     return ACTIONS.length
   }
   const clampedRowIndex = Math.min(rowIndex, HUB_ROWS.length - 1)
@@ -160,6 +175,22 @@ export function StoreScreen(): JSX.Element {
     void webviewRef.current?.executeJavaScript(`window.scrollBy(${dx}, ${dy})`)
   }
 
+  async function doInstallCommunityTheme(summary: CommunityThemeSummary): Promise<void> {
+    setMessage(`Installing ${summary.name}...`)
+    try {
+      const result = await window.api.settings.installCommunityTheme(summary.folder)
+      if (result.success && result.theme) {
+        await refreshCustomThemes()
+        setTheme(result.theme.id)
+        setMessage(`Installed and applied ${result.theme.name}`)
+      } else {
+        setMessage(`Couldn't install ${summary.name}: ${result.error}`)
+      }
+    } catch (error) {
+      setMessage(`Couldn't install ${summary.name}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   function activateHubItem(row: HubRow, index: number): void {
     if (row === 'steam') {
       setView('steamStore')
@@ -171,6 +202,11 @@ export function StoreScreen(): JSX.Element {
         setTheme(theme.id)
         setMessage(`Theme set to ${theme.name}`)
       }
+      return
+    }
+    if (row === 'community') {
+      const summary = communityThemes[index]
+      if (summary) void doInstallCommunityTheme(summary)
       return
     }
     const action = ACTIONS[index]
@@ -301,17 +337,36 @@ export function StoreScreen(): JSX.Element {
           />
         </div>
 
-        <div ref={(el) => (rowRefs.current[2] = el)} className="flex gap-3">
+        <div ref={(el) => (rowRefs.current[2] = el)} className="flex flex-col gap-3">
+          <CategoryRow
+            label="Community Themes"
+            items={communityThemeCards}
+            focused={clampedRowIndex === 2}
+            focusedIndex={clampedRowIndex === 2 ? clampedColIndex : 0}
+            aspect="landscape"
+            onSelect={(index) => {
+              setRowIndex(2)
+              setColIndex(index)
+              activateHubItem('community', index)
+            }}
+          />
+          <p className="px-1 text-xs text-muted">
+            Submitted by other players via github.com/{COMMUNITY_THEMES_REPO.owner}/
+            {COMMUNITY_THEMES_REPO.name} — share your own from Settings' Appearance tab.
+          </p>
+        </div>
+
+        <div ref={(el) => (rowRefs.current[3] = el)} className="flex gap-3">
           {ACTIONS.map((a, i) => (
             <div
               key={a.id}
               onClick={() => {
-                setRowIndex(2)
+                setRowIndex(3)
                 setColIndex(i)
                 activateHubItem('actions', i)
               }}
               className={`flex cursor-pointer items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium ring-1 transition-colors ${
-                clampedRowIndex === 2 && clampedColIndex === i
+                clampedRowIndex === 3 && clampedColIndex === i
                   ? 'bg-surface-hi shadow-focus ring-2 ring-accent'
                   : 'bg-surface text-muted ring-accent/15'
               }`}

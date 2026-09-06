@@ -48,3 +48,32 @@ export interface ThemeScanResult {
   installed: string[]
   errors: Array<{ folder: string; error: string }>
 }
+
+/** One theme pack folder listed in the public community repo (Store's
+ * "Community Themes" row) — enough to render a preview card without
+ * downloading anything; installCommunityTheme fetches the rest on demand. */
+export interface CommunityThemeSummary {
+  /** Folder name in the repo — also its identity: installing derives the
+   * same id from it that a local Themes-folder pack of the same name would. */
+  folder: string
+  name: string
+  /** Hot-linked raw.githubusercontent.com URL for the pack's own hero/first
+   * tile image, or null if it has neither — this repo is the user's own, so
+   * linking directly to it for a preview (rather than downloading first) is
+   * not the kind of hotlinking this app otherwise avoids. */
+  previewUrl: string | null
+}
+
+/** The public repo Store's Community Themes row reads from, and where
+ * "Prepare Submission" points the user to upload their exported folder —
+ * one place to update if it's ever renamed or moved. */
+export const COMMUNITY_THEMES_REPO = { owner: 'Eoinknd16', name: 'ClashPointNexus-Themes', branch: 'main' } as const
+
+/** Result of packaging a custom/installed theme into a shareable folder
+ * (see themeSubmission.ts) — the user uploads exportPath to the community
+ * repo themselves; this never touches GitHub. */
+export interface ThemeSubmissionResult {
+  success: boolean
+  error: string | null
+  exportPath: string | null
+}

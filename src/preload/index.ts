@@ -48,6 +48,9 @@ const api: LauncherApi = {
     getThemesFolderPath: () => ipcRenderer.invoke('settings:getThemesFolderPath'),
     openThemesFolder: () => ipcRenderer.invoke('settings:openThemesFolder'),
     removeTheme: (id) => ipcRenderer.invoke('settings:removeTheme', id),
+    listCommunityThemes: () => ipcRenderer.invoke('settings:listCommunityThemes'),
+    installCommunityTheme: (folder) => ipcRenderer.invoke('settings:installCommunityTheme', folder),
+    prepareThemeSubmission: (id) => ipcRenderer.invoke('settings:prepareThemeSubmission', id),
     getStartup: () => ipcRenderer.invoke('settings:getStartup'),
     setStartupEnabled: (enabled) => ipcRenderer.invoke('settings:setStartupEnabled', enabled)
   },

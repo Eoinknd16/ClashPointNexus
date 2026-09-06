@@ -8,7 +8,14 @@ import type {
   StremioSettings
 } from '@shared/settingsTypes'
 import type { AddonSummary } from '@shared/stremioTypes'
-import type { ThemeDefinition, ThemeInstallResult, ThemeScanResult } from '@shared/themeTypes'
+import type {
+  CommunityThemeSummary,
+  ThemeDefinition,
+  ThemeInstallResult,
+  ThemeScanResult,
+  ThemeSubmissionResult
+} from '@shared/themeTypes'
+import { installCommunityTheme, listCommunityThemes } from './communityThemes'
 import { loadSteamConfig, saveSteamConfig } from '../steam/config'
 import { signInWithSteam } from '../steam/openid'
 import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../stremio/account'
@@ -17,6 +24,7 @@ import { importStremioHistory } from '../stremio/importHistory'
 import { getStartupSettings, setStartupEnabled } from './startup'
 import { installThemeFromFolder, removeInstalledTheme, scanThemesDropFolder } from './themeInstall'
 import { loadCustomThemes, saveCustomThemes, themesDropRoot } from './themes'
+import { prepareThemeSubmission } from './themeSubmission'
 
 export function registerSettingsIpc(): void {
   ipcMain.handle('settings:getSteam', (): SteamSettings => {
@@ -87,6 +95,19 @@ export function registerSettingsIpc(): void {
   // (Settings' UI never offers this action on a built-in in the first place).
   ipcMain.handle('settings:removeTheme', (_event, id: string): void => {
     removeInstalledTheme(id)
+  })
+
+  ipcMain.handle('settings:listCommunityThemes', (): Promise<CommunityThemeSummary[]> => listCommunityThemes())
+
+  ipcMain.handle(
+    'settings:installCommunityTheme',
+    (_event, folder: string): Promise<ThemeInstallResult> => installCommunityTheme(folder)
+  )
+
+  ipcMain.handle('settings:prepareThemeSubmission', (_event, id: string): ThemeSubmissionResult => {
+    const result = prepareThemeSubmission(id)
+    if (result.success && result.exportPath) void shell.openPath(result.exportPath)
+    return result
   })
 
   // The in-app color picker (Settings > a custom theme > "Fine-Tune Colors")

@@ -30,7 +30,7 @@ const DEFAULT_BASE_VARS: Record<string, string> = {
   '--color-muted': '143 143 163'
 }
 
-function isThemePackManifest(value: unknown): value is ThemePackManifest {
+export function isThemePackManifest(value: unknown): value is ThemePackManifest {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Record<string, unknown>
   if (candidate.name !== undefined && (typeof candidate.name !== 'string' || !candidate.name.trim())) {
@@ -51,7 +51,7 @@ function isThemePackManifest(value: unknown): value is ThemePackManifest {
  * theme ids structurally unable to collide with the built-in ids (plain
  * "midnight"/"crimson"/etc.), which live in the renderer and aren't
  * reachable from here to check against directly. */
-function slugifyToId(name: string): string {
+export function slugifyToId(name: string): string {
   const slug = name
     .trim()
     .toLowerCase()
@@ -84,38 +84,53 @@ function readPackManifest(folderPath: string): { manifest: ThemePackManifest } |
   return { manifest: parsed }
 }
 
-/**
- * Copies a pack's referenced images into theme-assets/<id>/ and builds the
- * resulting ThemeDefinition, auto-extracting accent colors from the pack's
- * own imagery when its manifest doesn't specify them. Doesn't touch
- * themes.config.json itself — id/name are decided by the caller, since that
- * differs between a manual File Manager install (de-duplicated, manifest
- * name wins) and a Themes-folder scan (deterministic from folder name).
- */
-async function buildInstalledTheme(
-  folderPath: string,
-  manifest: ThemePackManifest,
-  id: string,
-  name: string
-): Promise<{ theme: ThemeDefinition } | { error: string }> {
-  const assetsDir = join(themeAssetsRoot(), id)
-  mkdirSync(assetsDir, { recursive: true })
+/** How buildInstalledTheme gets an asset's actual bytes onto disk at
+ * theme-assets/<id>/<filename> — a local copy for a folder on this machine
+ * (installThemeFromFolder, scanThemesDropFolder), or a download for a pack
+ * living in the community repo (communityThemes.ts). Returns null if the
+ * asset genuinely couldn't be obtained (missing locally, 404 remotely). */
+export type AssetFetcher = (
+  filename: string,
+  assetsDir: string
+) => { fileUrl: string; destPath: string } | null | Promise<{ fileUrl: string; destPath: string } | null>
 
-  function copyAsset(filename: string): { fileUrl: string; destPath: string } | null {
+/** AssetFetcher for a plain folder on this machine — install by copying. */
+export function localAssetFetcher(folderPath: string): AssetFetcher {
+  return (filename, assetsDir) => {
     const sourcePath = join(folderPath, filename)
     if (!existsSync(sourcePath)) return null
     const destPath = join(assetsDir, filename)
     copyFileSync(sourcePath, destPath)
     return { fileUrl: pathToFileURL(destPath).toString(), destPath }
   }
+}
+
+/**
+ * Fetches a pack's referenced images into theme-assets/<id>/ (however
+ * fetchAsset gets them there) and builds the resulting ThemeDefinition,
+ * auto-extracting accent colors from the pack's own imagery when its
+ * manifest doesn't specify them. Doesn't touch themes.config.json itself —
+ * id/name are decided by the caller, since that differs between a manual
+ * File Manager install (de-duplicated, manifest name wins), a Themes-folder
+ * scan, and a community-repo install (both of the latter: deterministic
+ * from folder name).
+ */
+export async function buildInstalledTheme(
+  manifest: ThemePackManifest,
+  id: string,
+  name: string,
+  fetchAsset: AssetFetcher
+): Promise<{ theme: ThemeDefinition } | { error: string }> {
+  const assetsDir = join(themeAssetsRoot(), id)
+  mkdirSync(assetsDir, { recursive: true })
 
   let heroImage: string | undefined
   let heroImageDestPath: string | undefined
   if (manifest.heroImage) {
-    const copied = copyAsset(manifest.heroImage)
+    const copied = await fetchAsset(manifest.heroImage, assetsDir)
     if (!copied) {
       rmSync(assetsDir, { recursive: true, force: true })
-      return { error: `heroImage "${manifest.heroImage}" not found in this folder` }
+      return { error: `heroImage "${manifest.heroImage}" not found` }
     }
     heroImage = copied.fileUrl
     heroImageDestPath = copied.destPath
@@ -126,10 +141,10 @@ async function buildInstalledTheme(
   if (manifest.tileImages) {
     tileImages = {}
     for (const [tileId, filename] of Object.entries(manifest.tileImages)) {
-      const copied = copyAsset(filename)
+      const copied = await fetchAsset(filename, assetsDir)
       if (!copied) {
         rmSync(assetsDir, { recursive: true, force: true })
-        return { error: `tileImages.${tileId} ("${filename}") not found in this folder` }
+        return { error: `tileImages.${tileId} ("${filename}") not found` }
       }
       tileImages[tileId] = copied.fileUrl
       firstTileImageDestPath ??= copied.destPath
@@ -184,7 +199,7 @@ export async function installThemeFromFolder(folderPath: string): Promise<ThemeI
   const name = read.manifest.name?.trim() || basename(folderPath)
   const id = uniqueId(slugifyToId(name), new Set(existing.map((t) => t.id)))
 
-  const built = await buildInstalledTheme(folderPath, read.manifest, id, name)
+  const built = await buildInstalledTheme(read.manifest, id, name, localAssetFetcher(folderPath))
   if ('error' in built) return { success: false, error: built.error, theme: null }
 
   saveCustomThemes([...existing, built.theme])
@@ -231,7 +246,7 @@ export async function scanThemesDropFolder(): Promise<ThemeScanResult> {
       continue
     }
 
-    const built = await buildInstalledTheme(folderPath, read.manifest, id, folderName)
+    const built = await buildInstalledTheme(read.manifest, id, folderName, localAssetFetcher(folderPath))
     if ('error' in built) {
       errors.push({ folder: folderName, error: built.error })
       continue
@@ -246,10 +261,10 @@ export async function scanThemesDropFolder(): Promise<ThemeScanResult> {
   return { installed, errors }
 }
 
-/** No UI wired to this yet — custom themes (and now theme packs) can still
- * only be removed by hand-editing themes.config.json, same as before this
- * feature existed. Exists so that path at least cleans up copied assets
- * properly once a removal UI is worth building. */
+/** Reached from Settings' "Remove Theme" action. Only ever deletes this
+ * app's own copied assets, not whatever the pack's original source was —
+ * a folder still sitting in the Themes drop folder will reinstall on the
+ * next scan unless it's also removed/renamed there. */
 export function removeInstalledTheme(id: string): void {
   const existing = loadCustomThemes()
   saveCustomThemes(existing.filter((t) => t.id !== id))

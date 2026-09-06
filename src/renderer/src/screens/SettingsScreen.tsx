@@ -7,6 +7,7 @@ import {
   Palette,
   RefreshCw,
   Settings as SettingsIcon,
+  Share2,
   Trash2,
   TriangleAlert,
   Tv,
@@ -25,7 +26,7 @@ import type { AddonSummary } from '@shared/stremioTypes'
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
 import type { StartupSettings } from '@shared/settingsTypes'
-import type { ThemeDefinition } from '@shared/themeTypes'
+import { COMMUNITY_THEMES_REPO, type ThemeDefinition } from '@shared/themeTypes'
 
 /** The 7 base colors a theme actually defines by hand — everything else
  * (--gradient-app-glow, --gradient-accent, --shadow-focus, --shadow-panel)
@@ -231,6 +232,13 @@ export function SettingsScreen(): JSX.Element {
           label: 'Fine-Tune Colors',
           category: 'appearance',
           icon: Palette
+        },
+        {
+          id: `submitTheme-${theme.id}`,
+          kind: 'action',
+          label: 'Prepare Submission',
+          category: 'appearance',
+          icon: Share2
         },
         {
           id: `removeTheme-${theme.id}`,
@@ -619,6 +627,20 @@ export function SettingsScreen(): JSX.Element {
     }
   }
 
+  async function doPrepareSubmission(theme: ThemeDefinition): Promise<void> {
+    setMessage(`Preparing submission for ${theme.name}...`)
+    try {
+      const result = await window.api.settings.prepareThemeSubmission(theme.id)
+      setMessage(
+        result.success
+          ? `Ready — opened the folder. Upload it to github.com/${COMMUNITY_THEMES_REPO.owner}/${COMMUNITY_THEMES_REPO.name}`
+          : `Couldn't prepare submission: ${result.error}`
+      )
+    } catch (error) {
+      setMessage(`Couldn't prepare submission: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   function adjustColor(direction: 1 | -1): void {
     if (!colorEditorTheme) return
     const colorKey = COLOR_KEYS[colorEditorKeyIndex].key
@@ -662,6 +684,10 @@ export function SettingsScreen(): JSX.Element {
       const id = row.id.replace('editColors-', '')
       const theme = allThemes.find((t) => t.id === id)
       if (theme) openColorEditor(theme)
+    } else if (row.id.startsWith('submitTheme-')) {
+      const id = row.id.replace('submitTheme-', '')
+      const theme = allThemes.find((t) => t.id === id)
+      if (theme) void doPrepareSubmission(theme)
     } else if (row.id.startsWith('removeTheme-')) {
       const id = row.id.replace('removeTheme-', '')
       const theme = allThemes.find((t) => t.id === id)
