@@ -1,4 +1,5 @@
 import type { CatalogType } from '@shared/stremioTypes'
+import { ADDON_REQUEST_HEADERS } from './addonHttp'
 import { encodeStremioId } from './streamId'
 
 export interface RawStreamResult {
@@ -35,6 +36,21 @@ export function normalizeAddonUrl(addonUrl: string): string {
   return addonUrl.trim().replace(/\/manifest\.json$/, '').replace(/\/$/, '')
 }
 
+/** Node's fetch (undici) throws a generic "fetch failed" TypeError for most
+ * network-level failures, with the actually-useful reason (DNS failure,
+ * connection refused, a TLS error, ...) nested one level down in `cause` —
+ * surfacing only `.message` makes every such failure look identical and
+ * gives nothing to act on. */
+function describeFetchError(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause
+    if (cause instanceof Error) return `${error.message}: ${cause.message}`
+    if (cause) return `${error.message}: ${String(cause)}`
+    return error.message
+  }
+  return String(error)
+}
+
 /** Queries one addon's /stream endpoint — the same open protocol the real Stremio app uses for any addon you add. */
 export async function fetchStreamsFromAddon(
   addonBaseUrl: string,
@@ -45,7 +61,7 @@ export async function fetchStreamsFromAddon(
   const url = `${base}/stream/${type}/${encodeStremioId(id)}.json`
 
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000), headers: ADDON_REQUEST_HEADERS })
     if (!response.ok) return { raw: [], error: `HTTP ${response.status}` }
 
     const data = (await response.json()) as StreamAddonResponse
@@ -57,6 +73,6 @@ export async function fetchStreamsFromAddon(
     }))
     return { raw, error: null }
   } catch (error) {
-    return { raw: [], error: error instanceof Error ? error.message : String(error) }
+    return { raw: [], error: describeFetchError(error) }
   }
 }

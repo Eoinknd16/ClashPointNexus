@@ -1,4 +1,5 @@
 import type { CatalogItem, CatalogType } from '@shared/stremioTypes'
+import { ADDON_REQUEST_HEADERS } from './addonHttp'
 import { normalizeAddonUrl } from './streamAddons'
 
 interface AddonMetaPreviewRaw {
@@ -28,7 +29,8 @@ export async function fetchAddonCatalog(
 ): Promise<CatalogItem[]> {
   const base = normalizeAddonUrl(addonUrl)
   const response = await fetch(`${base}/catalog/${type}/${encodeURIComponent(catalogId)}.json`, {
-    signal: AbortSignal.timeout(10000)
+    signal: AbortSignal.timeout(10000),
+    headers: ADDON_REQUEST_HEADERS
   })
   if (!response.ok) return []
 

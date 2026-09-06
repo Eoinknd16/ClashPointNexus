@@ -1,4 +1,5 @@
 import type { AddonSummary, CatalogType } from '@shared/stremioTypes'
+import { ADDON_REQUEST_HEADERS } from './addonHttp'
 import { normalizeAddonUrl } from './streamAddons'
 
 const API_BASE = 'https://api.strem.io'
@@ -97,7 +98,10 @@ export async function fetchAddonManifestInfo(
   addonUrl: string
 ): Promise<{ name: string; resources: string[]; catalogs: NonNullable<AddonSummary['catalogs']> }> {
   const base = normalizeAddonUrl(addonUrl)
-  const response = await fetch(`${base}/manifest.json`, { signal: AbortSignal.timeout(8000) })
+  const response = await fetch(`${base}/manifest.json`, {
+    signal: AbortSignal.timeout(8000),
+    headers: ADDON_REQUEST_HEADERS
+  })
   if (!response.ok) throw new Error(`Addon manifest fetch failed with ${response.status}`)
   const data = (await response.json()) as AddonManifest
   return {
