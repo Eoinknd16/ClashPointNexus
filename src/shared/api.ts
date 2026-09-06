@@ -85,6 +85,10 @@ export interface LauncherApi {
      * references — see themeInstall.ts. Reached from File Manager's
      * "Install as Theme" action, never a native file dialog. */
     installTheme: (folderPath: string) => Promise<ThemeInstallResult>
+    /** Patches one custom theme's vars — the in-app color picker. No-ops
+     * silently if id isn't a known custom theme (built-ins aren't tracked
+     * server-side at all). */
+    updateThemeVars: (id: string, vars: Record<string, string>) => Promise<void>
     getStartup: () => Promise<StartupSettings>
     /** No-ops in a dev build — see StartupSettings.supported. */
     setStartupEnabled: (enabled: boolean) => Promise<void>

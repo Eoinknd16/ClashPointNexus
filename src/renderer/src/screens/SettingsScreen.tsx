@@ -5,10 +5,27 @@ import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
 import { useThemeStore } from '../state/themeStore'
+import { deriveThemeVars, hslToRgbTriplet, rgbTripletToHsl } from '../themes/colorUtils'
 import type { AddonSummary } from '@shared/stremioTypes'
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
 import type { StartupSettings } from '@shared/settingsTypes'
+import type { ThemeDefinition } from '@shared/themeTypes'
+
+/** The 7 base colors a theme actually defines by hand — everything else
+ * (--gradient-app-glow, --gradient-accent, --shadow-focus, --shadow-panel)
+ * is mechanically derived from these (see colorUtils.ts's deriveThemeVars),
+ * so the color picker only ever needs to expose these. */
+const COLOR_KEYS: Array<{ key: string; label: string }> = [
+  { key: '--color-bg', label: 'Background' },
+  { key: '--color-surface', label: 'Surface' },
+  { key: '--color-surface-hi', label: 'Surface (highlighted)' },
+  { key: '--color-surface-hover', label: 'Surface (hover)' },
+  { key: '--color-accent', label: 'Accent' },
+  { key: '--color-accent-2', label: 'Accent 2' },
+  { key: '--color-muted', label: 'Muted text' }
+]
+const CHANNEL_LABELS = ['Hue', 'Saturation', 'Lightness'] as const
 
 type RowKind = 'header' | 'field' | 'action' | 'addon' | 'info' | 'theme'
 
@@ -92,22 +109,28 @@ export function SettingsScreen(): JSX.Element {
   const [globalInputStatus, setGlobalInputStatus] = useState<GlobalInputStatus | null>(null)
   const [startupSettings, setStartupSettings] = useState<StartupSettings | null>(null)
 
-  const [zone, setZone] = useState<'menu' | 'keyboard'>('menu')
+  const [zone, setZone] = useState<'menu' | 'keyboard' | 'colorEditor'>('menu')
   const [menuIndex, setMenuIndex] = useState(0)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [kbRow, setKbRow] = useState(0)
   const [kbCol, setKbCol] = useState(0)
   const [kbValue, setKbValue] = useState('')
   const [kbShift, setKbShift] = useState(false)
+  const [colorEditorTheme, setColorEditorTheme] = useState<ThemeDefinition | null>(null)
+  const [colorEditorKeyIndex, setColorEditorKeyIndex] = useState(0)
+  const [colorEditorChannel, setColorEditorChannel] = useState(0)
 
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
   const goHome = useNavigationStore((s) => s.goHome)
   const allThemes = useThemeStore((s) => s.allThemes)
+  const customThemes = useThemeStore((s) => s.customThemes)
   const themeId = useThemeStore((s) => s.themeId)
   const setTheme = useThemeStore((s) => s.setTheme)
   const refreshCustomThemes = useThemeStore((s) => s.refreshCustomThemes)
+  const updateThemeVars = useThemeStore((s) => s.updateThemeVars)
   const rowRefs = useRef<Array<HTMLDivElement | null>>([])
+  const customThemeIds = new Set(customThemes.map((t) => t.id))
 
   useEffect(() => {
     // A theme installed via File Manager's "Install as Theme" mid-session
@@ -151,15 +174,20 @@ export function SettingsScreen(): JSX.Element {
 
   const rows: SettingsRow[] = [
     header('appearance', 'Appearance'),
-    ...allThemes.map(
-      (theme): SettingsRow => ({
+    ...allThemes.flatMap((theme): SettingsRow[] => {
+      const themeRow: SettingsRow = {
         id: `theme-${theme.id}`,
         kind: 'theme',
         label: theme.name,
         swatch: theme.vars['--color-accent'],
         active: theme.id === themeId
-      })
-    ),
+      }
+      // Only custom/installed themes are editable — built-ins are meant to
+      // stay fixed reference points, and aren't tracked in
+      // themes.config.json at all for this to persist against anyway.
+      if (!customThemeIds.has(theme.id)) return [themeRow]
+      return [themeRow, { id: `editColors-${theme.id}`, kind: 'action', label: '🎨 Fine-Tune Colors' }]
+    }),
 
     header('app', 'App'),
     { id: 'appVersion', kind: 'info', label: `Version ${appVersion}` },
@@ -432,6 +460,38 @@ export function SettingsScreen(): JSX.Element {
     }
   }
 
+  // Editing a theme's colors implicitly selects it first — the live preview
+  // (colors apply to :root immediately on every adjustment) would otherwise
+  // be previewing a theme that isn't even the one currently showing.
+  function openColorEditor(theme: ThemeDefinition): void {
+    if (themeId !== theme.id) setTheme(theme.id)
+    setColorEditorTheme(theme)
+    setColorEditorKeyIndex(0)
+    setColorEditorChannel(0)
+    setZone('colorEditor')
+  }
+
+  function closeColorEditor(): void {
+    setZone('menu')
+    setColorEditorTheme(null)
+  }
+
+  function adjustColor(direction: 1 | -1): void {
+    if (!colorEditorTheme) return
+    const colorKey = COLOR_KEYS[colorEditorKeyIndex].key
+    const current = colorEditorTheme.vars[colorKey] ?? '128 128 128'
+    const hsl = rgbTripletToHsl(current)
+    if (colorEditorChannel === 0) hsl.h = ((hsl.h + direction * 4) % 360 + 360) % 360
+    else if (colorEditorChannel === 1) hsl.s = Math.max(0, Math.min(100, hsl.s + direction * 3))
+    else hsl.l = Math.max(0, Math.min(100, hsl.l + direction * 3))
+
+    const newBaseVars = { ...colorEditorTheme.vars, [colorKey]: hslToRgbTriplet(hsl.h, hsl.s, hsl.l) }
+    const newVars = deriveThemeVars(newBaseVars)
+    const updated: ThemeDefinition = { ...colorEditorTheme, vars: newVars }
+    setColorEditorTheme(updated)
+    updateThemeVars(updated.id, newVars)
+  }
+
   function doCheckForUpdates(): void {
     if (updateStatus?.state === 'downloaded') {
       void window.api.updater.quitAndInstall()
@@ -455,6 +515,10 @@ export function SettingsScreen(): JSX.Element {
       const id = row.id.replace('theme-', '')
       setTheme(id)
       setMessage(`Theme set to ${row.label}`)
+    } else if (row.id.startsWith('editColors-')) {
+      const id = row.id.replace('editColors-', '')
+      const theme = allThemes.find((t) => t.id === id)
+      if (theme) openColorEditor(theme)
     } else if (row.kind === 'field') {
       openKeyboard(row.id, row.value ?? '')
     } else if (row.kind === 'addon') {
@@ -480,6 +544,36 @@ export function SettingsScreen(): JSX.Element {
   }
 
   useNavListener((action) => {
+    if (zone === 'colorEditor') {
+      switch (action) {
+        case 'prevStream':
+          setColorEditorKeyIndex((i) => (i === 0 ? COLOR_KEYS.length - 1 : i - 1))
+          return
+        case 'nextStream':
+          setColorEditorKeyIndex((i) => (i + 1) % COLOR_KEYS.length)
+          return
+        case 'up':
+          setColorEditorChannel((c) => (c === 0 ? 2 : c - 1))
+          return
+        case 'down':
+          setColorEditorChannel((c) => (c + 1) % 3)
+          return
+        case 'left':
+          adjustColor(-1)
+          return
+        case 'right':
+          adjustColor(1)
+          return
+        case 'back':
+        case 'menu':
+        case 'confirm':
+          closeColorEditor()
+          return
+        default:
+          return
+      }
+    }
+
     if (zone === 'keyboard') {
       switch (action) {
         case 'up': {
@@ -608,6 +702,61 @@ export function SettingsScreen(): JSX.Element {
       </div>
 
       <footer className="text-sm text-muted">{message}</footer>
+
+      {zone === 'colorEditor' && colorEditorTheme && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
+          <div className="flex w-96 flex-col gap-4 rounded-2xl bg-surface p-8">
+            <div className="flex items-center gap-3">
+              <span
+                className="h-10 w-10 shrink-0 rounded-full ring-1 ring-white/20"
+                style={{
+                  backgroundColor: `rgb(${colorEditorTheme.vars[COLOR_KEYS[colorEditorKeyIndex].key] ?? '128 128 128'})`
+                }}
+              />
+              <div className="flex flex-col leading-tight">
+                <span className="text-xs text-muted">{colorEditorTheme.name}</span>
+                <span className="font-semibold">{COLOR_KEYS[colorEditorKeyIndex].label}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {CHANNEL_LABELS.map((label, i) => {
+                const hsl = rgbTripletToHsl(
+                  colorEditorTheme.vars[COLOR_KEYS[colorEditorKeyIndex].key] ?? '128 128 128'
+                )
+                const value = i === 0 ? hsl.h : i === 1 ? hsl.s : hsl.l
+                const max = i === 0 ? 360 : 100
+                return (
+                  <div
+                    key={label}
+                    className={`flex flex-col gap-1 rounded-xl px-4 py-3 transition-colors ${
+                      colorEditorChannel === i ? 'bg-surface-hi ring-2 ring-accent' : 'bg-surface-hover'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted">{label}</span>
+                      <span className="font-semibold">
+                        {Math.round(value)}
+                        {i === 0 ? '°' : '%'}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-accent-gradient"
+                        style={{ width: `${(value / max) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <p className="text-xs text-muted">
+              L1/R1: switch color · Up/Down: switch H/S/L · Left/Right: adjust · Back: done
+            </p>
+          </div>
+        </div>
+      )}
 
       {zone === 'keyboard' && (
         <OnScreenKeyboard

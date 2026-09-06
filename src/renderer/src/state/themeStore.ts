@@ -16,6 +16,14 @@ interface ThemeState {
    * until something re-fetches it, since init() only ever runs once at
    * app launch. Called every time Settings mounts. */
   refreshCustomThemes: () => Promise<void>
+  /** Patches one custom theme's vars in place (the in-app color picker) —
+   * updates the in-memory copy immediately (so the theme list's swatch and
+   * a live preview both reflect it right away, re-applying to :root if it's
+   * the active theme) and persists to themes.config.json in the background.
+   * Only meaningful for custom/installed themes; built-ins aren't tracked
+   * in that file at all, so persistence silently no-ops for them (the UI
+   * never offers this for a built-in theme in the first place). */
+  updateThemeVars: (id: string, vars: Record<string, string>) => void
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
@@ -64,5 +72,19 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     } catch {
       // themes.config.json missing/invalid — just keep whatever's already loaded
     }
+  },
+
+  updateThemeVars: (id, vars) => {
+    const theme = get().allThemes.find((t) => t.id === id)
+    if (!theme) return
+    const updated: ThemeDefinition = { ...theme, vars }
+    set((state) => ({
+      customThemes: state.customThemes.map((t) => (t.id === id ? updated : t)),
+      allThemes: state.allThemes.map((t) => (t.id === id ? updated : t))
+    }))
+    if (get().themeId === id) applyTheme(updated)
+    window.api.settings.updateThemeVars(id, vars).catch(() => {
+      // best-effort persistence -- the live preview above already applied either way
+    })
   }
 }))

@@ -16,7 +16,7 @@ import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
 import { importStremioHistory } from '../stremio/importHistory'
 import { getStartupSettings, setStartupEnabled } from './startup'
 import { installThemeFromFolder } from './themeInstall'
-import { loadCustomThemes } from './themes'
+import { loadCustomThemes, saveCustomThemes } from './themes'
 
 export function registerSettingsIpc(): void {
   ipcMain.handle('settings:getSteam', (): SteamSettings => {
@@ -73,6 +73,18 @@ export function registerSettingsIpc(): void {
   ipcMain.handle('settings:installTheme', (_event, folderPath: string): ThemeInstallResult =>
     installThemeFromFolder(folderPath)
   )
+
+  // The in-app color picker (Settings > a custom theme > "Fine-Tune Colors")
+  // — only ever touches custom/installed themes, never the built-ins (which
+  // aren't tracked in themes.config.json at all), so a not-found id here
+  // just means "nothing to persist", not an error worth surfacing.
+  ipcMain.handle('settings:updateThemeVars', (_event, id: string, vars: Record<string, string>) => {
+    const existing = loadCustomThemes()
+    const index = existing.findIndex((t) => t.id === id)
+    if (index === -1) return
+    existing[index] = { ...existing[index], vars }
+    saveCustomThemes(existing)
+  })
 
   ipcMain.handle(
     'settings:stremioLogin',

@@ -37,14 +37,9 @@ const TILES: Array<{
     subtitle: 'Nexus Dash · High Scores',
     icon: '🕹️',
     iconColors: ['#a21caf', '#0891b2']
-  },
-  {
-    id: 'settings',
-    title: 'Settings',
-    subtitle: 'Accounts & addons',
-    icon: '⚙️',
-    iconColors: ['#334155', '#0f172a']
   }
+  // Settings deliberately not a tile here anymore — it's already reachable
+  // from the top nav, and having it twice was redundant.
 ]
 
 // System-wide sections, reachable from Home directly rather than only via
@@ -185,51 +180,14 @@ export function HomeMenu(): JSX.Element {
 
   return (
     <div className="relative flex h-screen flex-col gap-5 overflow-hidden px-10 py-6">
-      <header className="flex shrink-0 items-center justify-between">
-        <nav className="flex gap-1 rounded-full bg-surface p-1.5 ring-1 ring-white/10">
-          {TOP_NAV.map((item, i) => (
-            <div
-              key={item.id}
-              onClick={() => {
-                setZone('topnav')
-                setTopNavIndex(i)
-                goTo(item.id)
-              }}
-              className={`flex cursor-pointer items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-                item.id === 'home' ? 'bg-accent text-white' : 'text-muted hover:text-white'
-              } ${
-                zone === 'topnav' && topNavIndex === i
-                  ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg'
-                  : ''
-              }`}
-            >
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </div>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-4">
-          {weather && (
-            <div className="flex items-center gap-2 rounded-full bg-surface px-4 py-2">
-              <span className="text-lg">{weatherEmoji(weather.weatherCode)}</span>
-              <div className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
-                {weather.city && <span className="text-xs text-muted">{weather.city}</span>}
-              </div>
-            </div>
-          )}
-          <Clock />
-          <div
-            onClick={() => goTo('settings')}
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-surface text-lg"
-          >
-            👤
-          </div>
-        </div>
-      </header>
-
-      <div className="relative min-h-[220px] flex-1 overflow-hidden rounded-3xl bg-surface">
+      {/* Full-bleed background — behind the top nav and the Your Apps row
+          too, not just the hero content, so the image reads as the actual
+          page background rather than a bordered "card" floating on top of
+          a differently-colored page. Fades to the theme's flat --color-bg
+          by the time it reaches the Apps row, and darkens slightly at the
+          very top for the nav/clock text to stay legible over whatever's
+          behind it. */}
+      <div className="absolute inset-0 -z-10">
         {activeTheme?.heroImage ? (
           // A real image from an installed theme pack (Settings > pick a
           // theme, installed via File Manager's "Install as Theme") —
@@ -280,14 +238,63 @@ export function HomeMenu(): JSX.Element {
                 fill="rgba(9,7,18,0.9)"
               />
             </svg>
-            <div
-              className="absolute inset-x-0 bottom-0 h-[22%]"
-              style={{ background: 'linear-gradient(180deg, transparent, rgba(5,4,12,0.95))' }}
-            />
           </>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-transparent to-transparent" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(to bottom, transparent 0%, transparent 48%, rgb(var(--color-bg)) 86%)'
+          }}
+        />
+      </div>
 
+      <header className="grid shrink-0 grid-cols-3 items-center">
+        <div />
+        <nav className="flex justify-self-center gap-1 rounded-full bg-surface/70 p-1.5 ring-1 ring-white/10 backdrop-blur-md">
+          {TOP_NAV.map((item, i) => (
+            <div
+              key={item.id}
+              onClick={() => {
+                setZone('topnav')
+                setTopNavIndex(i)
+                goTo(item.id)
+              }}
+              className={`flex cursor-pointer items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                item.id === 'home' ? 'bg-accent text-white' : 'text-muted hover:text-white'
+              } ${
+                zone === 'topnav' && topNavIndex === i
+                  ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg'
+                  : ''
+              }`}
+            >
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </nav>
+
+        <div className="flex items-center justify-self-end gap-4">
+          {weather && (
+            <div className="flex items-center gap-2 rounded-full bg-surface/70 px-4 py-2 backdrop-blur-md">
+              <span className="text-lg">{weatherEmoji(weather.weatherCode)}</span>
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
+                {weather.city && <span className="text-xs text-muted">{weather.city}</span>}
+              </div>
+            </div>
+          )}
+          <Clock />
+          <div
+            onClick={() => goTo('settings')}
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-surface/70 text-lg backdrop-blur-md"
+          >
+            👤
+          </div>
+        </div>
+      </header>
+
+      <div className="relative min-h-[220px] flex-1">
         {continueSuggestion && (
           <div
             onClick={() => {
@@ -373,7 +380,7 @@ export function HomeMenu(): JSX.Element {
 
       <div className="shrink-0">
         <h2 className="mb-3 text-lg font-semibold">Your Apps</h2>
-        <div className="grid grid-cols-7 gap-6">
+        <div className="grid grid-cols-6 gap-6">
           {TILES.map((tile, i) => (
             <motion.div
               key={tile.id}

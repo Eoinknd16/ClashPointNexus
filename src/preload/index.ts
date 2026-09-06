@@ -43,6 +43,7 @@ const api: LauncherApi = {
     importStremioHistory: () => ipcRenderer.invoke('settings:importStremioHistory'),
     getCustomThemes: () => ipcRenderer.invoke('settings:getCustomThemes'),
     installTheme: (folderPath) => ipcRenderer.invoke('settings:installTheme', folderPath),
+    updateThemeVars: (id, vars) => ipcRenderer.invoke('settings:updateThemeVars', id, vars),
     getStartup: () => ipcRenderer.invoke('settings:getStartup'),
     setStartupEnabled: (enabled) => ipcRenderer.invoke('settings:setStartupEnabled', enabled)
   },
