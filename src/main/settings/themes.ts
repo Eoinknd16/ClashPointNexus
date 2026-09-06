@@ -3,11 +3,18 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type { ThemeDefinition } from '@shared/themeTypes'
 
-function themesConfigPath(): string {
+export function themesConfigPath(): string {
   const isDev = !app.isPackaged
   return isDev
     ? join(process.cwd(), 'themes.config.json')
     : join(app.getPath('userData'), 'themes.config.json')
+}
+
+/** Root folder installed theme packs' copied image assets live under —
+ * .../theme-assets/<themeId>/<filename>, one subfolder per installed theme. */
+export function themeAssetsRoot(): string {
+  const isDev = !app.isPackaged
+  return isDev ? join(process.cwd(), 'theme-assets') : join(app.getPath('userData'), 'theme-assets')
 }
 
 const DEFAULT_CUSTOM_THEMES: ThemeDefinition[] = []
@@ -37,4 +44,8 @@ export function loadCustomThemes(): ThemeDefinition[] {
   } catch {
     return DEFAULT_CUSTOM_THEMES
   }
+}
+
+export function saveCustomThemes(themes: ThemeDefinition[]): void {
+  writeFileSync(themesConfigPath(), JSON.stringify(themes, null, 2))
 }

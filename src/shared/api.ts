@@ -24,7 +24,7 @@ import type {
   SeriesMeta,
   StreamResult
 } from './stremioTypes'
-import type { ThemeDefinition } from './themeTypes'
+import type { ThemeDefinition, ThemeInstallResult } from './themeTypes'
 import type { UpdateStatus } from './updateTypes'
 import type { WeatherData } from './weatherTypes'
 
@@ -81,6 +81,10 @@ export interface LauncherApi {
     resyncStremioAddons: () => Promise<StremioLoginResult>
     importStremioHistory: () => Promise<StremioImportResult>
     getCustomThemes: () => Promise<ThemeDefinition[]>
+    /** folderPath must contain a theme.json plus whatever image files it
+     * references — see themeInstall.ts. Reached from File Manager's
+     * "Install as Theme" action, never a native file dialog. */
+    installTheme: (folderPath: string) => Promise<ThemeInstallResult>
     getStartup: () => Promise<StartupSettings>
     /** No-ops in a dev build — see StartupSettings.supported. */
     setStartupEnabled: (enabled: boolean) => Promise<void>

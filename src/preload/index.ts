@@ -42,6 +42,7 @@ const api: LauncherApi = {
     resyncStremioAddons: () => ipcRenderer.invoke('settings:resyncStremioAddons'),
     importStremioHistory: () => ipcRenderer.invoke('settings:importStremioHistory'),
     getCustomThemes: () => ipcRenderer.invoke('settings:getCustomThemes'),
+    installTheme: (folderPath) => ipcRenderer.invoke('settings:installTheme', folderPath),
     getStartup: () => ipcRenderer.invoke('settings:getStartup'),
     setStartupEnabled: (enabled) => ipcRenderer.invoke('settings:setStartupEnabled', enabled)
   },

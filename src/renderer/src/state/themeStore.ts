@@ -11,6 +11,11 @@ interface ThemeState {
   allThemes: ThemeDefinition[]
   init: () => Promise<void>
   setTheme: (id: string) => void
+  /** Re-reads themes.config.json — a theme installed mid-session (File
+   * Manager's "Install as Theme") won't appear in Settings' theme list
+   * until something re-fetches it, since init() only ever runs once at
+   * app launch. Called every time Settings mounts. */
+  refreshCustomThemes: () => Promise<void>
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
@@ -49,6 +54,15 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
       localStorage.setItem(STORAGE_KEY, id)
     } catch {
       // per-viewer convenience only — fine if it doesn't persist
+    }
+  },
+
+  refreshCustomThemes: async () => {
+    try {
+      const customThemes = await window.api.settings.getCustomThemes()
+      set({ customThemes, allThemes: [...BUILT_IN_THEMES, ...customThemes] })
+    } catch {
+      // themes.config.json missing/invalid — just keep whatever's already loaded
     }
   }
 }))

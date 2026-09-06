@@ -8,13 +8,14 @@ import type {
   StremioSettings
 } from '@shared/settingsTypes'
 import type { AddonSummary } from '@shared/stremioTypes'
-import type { ThemeDefinition } from '@shared/themeTypes'
+import type { ThemeDefinition, ThemeInstallResult } from '@shared/themeTypes'
 import { loadSteamConfig, saveSteamConfig } from '../steam/config'
 import { signInWithSteam } from '../steam/openid'
 import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../stremio/account'
 import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
 import { importStremioHistory } from '../stremio/importHistory'
 import { getStartupSettings, setStartupEnabled } from './startup'
+import { installThemeFromFolder } from './themeInstall'
 import { loadCustomThemes } from './themes'
 
 export function registerSettingsIpc(): void {
@@ -68,6 +69,10 @@ export function registerSettingsIpc(): void {
   })
 
   ipcMain.handle('settings:getCustomThemes', (): ThemeDefinition[] => loadCustomThemes())
+
+  ipcMain.handle('settings:installTheme', (_event, folderPath: string): ThemeInstallResult =>
+    installThemeFromFolder(folderPath)
+  )
 
   ipcMain.handle(
     'settings:stremioLogin',

@@ -9,7 +9,16 @@ import type { FileEntry } from '@shared/filesystemTypes'
 type CurrentPath = string | null
 type Zone = 'list' | 'contextMenu' | 'confirmDelete' | 'keyboard'
 type KeyboardPurpose = 'rename' | 'newFolder' | 'search' | 'addToLauncher'
-type MenuActionId = 'open' | 'newFolder' | 'rename' | 'cut' | 'copy' | 'paste' | 'delete' | 'addToLauncher'
+type MenuActionId =
+  | 'open'
+  | 'newFolder'
+  | 'rename'
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'delete'
+  | 'addToLauncher'
+  | 'installTheme'
 interface MenuOption {
   id: MenuActionId
   label: string
@@ -137,6 +146,7 @@ export function FileManagerScreen(): JSX.Element {
       options.push({ id: 'copy', label: 'Copy' })
       options.push({ id: 'cut', label: 'Cut' })
       if (isExecutable(entry)) options.push({ id: 'addToLauncher', label: 'Add to App Launcher' })
+      if (entry.isDirectory) options.push({ id: 'installTheme', label: 'Install as Theme' })
     }
     options.push({ id: 'newFolder', label: 'New Folder' })
     if (clipboard) options.push({ id: 'paste', label: `Paste "${clipboard.name}"` })
@@ -178,6 +188,21 @@ export function FileManagerScreen(): JSX.Element {
       case 'addToLauncher':
         if (entry) openKeyboardFor('addToLauncher', stripExtension(entry.name))
         return
+      case 'installTheme': {
+        if (!entry) {
+          closeMenu()
+          return
+        }
+        closeMenu()
+        setMessage(`Installing "${entry.name}" as a theme...`)
+        const result = await window.api.settings.installTheme(entry.path)
+        setMessage(
+          result.success
+            ? `Installed "${result.theme?.name}" — pick it in Settings to use it`
+            : `Couldn't install theme: ${result.error}`
+        )
+        return
+      }
       case 'copy':
         if (entry) {
           setClipboard({ path: entry.path, name: entry.name, mode: 'copy' })

@@ -106,9 +106,14 @@ export function SettingsScreen(): JSX.Element {
   const allThemes = useThemeStore((s) => s.allThemes)
   const themeId = useThemeStore((s) => s.themeId)
   const setTheme = useThemeStore((s) => s.setTheme)
+  const refreshCustomThemes = useThemeStore((s) => s.refreshCustomThemes)
   const rowRefs = useRef<Array<HTMLDivElement | null>>([])
 
   useEffect(() => {
+    // A theme installed via File Manager's "Install as Theme" mid-session
+    // won't show up here otherwise — themeStore only fetches custom themes
+    // once, at app launch.
+    void refreshCustomThemes()
     window.api.settings
       .getSteam()
       .then((s) => {

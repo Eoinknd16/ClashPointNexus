@@ -4,6 +4,7 @@ import { FocusableCard } from '../components/FocusableCard'
 import { Clock } from '../components/Clock'
 import { useNavListener } from '../input/useNavListener'
 import { useNavigationStore, type ScreenId } from '../state/navigationStore'
+import { useThemeStore } from '../state/themeStore'
 import type { ContinueSuggestion } from '@shared/homeTypes'
 import type { WeatherData } from '@shared/weatherTypes'
 import type { SystemStats } from '@shared/systemTypes'
@@ -89,6 +90,9 @@ export function HomeMenu(): JSX.Element {
   const [libraryStats, setLibraryStats] = useState<LibraryStats | null>(null)
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const goTo = useNavigationStore((s) => s.goTo)
+  const allThemes = useThemeStore((s) => s.allThemes)
+  const themeId = useThemeStore((s) => s.themeId)
+  const activeTheme = allThemes.find((t) => t.id === themeId)
 
   useEffect(() => {
     window.api.home
@@ -226,47 +230,62 @@ export function HomeMenu(): JSX.Element {
       </header>
 
       <div className="relative min-h-[220px] flex-1 overflow-hidden rounded-3xl bg-surface">
-        {/* No real photo to work with (see the conversation — extracting one
-            from a flattened mockup screenshot produces garbage, and hotlinking
-            a stock photo from an unknown source isn't happening), so this is a
-            CSS/SVG dusk-over-mountains scene instead of a flat gradient: a sky
-            gradient, a soft sun/moon glow near the horizon, and two layered
-            mountain silhouettes for actual depth. */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(180deg, #14142e 0%, #322a52 22%, #6b3a5c 42%, #b6524f 60%, #dd8656 76%, #eeb374 100%)'
-          }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{ background: 'radial-gradient(circle 380px at 72% 66%, rgba(255,224,170,0.85), transparent 70%)' }}
-        />
-        <svg
-          className="absolute inset-x-0 bottom-0 h-[55%] w-full"
-          viewBox="0 0 100 40"
-          preserveAspectRatio="none"
-        >
-          <polygon
-            points="0,40 0,20 12,8 22,16 34,4 48,14 60,6 74,15 88,5 100,13 100,40"
-            fill="rgba(18,14,32,0.55)"
+        {activeTheme?.heroImage ? (
+          // A real image from an installed theme pack (Settings > pick a
+          // theme, installed via File Manager's "Install as Theme") —
+          // always preferred over the CSS/SVG fallback below when present.
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url("${activeTheme.heroImage}")` }}
           />
-        </svg>
-        <svg
-          className="absolute inset-x-0 bottom-0 h-[38%] w-full"
-          viewBox="0 0 100 30"
-          preserveAspectRatio="none"
-        >
-          <polygon
-            points="0,30 0,18 15,10 28,17 40,7 55,16 68,9 82,17 100,11 100,30"
-            fill="rgba(9,7,18,0.9)"
-          />
-        </svg>
-        <div
-          className="absolute inset-x-0 bottom-0 h-[22%]"
-          style={{ background: 'linear-gradient(180deg, transparent, rgba(5,4,12,0.95))' }}
-        />
+        ) : (
+          <>
+            {/* No installed theme pack image, and no other legitimate source
+                of real photography (extracting one from a flattened mockup
+                screenshot produces garbage; hotlinking a stock photo from an
+                unknown source isn't happening) — a CSS/SVG dusk-over-
+                mountains scene instead of a flat gradient: a sky gradient, a
+                soft sun/moon glow near the horizon, and two layered mountain
+                silhouettes for actual depth. */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  'linear-gradient(180deg, #14142e 0%, #322a52 22%, #6b3a5c 42%, #b6524f 60%, #dd8656 76%, #eeb374 100%)'
+              }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background: 'radial-gradient(circle 380px at 72% 66%, rgba(255,224,170,0.85), transparent 70%)'
+              }}
+            />
+            <svg
+              className="absolute inset-x-0 bottom-0 h-[55%] w-full"
+              viewBox="0 0 100 40"
+              preserveAspectRatio="none"
+            >
+              <polygon
+                points="0,40 0,20 12,8 22,16 34,4 48,14 60,6 74,15 88,5 100,13 100,40"
+                fill="rgba(18,14,32,0.55)"
+              />
+            </svg>
+            <svg
+              className="absolute inset-x-0 bottom-0 h-[38%] w-full"
+              viewBox="0 0 100 30"
+              preserveAspectRatio="none"
+            >
+              <polygon
+                points="0,30 0,18 15,10 28,17 40,7 55,16 68,9 82,17 100,11 100,30"
+                fill="rgba(9,7,18,0.9)"
+              />
+            </svg>
+            <div
+              className="absolute inset-x-0 bottom-0 h-[22%]"
+              style={{ background: 'linear-gradient(180deg, transparent, rgba(5,4,12,0.95))' }}
+            />
+          </>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent" />
 
         {continueSuggestion && (
@@ -370,6 +389,7 @@ export function HomeMenu(): JSX.Element {
                   title: tile.title,
                   subtitle: tile.subtitle,
                   icon: tile.icon,
+                  imageUrl: activeTheme?.tileImages?.[tile.id],
                   iconColors: tile.iconColors
                 }}
                 focused={zone === 'tiles' && tileIndex === i}
