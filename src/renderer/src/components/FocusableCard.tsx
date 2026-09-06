@@ -22,6 +22,12 @@ export interface CardItem {
    * whatever custom theme the user has picked. */
   gradientDirection?: string
   favorite?: boolean
+  /** Two explicit CSS colors for the icon-fallback background, overriding the
+   * theme accent entirely — Home's app tiles use this so each one gets its
+   * own distinct identity color instead of every tile looking like the same
+   * theme-tinted gradient. Everything else (Games/TV/Apps grids) leaves this
+   * unset and keeps deriving from the active theme as before. */
+  iconColors?: [string, string]
 }
 
 interface FocusableCardProps {
@@ -73,7 +79,14 @@ export function CardArt({ item, className }: { item: CardItem; className?: strin
       )}
       {showIcon && (
         <div
-          className={`flex h-full w-full items-center justify-center ${item.gradientDirection ?? 'bg-gradient-to-br'} from-accent/25 via-surface to-surface`}
+          className={`flex h-full w-full items-center justify-center ${
+            item.iconColors ? '' : `${item.gradientDirection ?? 'bg-gradient-to-br'} from-accent/25 via-surface to-surface`
+          }`}
+          style={
+            item.iconColors
+              ? { background: `linear-gradient(135deg, ${item.iconColors[0]}, ${item.iconColors[1]})` }
+              : undefined
+          }
         >
           <span className="text-6xl opacity-40">{item.icon}</span>
         </div>
@@ -122,9 +135,14 @@ export function FocusableCard({
       )}
       {showIcon && (
         <div
-          className={`absolute inset-0 ${item.gradientDirection ?? 'bg-gradient-to-br'} from-accent/25 via-surface to-surface transition-opacity ${
-            focused ? 'opacity-100' : 'opacity-70'
-          }`}
+          className={`absolute inset-0 transition-opacity ${
+            item.iconColors ? '' : `${item.gradientDirection ?? 'bg-gradient-to-br'} from-accent/25 via-surface to-surface`
+          } ${focused ? 'opacity-100' : 'opacity-80'}`}
+          style={
+            item.iconColors
+              ? { background: `linear-gradient(135deg, ${item.iconColors[0]}, ${item.iconColors[1]})` }
+              : undefined
+          }
         >
           <span className="absolute -bottom-4 -right-4 text-[6rem] leading-none opacity-25">
             {item.icon}

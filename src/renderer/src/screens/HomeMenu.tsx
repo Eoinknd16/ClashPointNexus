@@ -8,37 +8,41 @@ import type { ContinueSuggestion } from '@shared/homeTypes'
 import type { WeatherData } from '@shared/weatherTypes'
 import type { SystemStats } from '@shared/systemTypes'
 
+// Each tile gets its own explicit two-color identity (FocusableCard's
+// iconColors override) instead of every tile deriving from the same theme
+// accent color — the latter is what made every tile look like the same flat
+// brown/orange blob regardless of theme, per a real screenshot.
 const TILES: Array<{
   id: ScreenId
   title: string
   subtitle: string
   icon: string
-  gradientDirection: string
+  iconColors: [string, string]
 }> = [
-  { id: 'games', title: 'Games', subtitle: 'Steam library', icon: '🎮', gradientDirection: 'bg-gradient-to-br' },
+  { id: 'games', title: 'Games', subtitle: 'Steam library', icon: '🎮', iconColors: ['#1e3a8a', '#7c3aed'] },
   {
     id: 'tv',
     title: 'TV',
     subtitle: 'YouTube, Stremio & streaming',
     icon: '🎬',
-    gradientDirection: 'bg-gradient-to-bl'
+    iconColors: ['#7f1d1d', '#c2410c']
   },
-  { id: 'browse', title: 'Browse', subtitle: 'Web browser', icon: '🌐', gradientDirection: 'bg-gradient-to-tr' },
-  { id: 'files', title: 'Files', subtitle: 'This PC', icon: '🗂️', gradientDirection: 'bg-gradient-to-tl' },
-  { id: 'apps', title: 'Apps', subtitle: 'Launch anything', icon: '📦', gradientDirection: 'bg-gradient-to-tr' },
+  { id: 'browse', title: 'Browse', subtitle: 'Web browser', icon: '🌐', iconColors: ['#0e7490', '#2563eb'] },
+  { id: 'files', title: 'Files', subtitle: 'This PC', icon: '🗂️', iconColors: ['#b45309', '#1e40af'] },
+  { id: 'apps', title: 'Apps', subtitle: 'Launch anything', icon: '📦', iconColors: ['#6d28d9', '#db2777'] },
   {
     id: 'arcade',
     title: 'Arcade',
     subtitle: 'Nexus Dash · High Scores',
     icon: '🕹️',
-    gradientDirection: 'bg-gradient-to-b'
+    iconColors: ['#a21caf', '#0891b2']
   },
   {
     id: 'settings',
     title: 'Settings',
     subtitle: 'Accounts & addons',
     icon: '⚙️',
-    gradientDirection: 'bg-gradient-to-t'
+    iconColors: ['#334155', '#0f172a']
   }
 ]
 
@@ -178,7 +182,7 @@ export function HomeMenu(): JSX.Element {
   return (
     <div className="relative flex h-screen flex-col gap-5 overflow-hidden px-10 py-6">
       <header className="flex shrink-0 items-center justify-between">
-        <nav className="flex gap-1 rounded-full bg-surface p-1.5">
+        <nav className="flex gap-1 rounded-full bg-surface p-1.5 ring-1 ring-white/10">
           {TOP_NAV.map((item, i) => (
             <div
               key={item.id}
@@ -222,23 +226,48 @@ export function HomeMenu(): JSX.Element {
       </header>
 
       <div className="relative min-h-[220px] flex-1 overflow-hidden rounded-3xl bg-surface">
-        {/* A small poster (a few hundred px) stretched across the whole hero
-            and blurred doesn't turn into a nice cinematic backdrop — CSS blur
-            operates on the already-upscaled, blocky pixels, so it comes out
-            as ugly color blobs instead (confirmed: a real screenshot showed
-            exactly that). A rich, theme-driven gradient reads as deliberate
-            regardless of theme, where a stretched-thumbnail backdrop never
-            would without a real high-resolution image behind it. */}
+        {/* No real photo to work with (see the conversation — extracting one
+            from a flattened mockup screenshot produces garbage, and hotlinking
+            a stock photo from an unknown source isn't happening), so this is a
+            CSS/SVG dusk-over-mountains scene instead of a flat gradient: a sky
+            gradient, a soft sun/moon glow near the horizon, and two layered
+            mountain silhouettes for actual depth. */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(ellipse 90% 80% at 15% -10%, rgb(var(--color-accent) / 0.5), transparent 60%), ' +
-              'radial-gradient(ellipse 80% 70% at 100% 110%, rgb(var(--color-accent-2) / 0.45), transparent 60%), ' +
-              'radial-gradient(ellipse 60% 60% at 50% 50%, rgb(var(--color-surface-hi)), rgb(var(--color-bg)))'
+              'linear-gradient(180deg, #14142e 0%, #322a52 22%, #6b3a5c 42%, #b6524f 60%, #dd8656 76%, #eeb374 100%)'
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+        <div
+          className="absolute inset-0"
+          style={{ background: 'radial-gradient(circle 380px at 72% 66%, rgba(255,224,170,0.85), transparent 70%)' }}
+        />
+        <svg
+          className="absolute inset-x-0 bottom-0 h-[55%] w-full"
+          viewBox="0 0 100 40"
+          preserveAspectRatio="none"
+        >
+          <polygon
+            points="0,40 0,20 12,8 22,16 34,4 48,14 60,6 74,15 88,5 100,13 100,40"
+            fill="rgba(18,14,32,0.55)"
+          />
+        </svg>
+        <svg
+          className="absolute inset-x-0 bottom-0 h-[38%] w-full"
+          viewBox="0 0 100 30"
+          preserveAspectRatio="none"
+        >
+          <polygon
+            points="0,30 0,18 15,10 28,17 40,7 55,16 68,9 82,17 100,11 100,30"
+            fill="rgba(9,7,18,0.9)"
+          />
+        </svg>
+        <div
+          className="absolute inset-x-0 bottom-0 h-[22%]"
+          style={{ background: 'linear-gradient(180deg, transparent, rgba(5,4,12,0.95))' }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent" />
 
         {continueSuggestion && (
           <div
@@ -246,7 +275,7 @@ export function HomeMenu(): JSX.Element {
               setZone('hero')
               activateContinue(continueSuggestion)
             }}
-            className={`absolute bottom-6 left-6 flex w-[26rem] max-w-[80%] cursor-pointer items-center gap-4 rounded-2xl bg-black/40 p-4 backdrop-blur-md transition-shadow ${
+            className={`absolute bottom-6 left-6 flex w-[26rem] max-w-[80%] cursor-pointer items-center gap-4 rounded-2xl bg-black/40 p-4 shadow-lg ring-1 ring-white/15 backdrop-blur-md transition-shadow ${
               zone === 'hero' ? 'shadow-focus ring-2 ring-accent' : ''
             }`}
           >
@@ -277,7 +306,7 @@ export function HomeMenu(): JSX.Element {
 
         <div className="absolute right-6 top-6 flex flex-col gap-3">
           {weather && (
-            <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 backdrop-blur-md">
+            <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
               <span className="text-2xl">{weatherEmoji(weather.weatherCode)}</span>
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
@@ -286,7 +315,7 @@ export function HomeMenu(): JSX.Element {
             </div>
           )}
           {libraryStats && (
-            <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 backdrop-blur-md">
+            <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
               <span className="text-2xl">🎮</span>
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{libraryStats.games}</span>
@@ -295,7 +324,7 @@ export function HomeMenu(): JSX.Element {
             </div>
           )}
           {systemStats && (
-            <div className="flex w-52 flex-col gap-2 rounded-xl bg-black/40 px-4 py-3 backdrop-blur-md">
+            <div className="flex w-52 flex-col gap-2 rounded-xl bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted">CPU</span>
                 <span className="font-semibold">
@@ -341,7 +370,7 @@ export function HomeMenu(): JSX.Element {
                   title: tile.title,
                   subtitle: tile.subtitle,
                   icon: tile.icon,
-                  gradientDirection: tile.gradientDirection
+                  iconColors: tile.iconColors
                 }}
                 focused={zone === 'tiles' && tileIndex === i}
                 onClick={() => {
