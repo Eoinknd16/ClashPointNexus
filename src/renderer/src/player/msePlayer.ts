@@ -71,6 +71,25 @@ export async function startMsePlayback(
   if (!response.body) throw new Error('stream response has no body')
   reader = response.body.getReader()
 
+  // Waited for here, not inside the detached loop below, specifically so an
+  // immediately-empty stream can still fail this function outright — ffmpeg
+  // finding nothing to output at the requested seek position (e.g. a seek
+  // target past the last real keyframe, common after enough small seeks
+  // compound into landing near/past the true end of the available content)
+  // used to look identical to a normal, working stream from the caller's
+  // point of view: this function had already returned, the caller had
+  // already wired up the <video> element and called .play(), and playback
+  // just silently never started with nothing anywhere to catch. Throwing
+  // here instead lets startPlaybackAt's existing MSE-vs-progressive
+  // fallback actually trigger, rather than leaving a frozen, silent player.
+  const first = await reader.read()
+  if (stopped) return stop
+  if (first.done || !first.value || first.value.byteLength === 0) {
+    stop()
+    throw new Error('No data received at this playback position')
+  }
+  await appendChunk(first.value)
+
   void (async () => {
     try {
       for (;;) {

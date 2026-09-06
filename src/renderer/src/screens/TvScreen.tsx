@@ -63,6 +63,9 @@ const EXPANDED_SKIP_CAP = 950
 // this only caps what the inline row itself mounts.
 const ROW_PREVIEW_CAP = 20
 const CURRENT_YEAR = String(new Date().getFullYear())
+// How far back from the reported duration a manual seek stays clamped — see
+// the seek() function below for why.
+const SEEK_END_SAFETY_MARGIN_SECONDS = 3
 
 // Straight from Cinemeta's own manifest.json (its "top" catalog's declared
 // genre list) — matching the real Stremio app's board, which shows one row
@@ -1040,7 +1043,14 @@ export function TvScreen(): JSX.Element {
     const stream = streams[streamIndex]
     if (!stream?.playableUrl) return
     const current = baseOffset + (videoRef.current?.currentTime ?? 0)
-    const target = Math.max(0, duration ? Math.min(duration, current + deltaSeconds) : current + deltaSeconds)
+    // A few small seeks compounding can land right at (or past) the reported
+    // duration, which ffmpeg can't -ss into if there's no real keyframe left
+    // that close to actual EOF — held back from the very end so that mostly
+    // doesn't happen in the first place; startMsePlayback throwing on a
+    // genuinely-empty result (falling back to progressive playback) is the
+    // other half of actually handling it when it does anyway.
+    const seekableEnd = duration ? Math.max(0, duration - SEEK_END_SAFETY_MARGIN_SECONDS) : null
+    const target = Math.max(0, seekableEnd !== null ? Math.min(seekableEnd, current + deltaSeconds) : current + deltaSeconds)
     void startPlaybackAt(stream.playableUrl, target, audioIndex)
   }
 
