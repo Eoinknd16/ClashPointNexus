@@ -8,6 +8,11 @@ function steamHeaderUrl(appId: number): string {
   return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`
 }
 
+function progressPercentOf(positionSeconds: number, durationSeconds: number | null): number | null {
+  if (!durationSeconds || durationSeconds <= 0) return null
+  return Math.max(0, Math.min(100, Math.round((positionSeconds / durationSeconds) * 100)))
+}
+
 /**
  * Picks the single most recent thing across Steam play sessions and Stremio
  * watch progress (movies and series both) — whichever has the latest
@@ -51,6 +56,7 @@ async function buildContinueSuggestion(): Promise<ContinueSuggestion | null> {
       poster:
         mostRecentGame.imageDataUrl ??
         (mostRecentGame.imageAppId ? steamHeaderUrl(mostRecentGame.imageAppId) : null),
+      progressPercent: null,
       game: mostRecentGame
     }
   }
@@ -63,6 +69,7 @@ async function buildContinueSuggestion(): Promise<ContinueSuggestion | null> {
       title: meta.name,
       subtitle: 'Continue Watching',
       poster: meta.poster,
+      progressPercent: progressPercentOf(movieProgress.positionSeconds, movieProgress.durationSeconds),
       tab: 'movie',
       item: {
         id: movieProgress.id,
@@ -85,6 +92,10 @@ async function buildContinueSuggestion(): Promise<ContinueSuggestion | null> {
       seriesProgress.season != null && seriesProgress.episode != null
         ? `Continue S${seriesProgress.season}E${seriesProgress.episode}`
         : 'Continue Watching'
+    // A newer episode having aired means there's nothing to resume into — the
+    // progress bar would otherwise show stale completion from the last
+    // episode against a title the card no longer actually points at.
+    let progressPercent = progressPercentOf(seriesProgress.positionSeconds, seriesProgress.durationSeconds)
 
     if (seriesProgress.season != null && seriesProgress.episode != null) {
       try {
@@ -99,6 +110,7 @@ async function buildContinueSuggestion(): Promise<ContinueSuggestion | null> {
         const nextAired = next?.released ? Date.parse(next.released) <= Date.now() : false
         if (next && nextAired) {
           subtitle = `New Episode: S${next.season}E${next.episode}`
+          progressPercent = null
         }
       } catch {
         // fetchSeriesMeta failing just means we fall back to the plain "continue" subtitle
@@ -110,6 +122,7 @@ async function buildContinueSuggestion(): Promise<ContinueSuggestion | null> {
       title: meta.name,
       subtitle,
       poster: meta.poster,
+      progressPercent,
       tab: 'series',
       item: {
         id: seriesProgress.id,

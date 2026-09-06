@@ -32,6 +32,8 @@ interface FocusableCardProps {
   aspect?: 'landscape' | 'portrait'
   /** Mouse support — selecting a card by click acts the same as focus+confirm. */
   onClick?: () => void
+  /** Small "open this" affordance in the corner — Home's app tiles only. */
+  showChevron?: boolean
 }
 
 // Always fills its CSS Grid track (w-full) rather than a fixed pixel size —
@@ -85,7 +87,8 @@ export function FocusableCard({
   focused,
   size = 'default',
   aspect = 'landscape',
-  onClick
+  onClick,
+  showChevron = false
 }: FocusableCardProps): JSX.Element {
   const [candidateIndex, setCandidateIndex] = useState(0)
   const candidates = item.imageUrl ? [item.imageUrl, ...(item.imageFallbacks ?? [])] : []
@@ -130,6 +133,11 @@ export function FocusableCard({
       )}
       {item.favorite && (
         <span className="absolute right-3 top-3 z-10 text-lg leading-none drop-shadow">⭐</span>
+      )}
+      {showChevron && (
+        <span className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/30 text-sm text-white/80 backdrop-blur-sm">
+          ›
+        </span>
       )}
       <div className="relative p-4">
         <span className={`block font-semibold leading-tight ${TITLE_SIZE_CLASSES[size]}`}>

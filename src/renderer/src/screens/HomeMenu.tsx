@@ -42,24 +42,27 @@ const TILES: Array<{
   }
 ]
 
+// System-wide sections, reachable from Home directly rather than only via
+// the tile grid below — Library ("your stuff": owned games + movies/shows)
+// and Store (discover/buy new games) are new top-level screens, distinct
+// from the Games/TV tiles which stay focused on Steam/streaming specifically.
+const TOP_NAV: Array<{ id: ScreenId; label: string; icon: string }> = [
+  { id: 'home', label: 'Home', icon: '⌂' },
+  { id: 'library', label: 'Library', icon: '📚' },
+  { id: 'store', label: 'Store', icon: '🛒' },
+  { id: 'settings', label: 'Settings', icon: '⚙️' }
+]
+
 interface LibraryStats {
   movies: number
   series: number
   games: number
 }
 
-type PowerAction = 'sleep' | 'restart' | 'shutdown'
-const POWER_OPTIONS: Array<{ id: PowerAction; label: string }> = [
-  { id: 'sleep', label: 'Sleep' },
-  { id: 'restart', label: 'Restart' },
-  { id: 'shutdown', label: 'Shut Down' }
-]
-
-// Top row (Continue) is its own zone above the tile grid, the same
-// filters-above-rows split used on the TV/Games screens — Up from the tile
-// row reaches it, Down returns. Power is reached by extending the tile row's
-// own index range by one, same trick as the search bubbles on TV/Games.
-type Zone = 'top' | 'tiles' | 'power-menu' | 'power-confirm'
+// Three stacked zones, top to bottom — Up/Down move between them, Left/Right
+// move within whichever is active. Hero only exists as a stop when there's
+// an actual Continue card to land on.
+type Zone = 'topnav' | 'hero' | 'tiles'
 
 function weatherEmoji(code: number): string {
   if (code === 0) return '☀️'
@@ -75,10 +78,8 @@ function weatherEmoji(code: number): string {
 
 export function HomeMenu(): JSX.Element {
   const [zone, setZone] = useState<Zone>('tiles')
+  const [topNavIndex, setTopNavIndex] = useState(0)
   const [tileIndex, setTileIndex] = useState(0)
-  const [powerIndex, setPowerIndex] = useState(0)
-  const [confirmIndex, setConfirmIndex] = useState(0)
-  const [pendingPowerAction, setPendingPowerAction] = useState<PowerAction | null>(null)
   const [continueSuggestion, setContinueSuggestion] = useState<ContinueSuggestion | null>(null)
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [libraryStats, setLibraryStats] = useState<LibraryStats | null>(null)
@@ -111,77 +112,35 @@ export function HomeMenu(): JSX.Element {
     }
   }
 
-  function executePower(action: PowerAction): void {
-    if (action === 'sleep') void window.api.power.sleep()
-    else if (action === 'restart') void window.api.power.restart()
-    else void window.api.power.shutdown()
-  }
-
-  function closePowerMenu(): void {
-    setZone('tiles')
-    setPowerIndex(0)
-    setPendingPowerAction(null)
-    setConfirmIndex(0)
-  }
-
-  function openPowerMenu(): void {
-    setZone('power-menu')
-    setPowerIndex(0)
-  }
-
   useNavListener((action) => {
-    if (zone === 'power-confirm') {
+    if (zone === 'topnav') {
       switch (action) {
         case 'left':
+          setTopNavIndex((i) => Math.max(0, i - 1))
+          return
         case 'right':
-          setConfirmIndex((i) => (i === 0 ? 1 : 0))
-          return
-        case 'confirm':
-          if (confirmIndex === 0 && pendingPowerAction) executePower(pendingPowerAction)
-          closePowerMenu()
-          return
-        case 'back':
-        case 'menu':
-          setZone('power-menu')
-          setPendingPowerAction(null)
-          return
-        default:
-          return
-      }
-    }
-
-    if (zone === 'power-menu') {
-      switch (action) {
-        case 'up':
-          setPowerIndex((i) => Math.max(0, i - 1))
+          setTopNavIndex((i) => Math.min(TOP_NAV.length - 1, i + 1))
           return
         case 'down':
-          setPowerIndex((i) => Math.min(POWER_OPTIONS.length - 1, i + 1))
+          setZone(continueSuggestion ? 'hero' : 'tiles')
           return
-        case 'confirm': {
-          const option = POWER_OPTIONS[powerIndex]
-          if (!option) return
-          if (option.id === 'sleep') {
-            executePower('sleep')
-            closePowerMenu()
-          } else {
-            setPendingPowerAction(option.id)
-            setConfirmIndex(0)
-            setZone('power-confirm')
-          }
+        case 'confirm':
+          goTo(TOP_NAV[topNavIndex].id)
           return
-        }
         case 'back':
         case 'menu':
-          closePowerMenu()
+          setZone('tiles')
           return
         default:
           return
       }
     }
 
-    if (zone === 'top') {
+    if (zone === 'hero') {
       switch (action) {
+        case 'up':
+          setZone('topnav')
+          return
         case 'down':
           setZone('tiles')
           return
@@ -200,17 +159,16 @@ export function HomeMenu(): JSX.Element {
     // zone === 'tiles'
     switch (action) {
       case 'up':
-        if (continueSuggestion) setZone('top')
+        setZone(continueSuggestion ? 'hero' : 'topnav')
         return
       case 'left':
         setTileIndex((i) => Math.max(0, i - 1))
         return
       case 'right':
-        setTileIndex((i) => Math.min(TILES.length, i + 1))
+        setTileIndex((i) => Math.min(TILES.length - 1, i + 1))
         return
       case 'confirm':
-        if (tileIndex === TILES.length) openPowerMenu()
-        else goTo(TILES[tileIndex].id)
+        goTo(TILES[tileIndex].id)
         return
       default:
         return
@@ -218,169 +176,190 @@ export function HomeMenu(): JSX.Element {
   }, 'home')
 
   return (
-    <div className="flex h-screen flex-col gap-6 px-10 py-8">
-      <header className="flex items-center justify-between">
-        <h1 className="bg-accent-gradient bg-clip-text text-3xl font-bold tracking-tight text-transparent">
-          ClashPoint Nexus
-        </h1>
-        <Clock />
-      </header>
-
-      {(weather || continueSuggestion || libraryStats || systemStats) && (
-        <div className="flex flex-wrap gap-4">
-          {continueSuggestion && (
+    <div className="relative flex h-screen flex-col gap-5 overflow-hidden px-10 py-6">
+      <header className="flex shrink-0 items-center justify-between">
+        <nav className="flex gap-1 rounded-full bg-surface p-1.5">
+          {TOP_NAV.map((item, i) => (
             <div
+              key={item.id}
               onClick={() => {
-                setZone('top')
-                activateContinue(continueSuggestion)
+                setZone('topnav')
+                setTopNavIndex(i)
+                goTo(item.id)
               }}
-              className={`flex w-96 max-w-full cursor-pointer items-center gap-4 rounded-xl px-5 py-3 transition-colors ${
-                zone === 'top' ? 'bg-surface-hi shadow-focus' : 'bg-surface'
+              className={`flex cursor-pointer items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors ${
+                item.id === 'home' ? 'bg-accent text-white' : 'text-muted hover:text-white'
+              } ${
+                zone === 'topnav' && topNavIndex === i
+                  ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg'
+                  : ''
               }`}
             >
-              {continueSuggestion.poster ? (
-                <img
-                  src={continueSuggestion.poster}
-                  alt=""
-                  className="h-12 w-12 shrink-0 rounded-lg object-cover"
-                />
-              ) : (
-                <span className="text-2xl">▶️</span>
-              )}
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-semibold">{continueSuggestion.title}</span>
-                <span className="truncate text-xs text-accent">{continueSuggestion.subtitle}</span>
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-4">
+          {weather && (
+            <div className="flex items-center gap-2 rounded-full bg-surface px-4 py-2">
+              <span className="text-lg">{weatherEmoji(weather.weatherCode)}</span>
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
+                {weather.city && <span className="text-xs text-muted">{weather.city}</span>}
               </div>
             </div>
           )}
+          <Clock />
+          <div
+            onClick={() => goTo('settings')}
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-surface text-lg"
+          >
+            👤
+          </div>
+        </div>
+      </header>
+
+      <div className="relative min-h-[220px] flex-1 overflow-hidden rounded-3xl bg-surface">
+        {continueSuggestion?.poster ? (
+          <div
+            className="absolute inset-0 scale-110 bg-cover bg-center opacity-60 blur-2xl"
+            style={{ backgroundImage: `url(${continueSuggestion.poster})` }}
+          />
+        ) : (
+          <div className="absolute inset-0" style={{ backgroundImage: 'var(--gradient-app-glow)' }} />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
+
+        {continueSuggestion && (
+          <div
+            onClick={() => {
+              setZone('hero')
+              activateContinue(continueSuggestion)
+            }}
+            className={`absolute bottom-6 left-6 flex w-[26rem] max-w-[80%] cursor-pointer items-center gap-4 rounded-2xl bg-black/40 p-4 backdrop-blur-md transition-shadow ${
+              zone === 'hero' ? 'shadow-focus ring-2 ring-accent' : ''
+            }`}
+          >
+            {continueSuggestion.poster ? (
+              <img
+                src={continueSuggestion.poster}
+                alt=""
+                className="h-16 w-16 shrink-0 rounded-xl object-cover"
+              />
+            ) : (
+              <span className="text-3xl">▶️</span>
+            )}
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="truncate text-lg font-semibold">{continueSuggestion.title}</span>
+              <span className="truncate text-sm text-accent">{continueSuggestion.subtitle}</span>
+              {continueSuggestion.progressPercent !== null && (
+                <div className="mt-1 h-1.5 w-full rounded-full bg-white/20">
+                  <div
+                    className="h-full rounded-full bg-accent-gradient"
+                    style={{ width: `${continueSuggestion.progressPercent}%` }}
+                  />
+                </div>
+              )}
+            </div>
+            <span className="shrink-0 text-2xl">▶</span>
+          </div>
+        )}
+
+        <div className="absolute right-6 top-6 flex flex-col gap-3">
           {weather && (
-            <div className="flex w-48 shrink-0 items-center gap-3 rounded-xl bg-surface px-5 py-3">
+            <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 backdrop-blur-md">
               <span className="text-2xl">{weatherEmoji(weather.weatherCode)}</span>
-              <div className="flex min-w-0 flex-col">
+              <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
-                {weather.city && <span className="truncate text-xs text-muted">{weather.city}</span>}
+                {weather.city && <span className="text-xs text-muted">{weather.city}</span>}
               </div>
             </div>
           )}
           {libraryStats && (
-            <div className="flex w-56 shrink-0 flex-col justify-center gap-1 rounded-xl bg-surface px-5 py-3">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted">Library</span>
-              <span className="text-sm">
-                {libraryStats.movies} movies · {libraryStats.series} shows · {libraryStats.games} games
-              </span>
+            <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 backdrop-blur-md">
+              <span className="text-2xl">🎮</span>
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold">{libraryStats.games}</span>
+                <span className="text-xs text-muted">Active Games</span>
+              </div>
             </div>
           )}
           {systemStats && (
-            <div className="flex w-56 shrink-0 flex-col justify-center gap-1 rounded-xl bg-surface px-5 py-3">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted">System</span>
-              <span className="text-sm">
-                {systemStats.cpuLoadPercent !== null ? `CPU ${systemStats.cpuLoadPercent}%` : 'CPU —'} · RAM{' '}
-                {systemStats.usedMemPercent}%
-              </span>
+            <div className="flex w-52 flex-col gap-2 rounded-xl bg-black/40 px-4 py-3 backdrop-blur-md">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted">CPU</span>
+                <span className="font-semibold">
+                  {systemStats.cpuLoadPercent !== null ? `${systemStats.cpuLoadPercent}%` : '—'}
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-accent-gradient"
+                  style={{ width: `${systemStats.cpuLoadPercent ?? 0}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted">RAM</span>
+                <span className="font-semibold">{systemStats.usedMemPercent}%</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-accent-gradient"
+                  style={{ width: `${systemStats.usedMemPercent}%` }}
+                />
+              </div>
             </div>
           )}
         </div>
-      )}
+      </div>
 
-      <div className="grid flex-1 grid-cols-7 items-center gap-10">
-        {TILES.map((tile, i) => (
-          <motion.div
-            key={tile.id}
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, delay: i * 0.08, ease: 'easeOut' }}
-          >
-            <FocusableCard
-              size="large"
-              item={{
-                id: tile.id,
-                title: tile.title,
-                subtitle: tile.subtitle,
-                icon: tile.icon,
-                gradientDirection: tile.gradientDirection
-              }}
-              focused={zone === 'tiles' && tileIndex === i}
-              onClick={() => {
-                setZone('tiles')
-                setTileIndex(i)
-                goTo(tile.id)
-              }}
-            />
-          </motion.div>
+      <div className="shrink-0">
+        <h2 className="mb-3 text-lg font-semibold">Your Apps</h2>
+        <div className="grid grid-cols-7 gap-6">
+          {TILES.map((tile, i) => (
+            <motion.div
+              key={tile.id}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: i * 0.06, ease: 'easeOut' }}
+            >
+              <FocusableCard
+                size="large"
+                showChevron
+                item={{
+                  id: tile.id,
+                  title: tile.title,
+                  subtitle: tile.subtitle,
+                  icon: tile.icon,
+                  gradientDirection: tile.gradientDirection
+                }}
+                focused={zone === 'tiles' && tileIndex === i}
+                onClick={() => {
+                  setZone('tiles')
+                  setTileIndex(i)
+                  goTo(tile.id)
+                }}
+              />
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 justify-center gap-2">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className={`h-1.5 rounded-full transition-all ${i === 0 ? 'w-6 bg-accent' : 'w-1.5 bg-white/20'}`}
+          />
         ))}
       </div>
 
-      <button
-        onClick={() => {
-          setTileIndex(TILES.length)
-          openPowerMenu()
-        }}
-        className={`fixed bottom-8 right-8 flex h-14 w-14 items-center justify-center rounded-full text-2xl transition-colors ${
-          zone === 'tiles' && tileIndex === TILES.length
-            ? 'bg-accent text-white shadow-focus'
-            : 'bg-surface text-muted hover:text-white'
-        }`}
-      >
-        ⏻
-      </button>
-
-      {(zone === 'power-menu' || zone === 'power-confirm') && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
-          <div className="flex w-80 flex-col gap-4 rounded-2xl bg-surface p-8">
-            {zone === 'power-menu' ? (
-              <>
-                <h2 className="text-lg font-semibold">Power</h2>
-                <div className="flex flex-col gap-2">
-                  {POWER_OPTIONS.map((option, i) => (
-                    <div
-                      key={option.id}
-                      onClick={() => {
-                        setPowerIndex(i)
-                        if (option.id === 'sleep') {
-                          executePower('sleep')
-                          closePowerMenu()
-                        } else {
-                          setPendingPowerAction(option.id)
-                          setConfirmIndex(0)
-                          setZone('power-confirm')
-                        }
-                      }}
-                      className={`cursor-pointer rounded-xl px-5 py-3 text-center font-medium transition-colors ${
-                        powerIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted'
-                      }`}
-                    >
-                      {option.label}
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <h2 className="text-lg font-semibold">
-                  {pendingPowerAction === 'restart' ? 'Restart the PC now?' : 'Shut down the PC now?'}
-                </h2>
-                <div className="flex gap-3">
-                  {['Yes', 'No'].map((label, i) => (
-                    <div
-                      key={label}
-                      onClick={() => {
-                        setConfirmIndex(i)
-                        if (i === 0 && pendingPowerAction) executePower(pendingPowerAction)
-                        closePowerMenu()
-                      }}
-                      className={`flex-1 cursor-pointer rounded-xl px-5 py-3 text-center font-medium transition-colors ${
-                        confirmIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted'
-                      }`}
-                    >
-                      {label}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <div className="pointer-events-none fixed bottom-6 right-8 flex items-center gap-4 text-xs text-muted">
+        <span>🎮 Select</span>
+        <span>☰ Menu</span>
+      </div>
     </div>
   )
 }

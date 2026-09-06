@@ -9,8 +9,13 @@ export function Clock(): JSX.Element {
   }, [])
 
   return (
-    <span className="text-lg font-medium text-muted tabular-nums">
-      {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-    </span>
+    <div className="flex flex-col items-end leading-tight">
+      <span className="text-lg font-semibold tabular-nums">
+        {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </span>
+      <span className="text-xs text-muted">
+        {now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+      </span>
+    </div>
   )
 }
