@@ -1,8 +1,16 @@
-import type { AddonCatalogRow, CatalogItem, CatalogType, SeriesMeta, StreamResult } from '@shared/stremioTypes'
+import type {
+  AddonCatalogRow,
+  CatalogItem,
+  CatalogType,
+  ExtendedMeta,
+  SeriesMeta,
+  StreamResult
+} from '@shared/stremioTypes'
 import { getAllProgressForType } from '../progress/config'
+import { fetchExternalRatings } from '../ratings/omdb'
 import { fetchAccountAddons } from './account'
 import { fetchAddonCatalog } from './addonCatalog'
-import { fetchBasicMeta, fetchCatalog, fetchReleaseDate, fetchSeriesMeta } from './cinemeta'
+import { fetchBasicMeta, fetchCastAndCrew, fetchCatalog, fetchReleaseDate, fetchSeriesMeta } from './cinemeta'
 import { loadStremioConfig, saveStremioConfig, type StremioConfig } from './config'
 import { ensureStremioServer, localStreamUrl } from './server'
 import { extractLanguages, extractResolution } from './streamMeta'
@@ -70,6 +78,22 @@ export async function getContinueWatching(type: CatalogType): Promise<CatalogIte
 
 export async function getReleaseDate(type: CatalogType, id: string): Promise<string | null> {
   return fetchReleaseDate(type, id)
+}
+
+/** Cast/director/runtime/IMDb rating come free from Cinemeta; externalRatings
+ * (Rotten Tomatoes, Metacritic, ...) only populates once the user's configured
+ * their own OMDb API key in Settings — fetchExternalRatings itself no-ops to
+ * an empty array otherwise, so this never needs its own fallback logic. */
+export async function getExtendedMeta(type: CatalogType, id: string): Promise<ExtendedMeta> {
+  const meta = await fetchCastAndCrew(type, id)
+  const externalRatings = meta.imdbId ? await fetchExternalRatings(meta.imdbId) : []
+  return {
+    cast: meta.cast,
+    director: meta.director,
+    runtime: meta.runtime,
+    imdbRating: meta.imdbRating,
+    externalRatings
+  }
 }
 
 /** Searches Cinemeta's Popular catalog by title — result sets are small enough

@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, Download, Film, Play, Plus, Search, SkipForward, Trash2, Tv } from 'lucide-react'
+import { Check, Download, Film, Play, Plus, Search, SkipForward, Star, Trash2, Tv } from 'lucide-react'
 import { CategoryRow } from '../components/CategoryRow'
 import type { CardItem } from '../components/FocusableCard'
 import { CardArt, FocusableCard } from '../components/FocusableCard'
@@ -24,6 +24,7 @@ import type {
   CatalogItem,
   CatalogType,
   EpisodeItem,
+  ExtendedMeta,
   StreamOption,
   StreamResult
 } from '@shared/stremioTypes'
@@ -218,6 +219,7 @@ export function TvScreen(): JSX.Element {
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null)
   const [detailFocusIndex, setDetailFocusIndex] = useState(0)
   const [progress, setProgress] = useState<WatchProgress | null | undefined>(undefined)
+  const [extendedMeta, setExtendedMeta] = useState<ExtendedMeta | null>(null)
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([])
   const [episodeSubZone, setEpisodeSubZone] = useState<EpisodeSubZone>('seasons')
   const [seasonIndex, setSeasonIndex] = useState(0)
@@ -678,6 +680,22 @@ export function TvScreen(): JSX.Element {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItem?.id])
+
+  // Cast/director/runtime/ratings — separate from the effect above since this
+  // is pure enrichment (never blocks Play/Resume, which only need progress),
+  // and a slower OMDb lookup shouldn't hold up anything else in the panel.
+  useEffect(() => {
+    setExtendedMeta(null)
+    const item = selectedItem
+    if (!item) return
+    let cancelled = false
+    window.api.stremio.getExtendedMeta(item.type, item.id).then((meta) => {
+      if (!cancelled) setExtendedMeta(meta)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [selectedItem?.id])
 
   const seasonsList = Array.from(new Set(episodes.map((e) => e.season))).sort(
@@ -1956,12 +1974,57 @@ export function TvScreen(): JSX.Element {
 
             <div className="flex flex-col gap-1">
               <h2 className="text-2xl font-bold leading-tight">{selectedItem.name}</h2>
-              <p className="text-muted">{releaseDate ?? selectedItem.year ?? ''}</p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted">
+                <span>{releaseDate ?? selectedItem.year ?? ''}</span>
+                {extendedMeta?.runtime && (
+                  <>
+                    <span>·</span>
+                    <span>{extendedMeta.runtime}</span>
+                  </>
+                )}
+                {extendedMeta?.imdbRating && (
+                  <>
+                    <span>·</span>
+                    <span className="flex items-center gap-1 text-accent">
+                      <Star className="h-3.5 w-3.5" fill="currentColor" />
+                      {extendedMeta.imdbRating}
+                    </span>
+                  </>
+                )}
+              </div>
               {selectedItem.genres.length > 0 && (
                 <p className="text-sm text-muted">{selectedItem.genres.join(' · ')}</p>
               )}
               {selectedItem.description && (
                 <p className="mt-2 line-clamp-6 text-sm text-muted">{selectedItem.description}</p>
+              )}
+              {extendedMeta && (extendedMeta.director.length > 0 || extendedMeta.cast.length > 0) && (
+                <div className="mt-2 flex flex-col gap-1 text-sm">
+                  {extendedMeta.director.length > 0 && (
+                    <p>
+                      <span className="text-muted">Director: </span>
+                      {extendedMeta.director.join(', ')}
+                    </p>
+                  )}
+                  {extendedMeta.cast.length > 0 && (
+                    <p>
+                      <span className="text-muted">Cast: </span>
+                      {extendedMeta.cast.join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
+              {extendedMeta && extendedMeta.externalRatings.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {extendedMeta.externalRatings.map((r) => (
+                    <span
+                      key={r.source}
+                      className="rounded-full bg-surface-hi px-3 py-1 text-xs font-medium text-muted"
+                    >
+                      {r.source} <span className="text-accent">{r.value}</span>
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
 

@@ -1,9 +1,10 @@
 import { ipcMain } from 'electron'
-import type { CatalogType } from '@shared/stremioTypes'
+import type { CatalogType, ExtendedMeta } from '@shared/stremioTypes'
 import {
   getAddonCatalogs,
   getCatalog,
   getContinueWatching,
+  getExtendedMeta,
   getReleaseDate,
   getSeriesMeta,
   getStreamOptions,
@@ -19,6 +20,10 @@ export function registerStremioIpc(): void {
   ipcMain.handle('stremio:getStreams', (_event, type: CatalogType, id: string) => getStreamOptions(type, id))
   ipcMain.handle('stremio:getReleaseDate', (_event, type: CatalogType, id: string) =>
     getReleaseDate(type, id)
+  )
+  ipcMain.handle(
+    'stremio:getExtendedMeta',
+    (_event, type: CatalogType, id: string): Promise<ExtendedMeta> => getExtendedMeta(type, id)
   )
   ipcMain.handle('stremio:getSeriesMeta', (_event, id: string) => getSeriesMeta(id))
   ipcMain.handle('stremio:getContinueWatching', (_event, type: CatalogType) => getContinueWatching(type))

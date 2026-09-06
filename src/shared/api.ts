@@ -21,6 +21,7 @@ import type {
   AddonSummary,
   CatalogItem,
   CatalogType,
+  ExtendedMeta,
   SeriesMeta,
   StreamResult
 } from './stremioTypes'
@@ -56,6 +57,10 @@ export interface LauncherApi {
     getCatalog: (type: CatalogType, catalogId: string, skip?: number, genre?: string) => Promise<CatalogItem[]>
     getStreams: (type: CatalogType, id: string) => Promise<StreamResult>
     getReleaseDate: (type: CatalogType, id: string) => Promise<string | null>
+    /** Cast/director/runtime/IMDb rating (free, from Cinemeta) plus
+     * externalRatings (Rotten Tomatoes/Metacritic/... — empty unless the
+     * user's configured their own OMDb API key in Settings). */
+    getExtendedMeta: (type: CatalogType, id: string) => Promise<ExtendedMeta>
     getSeriesMeta: (id: string) => Promise<SeriesMeta>
     getContinueWatching: (type: CatalogType) => Promise<CatalogItem[]>
     getAddonCatalogs: (type: CatalogType) => Promise<AddonCatalogRow[]>
@@ -110,6 +115,10 @@ export interface LauncherApi {
      * Themes drop folder — that'll reinstall it on the next scan unless
      * the user also removes/renames the source folder. */
     removeTheme: (id: string) => Promise<void>
+    /** Free OMDb tier key the user gets themselves at omdbapi.com/apikey.aspx —
+     * never bundled/shared, purely optional (see stremio.getExtendedMeta). */
+    getOmdbApiKey: () => Promise<string>
+    setOmdbApiKey: (key: string) => Promise<void>
     /** Lists what's currently in the public community theme repo — read-only,
      * anonymous, best-effort (an unreachable repo just means an empty list). */
     listCommunityThemes: () => Promise<CommunityThemeSummary[]>

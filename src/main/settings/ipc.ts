@@ -16,6 +16,7 @@ import type {
   ThemeSubmissionResult
 } from '@shared/themeTypes'
 import { installCommunityTheme, listCommunityThemes } from './communityThemes'
+import { getOmdbApiKey, setOmdbApiKey } from '../ratings/config'
 import { loadSteamConfig, saveSteamConfig } from '../steam/config'
 import { signInWithSteam } from '../steam/openid'
 import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../stremio/account'
@@ -108,6 +109,12 @@ export function registerSettingsIpc(): void {
     const result = prepareThemeSubmission(id)
     if (result.success && result.exportPath) void shell.openPath(result.exportPath)
     return result
+  })
+
+  ipcMain.handle('settings:getOmdbApiKey', (): string => getOmdbApiKey())
+
+  ipcMain.handle('settings:setOmdbApiKey', (_event, key: string): void => {
+    setOmdbApiKey(key)
   })
 
   // The in-app color picker (Settings > a custom theme > "Fine-Tune Colors")

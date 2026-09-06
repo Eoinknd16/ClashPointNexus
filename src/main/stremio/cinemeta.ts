@@ -24,6 +24,11 @@ interface CinemetaMetaRaw {
   released?: string
   genres?: string[]
   videos?: CinemetaVideoRaw[]
+  cast?: string[]
+  director?: string[]
+  runtime?: string
+  imdbRating?: string
+  imdb_id?: string
 }
 
 interface CinemetaCatalogResponse {
@@ -121,6 +126,25 @@ export async function fetchBasicMeta(
   const meta = await fetchMetaRaw(type, id)
   if (!meta) return null
   return { name: meta.name, poster: meta.poster ?? null }
+}
+
+/** Cast/director/runtime/IMDb rating — all already present on the same
+ * Cinemeta meta response fetchReleaseDate uses, just not read before now.
+ * imdbId is usually just `id` itself (Cinemeta ids for movie/series already
+ * are IMDb ids), but reads Cinemeta's own imdb_id when present in case that
+ * ever isn't true, since it's what OMDb's ratings lookup needs. */
+export async function fetchCastAndCrew(
+  type: CatalogType,
+  id: string
+): Promise<{ cast: string[]; director: string[]; runtime: string | null; imdbRating: string | null; imdbId: string | null }> {
+  const meta = await fetchMetaRaw(type, id)
+  return {
+    cast: meta?.cast ?? [],
+    director: meta?.director ?? [],
+    runtime: meta?.runtime ?? null,
+    imdbRating: meta?.imdbRating ?? null,
+    imdbId: meta?.imdb_id ?? id
+  }
 }
 
 /** Series meta's `videos` array is Cinemeta's season/episode list — fetched once per

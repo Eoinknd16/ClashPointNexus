@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Settings as SettingsIcon,
   Share2,
+  Star,
   Trash2,
   TriangleAlert,
   Tv,
@@ -50,7 +51,8 @@ const CATEGORIES: Array<{ id: string; label: string; icon: LucideIcon }> = [
   { id: 'app', label: 'App', icon: SettingsIcon },
   { id: 'controller', label: 'Controller', icon: Gamepad2 },
   { id: 'steam', label: 'Steam', icon: Link2 },
-  { id: 'stremio', label: 'Stremio', icon: Tv }
+  { id: 'stremio', label: 'Stremio', icon: Tv },
+  { id: 'ratings', label: 'Ratings', icon: Star }
 ]
 
 type RowKind = 'header' | 'field' | 'action' | 'info' | 'theme'
@@ -73,7 +75,8 @@ const FIELD_LABELS: Record<string, string> = {
   steamApiKey: 'Steam API Key',
   steamId64: 'Steam ID64',
   stremioEmail: 'Stremio Email',
-  stremioPassword: 'Stremio Password'
+  stremioPassword: 'Stremio Password',
+  omdbApiKey: 'OMDb API Key'
 }
 
 function header(id: string, label: string, category: string): SettingsRow {
@@ -114,6 +117,7 @@ function updateActionLabel(status: UpdateStatus | null): string {
 
 export function SettingsScreen(): JSX.Element {
   const [steamApiKey, setSteamApiKey] = useState('')
+  const [omdbApiKey, setOmdbApiKey] = useState('')
   const [steamId64, setSteamId64] = useState('')
   const [stremioEmail, setStremioEmail] = useState('')
   const [stremioPassword, setStremioPassword] = useState('')
@@ -166,6 +170,7 @@ export function SettingsScreen(): JSX.Element {
         setSteamId64(s.steamId64)
       })
       .catch(() => {})
+    window.api.settings.getOmdbApiKey().then(setOmdbApiKey).catch(() => {})
     window.api.settings
       .getStremio()
       .then((s) => {
@@ -416,6 +421,14 @@ export function SettingsScreen(): JSX.Element {
       kind: 'info',
       category: 'stremio',
       label: 'Manage individual addons (Torrentio, Debridio, etc.) from the TV screen\'s own Addons tab'
+    },
+
+    { id: 'omdbApiKey', kind: 'field', label: 'OMDb API Key', category: 'ratings', value: omdbApiKey, masked: true },
+    {
+      id: 'omdbApiKeyHint',
+      kind: 'info',
+      category: 'ratings',
+      label: 'Optional — adds Rotten Tomatoes/Metacritic scores to movie & series detail pages. Get a free key at omdbapi.com/apikey.aspx'
     }
   ]
 
@@ -463,6 +476,11 @@ export function SettingsScreen(): JSX.Element {
       setStremioEmail(value)
     } else if (field === 'stremioPassword') {
       setStremioPassword(value)
+    } else if (field === 'omdbApiKey') {
+      const trimmed = value.trim()
+      setOmdbApiKey(trimmed)
+      window.api.settings.setOmdbApiKey(trimmed)
+      setMessage('OMDb API key saved')
     }
   }
 
@@ -1010,7 +1028,11 @@ export function SettingsScreen(): JSX.Element {
         <OnScreenKeyboard
           label={editingField ? (FIELD_LABELS[editingField] ?? '') : ''}
           value={kbValue}
-          masked={editingField === 'steamApiKey' || editingField === 'stremioPassword'}
+          masked={
+            editingField === 'steamApiKey' ||
+            editingField === 'stremioPassword' ||
+            editingField === 'omdbApiKey'
+          }
           shift={kbShift}
           focusedRow={kbRow}
           focusedCol={kbCol}
