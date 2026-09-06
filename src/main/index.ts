@@ -17,6 +17,7 @@ import { startTranscodeProxy, stopTranscodeProxy } from './player/transcodeProxy
 import { registerPowerIpc } from './power/ipc'
 import { registerProgressIpc } from './progress/ipc'
 import { registerSettingsIpc } from './settings/ipc'
+import { scanThemesDropFolder } from './settings/themeInstall'
 import { registerSteamIpc } from './steam/ipc'
 import { registerStremioIpc } from './stremio/ipc'
 import { stopStremioServer } from './stremio/server'
@@ -77,7 +78,7 @@ function createWindow(): BrowserWindow {
   return mainWindow
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerSteamIpc()
   registerStremioIpc()
   registerSettingsIpc()
@@ -94,6 +95,13 @@ app.whenReady().then(() => {
   registerAppsIpc()
   registerArcadeIpc()
   startTranscodeProxy()
+
+  // Picks up any theme pack folders dropped into the Themes folder since
+  // last launch, before the window (and the renderer's first
+  // getCustomThemes call) even exists — see scanThemesDropFolder's own docs
+  // for why re-scanning an already-installed pack is always a no-op.
+  await scanThemesDropFolder().catch(() => {})
+
   const mainWindow = createWindow()
   registerGlobalInputIpc(mainWindow)
 

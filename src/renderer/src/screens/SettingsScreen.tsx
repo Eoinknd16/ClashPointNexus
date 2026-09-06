@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Palette, TriangleAlert, X, type LucideIcon } from 'lucide-react'
+import {
+  Check,
+  FolderOpen,
+  Gamepad2,
+  Link2,
+  Palette,
+  RefreshCw,
+  Settings as SettingsIcon,
+  TriangleAlert,
+  Tv,
+  X,
+  type LucideIcon
+} from 'lucide-react'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
@@ -28,12 +40,25 @@ const COLOR_KEYS: Array<{ key: string; label: string }> = [
 ]
 const CHANNEL_LABELS = ['Hue', 'Saturation', 'Lightness'] as const
 
+/** Left-hand category rail — each row below belongs to exactly one of
+ * these, so the content pane only ever shows one category at a time
+ * instead of one long undifferentiated scrolling list. */
+const CATEGORIES: Array<{ id: string; label: string; icon: LucideIcon }> = [
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'app', label: 'App', icon: SettingsIcon },
+  { id: 'controller', label: 'Controller', icon: Gamepad2 },
+  { id: 'steam', label: 'Steam', icon: Link2 },
+  { id: 'stremio', label: 'Stremio', icon: Tv }
+]
+
 type RowKind = 'header' | 'field' | 'action' | 'addon' | 'info' | 'theme'
 
 interface SettingsRow {
   id: string
   kind: RowKind
   label: string
+  /** One of CATEGORIES' ids — decides which sidebar category shows this row. */
+  category: string
   value?: string
   masked?: boolean
   /** "R G B" space-separated, for the theme picker's swatch dot. */
@@ -62,8 +87,8 @@ function describeCapabilities(resources: string[]): string {
   return resources.map((r) => CAPABILITY_LABELS[r] ?? r).join(', ')
 }
 
-function header(id: string, label: string): SettingsRow {
-  return { id, kind: 'header', label }
+function header(id: string, label: string, category: string): SettingsRow {
+  return { id, kind: 'header', label, category }
 }
 
 function describeSyncAge(lastSyncedAt: number | null): string {
@@ -110,8 +135,10 @@ export function SettingsScreen(): JSX.Element {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [globalInputStatus, setGlobalInputStatus] = useState<GlobalInputStatus | null>(null)
   const [startupSettings, setStartupSettings] = useState<StartupSettings | null>(null)
+  const [themesFolderPath, setThemesFolderPath] = useState('')
 
-  const [zone, setZone] = useState<'menu' | 'keyboard' | 'colorEditor'>('menu')
+  const [zone, setZone] = useState<'sidebar' | 'content' | 'keyboard' | 'colorEditor'>('sidebar')
+  const [categoryIndex, setCategoryIndex] = useState(0)
   const [menuIndex, setMenuIndex] = useState(0)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [kbRow, setKbRow] = useState(0)
@@ -159,6 +186,7 @@ export function SettingsScreen(): JSX.Element {
     window.api.updater.getStatus().then(setUpdateStatus).catch(() => {})
     window.api.globalInput.getStatus().then(setGlobalInputStatus).catch(() => {})
     window.api.settings.getStartup().then(setStartupSettings).catch(() => {})
+    window.api.settings.getThemesFolderPath().then(setThemesFolderPath).catch(() => {})
     // Mirrors status changes into the footer too — the row label alone is
     // easy to not notice changing in place.
     const unsubscribeUpdater = window.api.updater.onStatus((status) => {
@@ -175,12 +203,12 @@ export function SettingsScreen(): JSX.Element {
   }, [])
 
   const rows: SettingsRow[] = [
-    header('appearance', 'Appearance'),
     ...allThemes.flatMap((theme): SettingsRow[] => {
       const themeRow: SettingsRow = {
         id: `theme-${theme.id}`,
         kind: 'theme',
         label: theme.name,
+        category: 'appearance',
         swatch: theme.vars['--color-accent'],
         active: theme.id === themeId
       }
@@ -190,16 +218,37 @@ export function SettingsScreen(): JSX.Element {
       if (!customThemeIds.has(theme.id)) return [themeRow]
       return [
         themeRow,
-        { id: `editColors-${theme.id}`, kind: 'action', label: 'Fine-Tune Colors', icon: Palette }
+        {
+          id: `editColors-${theme.id}`,
+          kind: 'action',
+          label: 'Fine-Tune Colors',
+          category: 'appearance',
+          icon: Palette
+        }
       ]
     }),
+    header('themePacks', 'Custom Theme Packs', 'appearance'),
+    {
+      id: 'themesFolderPath',
+      kind: 'info',
+      category: 'appearance',
+      label: themesFolderPath ? `Drop pack folders here: ${themesFolderPath}` : 'Locating Themes folder...'
+    },
+    { id: 'openThemesFolder', kind: 'action', label: 'Open Themes Folder', category: 'appearance', icon: FolderOpen },
+    {
+      id: 'rescanThemesFolder',
+      kind: 'action',
+      label: 'Rescan Themes Folder',
+      category: 'appearance',
+      icon: RefreshCw
+    },
 
-    header('app', 'App'),
-    { id: 'appVersion', kind: 'info', label: `Version ${appVersion}` },
+    { id: 'appVersion', kind: 'info', label: `Version ${appVersion}`, category: 'app' },
     {
       id: 'checkForUpdates',
       kind: 'action',
       label: updateActionLabel(updateStatus),
+      category: 'app',
       icon: updateStatus?.state === 'not-available' ? Check : undefined
     },
     ...(startupSettings?.supported
@@ -208,6 +257,7 @@ export function SettingsScreen(): JSX.Element {
             id: 'toggleStartup',
             kind: 'action' as const,
             label: 'Launch at Windows Startup',
+            category: 'app',
             icon: startupSettings.enabled ? Check : undefined
           }
         ]
@@ -215,20 +265,22 @@ export function SettingsScreen(): JSX.Element {
           {
             id: 'startupUnsupported',
             kind: 'info' as const,
-            label: 'Launch at Startup unavailable in dev builds'
+            label: 'Launch at Startup unavailable in dev builds',
+            category: 'app'
           }
         ]),
 
-    header('globalInput', 'Global Controller Input (works outside the app too)'),
     {
       id: 'globalInputCombos',
       kind: 'info',
+      category: 'controller',
       label:
         'PS Button or hold L1+R1+Options: Quick Menu · L1+R1+Share: Mouse Mode · L1+R1+Square: Show Desktop'
     },
     {
       id: 'globalInputHelper',
       kind: 'info',
+      category: 'controller',
       label: globalInputStatus?.helperRunning
         ? 'Background listener running'
         : 'Not running (packaged builds only, not npm run dev)',
@@ -239,6 +291,7 @@ export function SettingsScreen(): JSX.Element {
           {
             id: 'globalInputController',
             kind: 'info' as const,
+            category: 'controller',
             label:
               globalInputStatus.controllerConnected === true
                 ? 'Controller detected'
@@ -259,6 +312,7 @@ export function SettingsScreen(): JSX.Element {
           {
             id: 'hidPsButton',
             kind: 'info' as const,
+            category: 'controller',
             label: globalInputStatus.hidPsButtonCaptureLive
               ? 'PS Button capture active'
               : globalInputStatus.hidPsButtonDiagnostic
@@ -273,31 +327,45 @@ export function SettingsScreen(): JSX.Element {
           {
             id: 'globalInputRestarts',
             kind: 'info' as const,
+            category: 'controller',
             label: `Background listener has restarted ${globalInputStatus.restartCount} time(s) this session`,
             icon: TriangleAlert
           }
         ]
       : []),
     ...(globalInputStatus?.lastError
-      ? [{ id: 'globalInputError', kind: 'info' as const, label: `Last error: ${globalInputStatus.lastError}` }]
+      ? [
+          {
+            id: 'globalInputError',
+            kind: 'info' as const,
+            category: 'controller',
+            label: `Last error: ${globalInputStatus.lastError}`
+          }
+        ]
       : []),
 
-    header('steam', 'Steam'),
-    { id: 'steamApiKey', kind: 'field', label: 'Steam API Key', value: steamApiKey, masked: true },
-    { id: 'steamApiKeyHint', kind: 'info', label: 'Get one at steamcommunity.com/dev/apikey' },
+    { id: 'steamApiKey', kind: 'field', label: 'Steam API Key', category: 'steam', value: steamApiKey, masked: true },
+    { id: 'steamApiKeyHint', kind: 'info', label: 'Get one at steamcommunity.com/dev/apikey', category: 'steam' },
     {
       id: 'steamIdStatus',
       kind: 'info',
+      category: 'steam',
       label: steamId64 ? `Linked to SteamID ${steamId64}` : 'Not linked to a Steam account',
       icon: steamId64 ? Check : undefined
     },
-    { id: 'steamSignIn', kind: 'action', label: steamId64 ? 'Re-link Steam Account' : 'Sign In With Steam' },
-    { id: 'steamId64', kind: 'field', label: 'Steam ID64 (manual entry)', value: steamId64 },
+    {
+      id: 'steamSignIn',
+      kind: 'action',
+      category: 'steam',
+      label: steamId64 ? 'Re-link Steam Account' : 'Sign In With Steam'
+    },
+    { id: 'steamId64', kind: 'field', label: 'Steam ID64 (manual entry)', category: 'steam', value: steamId64 },
 
-    header('stremioAccount', 'Stremio Account'),
+    header('stremioAccount', 'Stremio Account', 'stremio'),
     {
       id: 'stremioStatus',
       kind: 'info',
+      category: 'stremio',
       label: loggedIn ? `Logged in as ${stremioEmail}` : 'Not logged in to Stremio',
       icon: loggedIn ? Check : undefined
     },
@@ -306,15 +374,24 @@ export function SettingsScreen(): JSX.Element {
           {
             id: 'stremioSyncAge',
             kind: 'info' as const,
+            category: 'stremio',
             label: `Addon list: ${describeSyncAge(lastAddonsSyncedAt)} — auto-refreshes every few hours, or tap Re-sync below`
           }
         ]
       : []),
-    { id: 'stremioEmail', kind: 'field', label: 'Stremio Email', value: stremioEmail },
-    { id: 'stremioPassword', kind: 'field', label: 'Stremio Password', value: stremioPassword, masked: true },
+    { id: 'stremioEmail', kind: 'field', label: 'Stremio Email', category: 'stremio', value: stremioEmail },
+    {
+      id: 'stremioPassword',
+      kind: 'field',
+      label: 'Stremio Password',
+      category: 'stremio',
+      value: stremioPassword,
+      masked: true
+    },
     {
       id: 'stremioLogin',
       kind: 'action',
+      category: 'stremio',
       label: loggedIn ? 'Re-sync Addons From Stremio Account' : 'Log In & Sync Addons'
     },
     ...(loggedIn
@@ -322,26 +399,31 @@ export function SettingsScreen(): JSX.Element {
           {
             id: 'importHistory',
             kind: 'action' as const,
+            category: 'stremio',
             label: 'Import Watch History & Library From Stremio'
           }
         ]
       : []),
 
-    header('stremioAddons', 'Stremio Addons'),
+    header('stremioAddons', 'Stremio Addons', 'stremio'),
     ...addons.map(
       (addon, i): SettingsRow => ({
         id: `addon-${i}`,
         kind: 'addon',
+        category: 'stremio',
         label: addon.name,
         value: describeCapabilities(addon.resources)
       })
     ),
-    { id: 'addAddon', kind: 'action', label: '+ Add Addon URL' }
+    { id: 'addAddon', kind: 'action', label: '+ Add Addon URL', category: 'stremio' }
   ]
 
+  const activeCategory = CATEGORIES[categoryIndex]
+  const categoryRows = rows.filter((row) => row.category === activeCategory.id)
+
   // Headers are visual dividers, not stops — menuIndex indexes into this
-  // filtered list of the rows that can actually be focused.
-  const selectableIndices = rows.reduce<number[]>((acc, row, i) => {
+  // filtered list of the current category's rows that can actually be focused.
+  const selectableIndices = categoryRows.reduce<number[]>((acc, row, i) => {
     if (row.kind !== 'header') acc.push(i)
     return acc
   }, [])
@@ -349,7 +431,7 @@ export function SettingsScreen(): JSX.Element {
   const activeIndex = selectableIndices[clampedMenuIndex] ?? 0
 
   useEffect(() => {
-    if (zone !== 'menu') return
+    if (zone !== 'content') return
     rowRefs.current[activeIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [zone, activeIndex])
 
@@ -396,12 +478,12 @@ export function SettingsScreen(): JSX.Element {
 
   function submitKeyboard(finalValue: string): void {
     commitField(editingField, finalValue)
-    setZone('menu')
+    setZone('content')
     setEditingField(null)
   }
 
   function cancelKeyboard(): void {
-    setZone('menu')
+    setZone('content')
     setEditingField(null)
   }
 
@@ -492,8 +574,32 @@ export function SettingsScreen(): JSX.Element {
   }
 
   function closeColorEditor(): void {
-    setZone('menu')
+    setZone('content')
     setColorEditorTheme(null)
+  }
+
+  function doOpenThemesFolder(): void {
+    void window.api.settings.openThemesFolder()
+  }
+
+  // Only ever adds themes (never updates/removes) — see scanThemesDropFolder's
+  // own docs for why a folder that's already installed is always a no-op, so
+  // it's safe to call this as often as the user likes.
+  async function doRescanThemesFolder(): Promise<void> {
+    setMessage('Scanning Themes folder...')
+    try {
+      const result = await window.api.settings.scanThemesFolder()
+      if (result.installed.length > 0) {
+        await refreshCustomThemes()
+        setMessage(`Installed ${result.installed.length} new theme(s): ${result.installed.join(', ')}`)
+      } else if (result.errors.length > 0) {
+        setMessage(`No new themes — ${result.errors.length} folder(s) had errors (missing/invalid theme.json)`)
+      } else {
+        setMessage('No new theme pack folders found')
+      }
+    } catch (error) {
+      setMessage(`Rescan failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   function adjustColor(direction: 1 | -1): void {
@@ -560,6 +666,10 @@ export function SettingsScreen(): JSX.Element {
       doCheckForUpdates()
     } else if (row.id === 'toggleStartup') {
       void doToggleStartup()
+    } else if (row.id === 'openThemesFolder') {
+      doOpenThemesFolder()
+    } else if (row.id === 'rescanThemesFolder') {
+      void doRescanThemesFolder()
     }
   }
 
@@ -635,7 +745,30 @@ export function SettingsScreen(): JSX.Element {
       }
     }
 
-    // zone === 'menu'
+    if (zone === 'sidebar') {
+      switch (action) {
+        case 'up':
+          setCategoryIndex((i) => Math.max(0, i - 1))
+          setMenuIndex(0)
+          return
+        case 'down':
+          setCategoryIndex((i) => Math.min(CATEGORIES.length - 1, i + 1))
+          setMenuIndex(0)
+          return
+        case 'right':
+        case 'confirm':
+          setZone('content')
+          return
+        case 'back':
+        case 'menu':
+          goHome()
+          return
+        default:
+          return
+      }
+    }
+
+    // zone === 'content'
     switch (action) {
       case 'up':
         setMenuIndex((i) => Math.max(0, i - 1))
@@ -644,13 +777,14 @@ export function SettingsScreen(): JSX.Element {
         setMenuIndex((i) => Math.min(selectableIndices.length - 1, i + 1))
         return
       case 'confirm': {
-        const row = rows[activeIndex]
+        const row = categoryRows[activeIndex]
         if (row) activateRow(row)
         return
       }
+      case 'left':
       case 'back':
       case 'menu':
-        goHome()
+        setZone('sidebar')
         return
       default:
         return
@@ -663,63 +797,95 @@ export function SettingsScreen(): JSX.Element {
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
       </header>
 
-      <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
-        {rows.map((row, i) => {
-          if (row.kind === 'header') {
+      <div className="flex flex-1 gap-8 overflow-hidden">
+        <nav className="flex w-60 shrink-0 flex-col gap-1.5">
+          {CATEGORIES.map((cat, i) => {
+            const isCurrentCategory = i === categoryIndex
+            const isFocused = zone === 'sidebar' && isCurrentCategory
             return (
-              <h2
-                key={row.id}
-                className="mb-1 mt-4 px-1 text-xs font-bold uppercase tracking-wider text-muted first:mt-0"
+              <div
+                key={cat.id}
+                onClick={() => {
+                  setCategoryIndex(i)
+                  setMenuIndex(0)
+                  setZone('content')
+                }}
+                className={`flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 font-medium transition-colors ${
+                  isFocused
+                    ? 'bg-surface-hi text-accent shadow-focus ring-2 ring-accent'
+                    : isCurrentCategory
+                      ? 'bg-surface-hi text-accent'
+                      : 'text-muted hover:bg-surface'
+                }`}
               >
-                {row.label}
-              </h2>
+                <cat.icon className="h-4 w-4 shrink-0" />
+                {cat.label}
+              </div>
             )
-          }
-          return (
-            <div
-              key={row.id}
-              ref={(el) => (rowRefs.current[i] = el)}
-              onClick={() => {
-                setZone('menu')
-                setMenuIndex(selectableIndices.indexOf(i))
-                activateRow(row)
-              }}
-              className={`mb-2 flex items-center justify-between rounded-xl px-5 py-4 transition-colors ${
-                row.kind === 'info' ? '' : 'cursor-pointer'
-              } ${
-                row.kind === 'info'
-                  ? loggedIn && row.id === 'stremioStatus'
-                    ? 'bg-accent/20 text-accent'
-                    : 'bg-surface text-muted'
-                  : zone === 'menu' && activeIndex === i
-                    ? 'bg-surface-hi shadow-focus'
-                    : 'bg-surface'
-              }`}
-            >
-              <span className="flex items-center gap-3 font-medium">
-                {row.kind === 'theme' && row.swatch && (
-                  <span
-                    className="h-4 w-4 shrink-0 rounded-full ring-1 ring-white/20"
-                    style={{ backgroundColor: `rgb(${row.swatch})` }}
-                  />
-                )}
-                {row.icon && <row.icon className="h-4 w-4 shrink-0" />}
-                {row.label}
-                {row.kind === 'theme' && row.active && <Check className="h-4 w-4 text-accent" />}
-              </span>
-              {row.kind === 'field' && (
-                <span className="text-muted">
-                  {row.value
-                    ? row.masked
-                      ? '•'.repeat(Math.min(row.value.length, 12))
-                      : row.value
-                    : 'Not set'}
+          })}
+        </nav>
+
+        <div className="w-px shrink-0 bg-surface-hover" />
+
+        <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
+          <h2 className="mb-2 px-1 text-lg font-bold tracking-tight">{activeCategory.label}</h2>
+          {categoryRows.map((row, i) => {
+            if (row.kind === 'header') {
+              return (
+                <h3
+                  key={row.id}
+                  className="mb-1 mt-4 px-1 text-xs font-bold uppercase tracking-wider text-muted first:mt-0"
+                >
+                  {row.label}
+                </h3>
+              )
+            }
+            return (
+              <div
+                key={row.id}
+                ref={(el) => (rowRefs.current[i] = el)}
+                onClick={() => {
+                  setZone('content')
+                  setMenuIndex(selectableIndices.indexOf(i))
+                  activateRow(row)
+                }}
+                className={`mb-2 flex items-center justify-between rounded-xl px-5 py-4 ring-1 transition-colors ${
+                  row.kind === 'info' ? '' : 'cursor-pointer'
+                } ${
+                  row.kind === 'info'
+                    ? loggedIn && row.id === 'stremioStatus'
+                      ? 'bg-accent/20 text-accent ring-accent/30'
+                      : 'bg-surface text-muted ring-accent/10'
+                    : zone === 'content' && activeIndex === i
+                      ? 'bg-surface-hi shadow-focus ring-2 ring-accent'
+                      : 'bg-surface ring-accent/15'
+                }`}
+              >
+                <span className="flex items-center gap-3 font-medium">
+                  {row.kind === 'theme' && row.swatch && (
+                    <span
+                      className="h-4 w-4 shrink-0 rounded-full ring-1 ring-white/20"
+                      style={{ backgroundColor: `rgb(${row.swatch})` }}
+                    />
+                  )}
+                  {row.icon && <row.icon className="h-4 w-4 shrink-0" />}
+                  {row.label}
+                  {row.kind === 'theme' && row.active && <Check className="h-4 w-4 text-accent" />}
                 </span>
-              )}
-              {row.kind === 'addon' && <span className="pl-4 text-xs text-muted">{row.value}</span>}
-            </div>
-          )
-        })}
+                {row.kind === 'field' && (
+                  <span className="text-muted">
+                    {row.value
+                      ? row.masked
+                        ? '•'.repeat(Math.min(row.value.length, 12))
+                        : row.value
+                      : 'Not set'}
+                  </span>
+                )}
+                {row.kind === 'addon' && <span className="pl-4 text-xs text-muted">{row.value}</span>}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       <footer className="text-sm text-muted">{message}</footer>

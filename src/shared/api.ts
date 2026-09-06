@@ -24,7 +24,7 @@ import type {
   SeriesMeta,
   StreamResult
 } from './stremioTypes'
-import type { ThemeDefinition, ThemeInstallResult } from './themeTypes'
+import type { ThemeDefinition, ThemeInstallResult, ThemeScanResult } from './themeTypes'
 import type { UpdateStatus } from './updateTypes'
 import type { WeatherData } from './weatherTypes'
 
@@ -89,6 +89,15 @@ export interface LauncherApi {
      * silently if id isn't a known custom theme (built-ins aren't tracked
      * server-side at all). */
     updateThemeVars: (id: string, vars: Record<string, string>) => Promise<void>
+    /** Scans the Themes drop folder for pack subfolders not yet installed —
+     * already runs once at app startup, this is for picking up a folder
+     * dropped in mid-session without restarting. */
+    scanThemesFolder: () => Promise<ThemeScanResult>
+    /** Absolute path to the Themes drop folder, for display only (e.g. a
+     * hint row in Settings) — actually opening it is openThemesFolder. */
+    getThemesFolderPath: () => Promise<string>
+    /** Opens the Themes drop folder in the OS file explorer. */
+    openThemesFolder: () => Promise<void>
     getStartup: () => Promise<StartupSettings>
     /** No-ops in a dev build — see StartupSettings.supported. */
     setStartupEnabled: (enabled: boolean) => Promise<void>

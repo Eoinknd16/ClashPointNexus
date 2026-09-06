@@ -17,6 +17,16 @@ export function themeAssetsRoot(): string {
   return isDev ? join(process.cwd(), 'theme-assets') : join(app.getPath('userData'), 'theme-assets')
 }
 
+/** Folder a user can drop ready-made theme pack folders into directly —
+ * no File Manager needed. Scanned at startup and via Settings' "Rescan
+ * Themes Folder" action (see scanThemesDropFolder); created on first scan
+ * if it doesn't exist yet, so there's always somewhere for the user to
+ * find and drop packs into. */
+export function themesDropRoot(): string {
+  const isDev = !app.isPackaged
+  return isDev ? join(process.cwd(), 'Themes') : join(app.getPath('userData'), 'Themes')
+}
+
 const DEFAULT_CUSTOM_THEMES: ThemeDefinition[] = []
 
 function isThemeDefinition(value: unknown): value is ThemeDefinition {

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import type {
   SteamSettings,
   SteamSignInResult,
@@ -8,15 +8,15 @@ import type {
   StremioSettings
 } from '@shared/settingsTypes'
 import type { AddonSummary } from '@shared/stremioTypes'
-import type { ThemeDefinition, ThemeInstallResult } from '@shared/themeTypes'
+import type { ThemeDefinition, ThemeInstallResult, ThemeScanResult } from '@shared/themeTypes'
 import { loadSteamConfig, saveSteamConfig } from '../steam/config'
 import { signInWithSteam } from '../steam/openid'
 import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../stremio/account'
 import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
 import { importStremioHistory } from '../stremio/importHistory'
 import { getStartupSettings, setStartupEnabled } from './startup'
-import { installThemeFromFolder } from './themeInstall'
-import { loadCustomThemes, saveCustomThemes } from './themes'
+import { installThemeFromFolder, scanThemesDropFolder } from './themeInstall'
+import { loadCustomThemes, saveCustomThemes, themesDropRoot } from './themes'
 
 export function registerSettingsIpc(): void {
   ipcMain.handle('settings:getSteam', (): SteamSettings => {
@@ -73,6 +73,14 @@ export function registerSettingsIpc(): void {
   ipcMain.handle('settings:installTheme', (_event, folderPath: string): Promise<ThemeInstallResult> =>
     installThemeFromFolder(folderPath)
   )
+
+  ipcMain.handle('settings:scanThemesFolder', (): Promise<ThemeScanResult> => scanThemesDropFolder())
+
+  ipcMain.handle('settings:getThemesFolderPath', (): string => themesDropRoot())
+
+  ipcMain.handle('settings:openThemesFolder', async (): Promise<void> => {
+    await shell.openPath(themesDropRoot())
+  })
 
   // The in-app color picker (Settings > a custom theme > "Fine-Tune Colors")
   // — only ever touches custom/installed themes, never the built-ins (which

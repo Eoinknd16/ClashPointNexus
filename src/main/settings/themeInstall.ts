@@ -1,10 +1,15 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'fs'
 import { pathToFileURL } from 'url'
 import { deriveThemeVars } from '@shared/colorMath'
-import type { ThemeDefinition, ThemeInstallResult, ThemePackManifest } from '@shared/themeTypes'
+import type {
+  ThemeDefinition,
+  ThemeInstallResult,
+  ThemePackManifest,
+  ThemeScanResult
+} from '@shared/themeTypes'
 import { extractAccentColorsFromImage } from './imageColors'
-import { loadCustomThemes, saveCustomThemes, themeAssetsRoot } from './themes'
+import { loadCustomThemes, saveCustomThemes, themeAssetsRoot, themesDropRoot } from './themes'
 
 const MANIFEST_FILENAME = 'theme.json'
 
@@ -28,7 +33,9 @@ const DEFAULT_BASE_VARS: Record<string, string> = {
 function isThemePackManifest(value: unknown): value is ThemePackManifest {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Record<string, unknown>
-  if (typeof candidate.name !== 'string' || !candidate.name.trim()) return false
+  if (candidate.name !== undefined && (typeof candidate.name !== 'string' || !candidate.name.trim())) {
+    return false
+  }
   if (candidate.vars !== undefined && (typeof candidate.vars !== 'object' || candidate.vars === null)) {
     return false
   }
@@ -60,42 +67,37 @@ function uniqueId(baseId: string, existingIds: Set<string>): string {
   return `${baseId}-${n}`
 }
 
-/**
- * Installs a theme pack from a plain folder (theme.json + whatever image
- * files it references, all relative to that same folder) — reached from the
- * File Manager's "Install as Theme" context action, not a native OS file
- * dialog, since a native dialog isn't controller-navigable and this whole
- * app is built to never need a mouse. Copies every referenced image into
- * this app's own userData/theme-assets/<id>/ folder rather than referencing
- * the source folder live, so the pack keeps working even if the user later
- * moves or deletes wherever they originally unpacked it from.
- *
- * If the pack's theme.json doesn't specify --color-accent/--color-accent-2
- * itself, they're auto-extracted from the pack's own heroImage (or its first
- * tileImage if there's no hero) — a real user asked for exactly this rather
- * than needing to hand-pick complementary colors for every pack.
- */
-export async function installThemeFromFolder(folderPath: string): Promise<ThemeInstallResult> {
+function readPackManifest(folderPath: string): { manifest: ThemePackManifest } | { error: string } {
   const manifestPath = join(folderPath, MANIFEST_FILENAME)
   if (!existsSync(manifestPath)) {
-    return { success: false, error: `No ${MANIFEST_FILENAME} found in this folder`, theme: null }
+    return { error: `No ${MANIFEST_FILENAME} found in this folder` }
   }
-
-  let manifest: unknown
+  let parsed: unknown
   try {
-    manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+    parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'))
   } catch {
-    return { success: false, error: `${MANIFEST_FILENAME} is not valid JSON`, theme: null }
+    return { error: `${MANIFEST_FILENAME} is not valid JSON` }
   }
-  if (!isThemePackManifest(manifest)) {
-    return { success: false, error: `${MANIFEST_FILENAME} is missing a name, or malformed`, theme: null }
+  if (!isThemePackManifest(parsed)) {
+    return { error: `${MANIFEST_FILENAME} is malformed` }
   }
+  return { manifest: parsed }
+}
 
-  const existing = loadCustomThemes()
-  const id = uniqueId(
-    slugifyToId(manifest.name),
-    new Set(existing.map((t) => t.id))
-  )
+/**
+ * Copies a pack's referenced images into theme-assets/<id>/ and builds the
+ * resulting ThemeDefinition, auto-extracting accent colors from the pack's
+ * own imagery when its manifest doesn't specify them. Doesn't touch
+ * themes.config.json itself — id/name are decided by the caller, since that
+ * differs between a manual File Manager install (de-duplicated, manifest
+ * name wins) and a Themes-folder scan (deterministic from folder name).
+ */
+async function buildInstalledTheme(
+  folderPath: string,
+  manifest: ThemePackManifest,
+  id: string,
+  name: string
+): Promise<{ theme: ThemeDefinition } | { error: string }> {
   const assetsDir = join(themeAssetsRoot(), id)
   mkdirSync(assetsDir, { recursive: true })
 
@@ -113,7 +115,7 @@ export async function installThemeFromFolder(folderPath: string): Promise<ThemeI
     const copied = copyAsset(manifest.heroImage)
     if (!copied) {
       rmSync(assetsDir, { recursive: true, force: true })
-      return { success: false, error: `heroImage "${manifest.heroImage}" not found in this folder`, theme: null }
+      return { error: `heroImage "${manifest.heroImage}" not found in this folder` }
     }
     heroImage = copied.fileUrl
     heroImageDestPath = copied.destPath
@@ -127,11 +129,7 @@ export async function installThemeFromFolder(folderPath: string): Promise<ThemeI
       const copied = copyAsset(filename)
       if (!copied) {
         rmSync(assetsDir, { recursive: true, force: true })
-        return {
-          success: false,
-          error: `tileImages.${tileId} ("${filename}") not found in this folder`,
-          theme: null
-        }
+        return { error: `tileImages.${tileId} ("${filename}") not found in this folder` }
       }
       tileImages[tileId] = copied.fileUrl
       firstTileImageDestPath ??= copied.destPath
@@ -155,14 +153,97 @@ export async function installThemeFromFolder(folderPath: string): Promise<ThemeI
 
   const theme: ThemeDefinition = {
     id,
-    name: manifest.name,
+    name,
     vars: deriveThemeVars(baseVars),
     ...(heroImage ? { heroImage } : {}),
     ...(tileImages ? { tileImages } : {})
   }
+  return { theme }
+}
 
-  saveCustomThemes([...existing, theme])
-  return { success: true, error: null, theme }
+/**
+ * Installs a theme pack from a plain folder (theme.json + whatever image
+ * files it references, all relative to that same folder) — reached from the
+ * File Manager's "Install as Theme" context action, not a native OS file
+ * dialog, since a native dialog isn't controller-navigable and this whole
+ * app is built to never need a mouse. Copies every referenced image into
+ * this app's own userData/theme-assets/<id>/ folder rather than referencing
+ * the source folder live, so the pack keeps working even if the user later
+ * moves or deletes wherever they originally unpacked it from.
+ *
+ * The pack's display name comes from theme.json's own "name" field, falling
+ * back to the folder's own name if that's omitted. (For the Themes drop
+ * folder's automatic scan, see scanThemesDropFolder instead — there the
+ * folder name always wins, even over an explicit "name".)
+ */
+export async function installThemeFromFolder(folderPath: string): Promise<ThemeInstallResult> {
+  const read = readPackManifest(folderPath)
+  if ('error' in read) return { success: false, error: read.error, theme: null }
+
+  const existing = loadCustomThemes()
+  const name = read.manifest.name?.trim() || basename(folderPath)
+  const id = uniqueId(slugifyToId(name), new Set(existing.map((t) => t.id)))
+
+  const built = await buildInstalledTheme(folderPath, read.manifest, id, name)
+  if ('error' in built) return { success: false, error: built.error, theme: null }
+
+  saveCustomThemes([...existing, built.theme])
+  return { success: true, error: null, theme: built.theme }
+}
+
+/**
+ * Scans the Themes drop folder (themesDropRoot) for pack subfolders and
+ * installs any that aren't already installed — run once at every app
+ * startup, and again on demand via Settings' "Rescan Themes Folder" action,
+ * so dropping a ready-made pack folder into Explorer is enough on its own;
+ * no in-app File Manager step needed.
+ *
+ * The folder's own name always becomes the theme's display name here —
+ * theme.json's "name" field, even if present, is ignored — since renaming
+ * the folder to rename the theme is the whole point of organizing packs
+ * this way. The id is derived deterministically from that same folder name
+ * rather than de-duplicated like installThemeFromFolder's uniqueId, so
+ * re-scanning a folder that's already installed is a silent no-op instead
+ * of installing a second copy or re-deriving (and clobbering) colors the
+ * user has since fine-tuned in-app for it — this runs unattended on every
+ * launch, so it must never touch an already-installed pack.
+ */
+export async function scanThemesDropFolder(): Promise<ThemeScanResult> {
+  const root = themesDropRoot()
+  mkdirSync(root, { recursive: true })
+
+  const existing = loadCustomThemes()
+  const existingIds = new Set(existing.map((t) => t.id))
+  const installed: string[] = []
+  const errors: Array<{ folder: string; error: string }> = []
+  const nextThemes = [...existing]
+
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const folderName = entry.name
+    const id = slugifyToId(folderName)
+    if (existingIds.has(id)) continue
+
+    const folderPath = join(root, folderName)
+    const read = readPackManifest(folderPath)
+    if ('error' in read) {
+      errors.push({ folder: folderName, error: read.error })
+      continue
+    }
+
+    const built = await buildInstalledTheme(folderPath, read.manifest, id, folderName)
+    if ('error' in built) {
+      errors.push({ folder: folderName, error: built.error })
+      continue
+    }
+
+    nextThemes.push(built.theme)
+    existingIds.add(id)
+    installed.push(folderName)
+  }
+
+  if (installed.length > 0) saveCustomThemes(nextThemes)
+  return { installed, errors }
 }
 
 /** No UI wired to this yet — custom themes (and now theme packs) can still
