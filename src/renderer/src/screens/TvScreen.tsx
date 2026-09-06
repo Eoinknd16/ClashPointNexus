@@ -162,7 +162,8 @@ export function TvScreen(): JSX.Element {
   // whichever tab is/has been active, so switching tabs doesn't refetch.
   const [genreRows, setGenreRows] = useState<Record<string, CatalogItem[]>>({})
   const requestedGenresRef = useRef<Set<string>>(new Set())
-  const [continueWatching, setContinueWatching] = useState<CatalogItem[]>([])
+  const [continueWatchingMovies, setContinueWatchingMovies] = useState<CatalogItem[]>([])
+  const [continueWatchingSeries, setContinueWatchingSeries] = useState<CatalogItem[]>([])
   // Keyed by tab, same caching approach as genreRows — avoids both a refetch
   // and a flash of the previous tab's addon rows every time you switch tabs.
   const [addonRowsByTab, setAddonRowsByTab] = useState<Partial<Record<BrowseTab, AddonCatalogRow[]>>>({})
@@ -275,7 +276,11 @@ export function TvScreen(): JSX.Element {
       .filter((r): r is RowDef => r !== null)
 
     if (tab === 'movie') {
-      return [
+      const movieRows: RowDef[] = []
+      if (continueWatchingMovies.length > 0) {
+        movieRows.push({ key: 'continue', label: 'Continue Watching', items: continueWatchingMovies, source: null })
+      }
+      movieRows.push(
         { key: 'popular-movie', label: 'Popular Movies', items: movieCatalog, source: { catalogId: 'top' } },
         {
           key: 'new-movie',
@@ -291,11 +296,12 @@ export function TvScreen(): JSX.Element {
         },
         ...genreRowDefs,
         ...addonRowDefs
-      ]
+      )
+      return movieRows
     }
     const seriesRows: RowDef[] = []
-    if (continueWatching.length > 0) {
-      seriesRows.push({ key: 'continue', label: 'Continue Watching', items: continueWatching, source: null })
+    if (continueWatchingSeries.length > 0) {
+      seriesRows.push({ key: 'continue', label: 'Continue Watching', items: continueWatchingSeries, source: null })
     }
     seriesRows.push(
       { key: 'popular-series', label: 'Popular Series', items: seriesCatalog, source: { catalogId: 'top' } },
@@ -501,7 +507,8 @@ export function TvScreen(): JSX.Element {
   useEffect(() => {
     if (zone !== 'filters' && zone !== 'rows') return
     window.api.library.list().then(setLibraryItems).catch(() => {})
-    window.api.stremio.getContinueWatching('series').then(setContinueWatching).catch(() => {})
+    window.api.stremio.getContinueWatching('movie').then(setContinueWatchingMovies).catch(() => {})
+    window.api.stremio.getContinueWatching('series').then(setContinueWatchingSeries).catch(() => {})
   }, [zone])
 
   // Pulls a row per movie/series catalog declared by the user's own configured
