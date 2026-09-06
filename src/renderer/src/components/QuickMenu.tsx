@@ -48,10 +48,15 @@ interface Option {
  * brings an already-running game to the foreground instead of relaunching it
  * — but that only works while ClashPoint Nexus itself has focus to receive
  * the button press. A game running full-screen has OS input focus, and the
- * Gamepad API only delivers to whichever window is focused, so this menu
- * can't be summoned FROM INSIDE that game the same way — that would need a
- * global raw-input listener plus an always-on-top overlay window (the same
- * shape of feature as Steam's own overlay), which hasn't been built.
+ * Gamepad API only delivers to whichever window is focused, so THIS menu
+ * can't be summoned from inside that game without first switching to Nexus
+ * (which is exactly what the L1+R1+Options combo's handler does before
+ * sending the event that opens this). The genuinely separate always-on-top
+ * overlay this used to say hadn't been built now has (see
+ * ControlCenterOverlay.tsx + main/controlCenter/), reached instead by
+ * holding PS/Home — it can appear over a running game without switching
+ * away from it, at the cost of only covering quick system actions rather
+ * than this menu's full option list.
  */
 export function QuickMenu(): JSX.Element | null {
   const [open, setOpen] = useState(false)

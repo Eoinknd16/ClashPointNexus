@@ -60,6 +60,10 @@ function App(): JSX.Element {
   // opens in-app, just triggered from outside instead of via the Gamepad API.
   useEffect(() => window.api.globalInput.onOpenQuickMenu(() => emitNav('quickMenu')), [])
 
+  // PS/Home button clicked (not held) — main process already foregrounded
+  // this window, just needs to navigate home.
+  useEffect(() => window.api.globalInput.onGoHome(() => useNavigationStore.getState().goHome()), [])
+
   // Keeps useGamepadNav's double-click-suppression flag in sync with the
   // actual global Mouse Mode state — fetched once for whatever it already
   // was (e.g. toggled on by the physical combo before this window ever had

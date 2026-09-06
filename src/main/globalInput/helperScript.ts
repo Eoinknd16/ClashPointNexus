@@ -29,9 +29,12 @@
 // ("Menu"/"View" are this API's names for Options/Share on a PlayStation
 // pad, Start/Back on an Xbox pad; "X" is Square on a PlayStation pad.)
 //
-// PS/Home button -> also fires "COMBO_QUICKMENU" (same effect as the
-// L1+R1+Menu combo, no separate Electron-side handling needed), a single
-// press with no hold required. Windows.Gaming.Input deliberately doesn't
+// PS/Home button, click vs hold (same 500ms threshold as the combos above,
+// timed here in PowerShell against the C# side's continuous HomeButtonHeld
+// rather than an edge pulse):
+//   click (released before 500ms) -> "COMBO_PSCLICK"       (foreground Nexus)
+//   hold  (held past 500ms)       -> "COMBO_CONTROLCENTER" (open the overlay)
+// Windows.Gaming.Input deliberately doesn't
 // expose this button at all (Windows reserves the Xbox Guide-button
 // equivalent for its own Game Bar), so this needs raw HID reading instead --
 // SetupDi device enumeration + CreateFile/ReadFile straight against the
@@ -139,7 +142,15 @@ public class ClashPointNativeInput {
     const uint OPEN_EXISTING = 3;
     const int SONY_VID = 0x054C;
 
-    public static volatile bool HomeButtonPressed = false;
+    // Continuous held-state -- needed so the PowerShell loop can time a real
+    // hold duration for the click-vs-hold split (single click -> foreground
+    // Nexus, hold -> Control Center overlay), the same way it already times
+    // the L1+R1 combos below, just driven from this instead of
+    // Windows.Gaming.Input (which has no PS button of its own to read).
+    // NOTE: this whole block is a single-quoted PowerShell string (see the
+    // Add-Type call above) -- no apostrophes anywhere in here, or it closes
+    // the string early and corrupts the entire script silently.
+    public static volatile bool HomeButtonHeld = false;
     public static volatile bool HidCaptureLive = false;
     private static List<string> hidDiagnostics = new List<string>();
     private static readonly object diagLock = new object();
@@ -253,7 +264,6 @@ public class ClashPointNativeInput {
                 return;
             }
             var buf = new byte[96];
-            bool wasPressed = false;
             while (true) {
                 int bytesRead;
                 bool ok = ReadFile(handle, buf, buf.Length, out bytesRead, IntPtr.Zero);
@@ -266,9 +276,7 @@ public class ClashPointNativeInput {
                 if (reportId == 0x01) psByteIndex = 10;
                 else if (reportId == 0x31) psByteIndex = 11;
                 if (psByteIndex >= 0 && psByteIndex < bytesRead) {
-                    bool pressed = (buf[psByteIndex] & 0x01) != 0;
-                    if (pressed && !wasPressed) HomeButtonPressed = true;
-                    wasPressed = pressed;
+                    HomeButtonHeld = (buf[psByteIndex] & 0x01) != 0;
                 }
             }
         } catch (Exception ex) {
@@ -338,6 +346,8 @@ $mouseModeComboStart = $null
 $mouseModeFiredForThisHold = $false
 $showDesktopComboStart = $null
 $showDesktopFiredForThisHold = $false
+$psButtonHoldStart = $null
+$psButtonFiredForThisHold = $false
 $prevA = $false
 $prevB = $false
 # A string sentinel, not $null/boolean -- PowerShell's -ne coerces $null to
@@ -357,9 +367,21 @@ while ($true) {
     if ($mouseMode) { Write-Output "MOUSE_MODE_ON" } else { Write-Output "MOUSE_MODE_OFF" }
   }
 
-  if ([ClashPointNativeInput]::HomeButtonPressed) {
-    [ClashPointNativeInput]::HomeButtonPressed = $false
-    Write-Output "COMBO_QUICKMENU"
+  if ([ClashPointNativeInput]::HomeButtonHeld) {
+    if ($null -eq $psButtonHoldStart) {
+      $psButtonHoldStart = Get-Date
+      $psButtonFiredForThisHold = $false
+    } elseif ((-not $psButtonFiredForThisHold) -and (((Get-Date) - $psButtonHoldStart).TotalMilliseconds -ge $HOLD_MS)) {
+      Write-Output "COMBO_CONTROLCENTER"
+      $psButtonFiredForThisHold = $true
+    }
+  } else {
+    if (($null -ne $psButtonHoldStart) -and (-not $psButtonFiredForThisHold)) {
+      # Released before reaching the hold threshold -- a click, not a hold.
+      Write-Output "COMBO_PSCLICK"
+    }
+    $psButtonHoldStart = $null
+    $psButtonFiredForThisHold = $false
   }
 
   $hidCaptureLive = [ClashPointNativeInput]::HidCaptureLive

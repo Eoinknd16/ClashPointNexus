@@ -2,8 +2,16 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { ControlCenterOverlay } from './screens/ControlCenterOverlay'
 import { useCrashLogStore } from './state/crashLogStore'
 import './styles/index.css'
+
+// The Control Center window (main/controlCenter/window.ts) loads this exact
+// same bundle with ?view=controlcenter appended rather than being a whole
+// separate renderer entry point — simplest way to reuse the same build/nav
+// infrastructure for a window that otherwise has nothing to do with the
+// normal screen system.
+const isControlCenter = new URLSearchParams(window.location.search).get('view') === 'controlcenter'
 
 // Can't recover a React tree from here, since these fire for errors React
 // never even saw (a rejected promise, a throw inside framer-motion's own
@@ -32,7 +40,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
         unmount everything with nothing above it to catch it, which is a
         blank #root indistinguishable from what's been reported. */}
     <ErrorBoundary>
-      <App />
+      {isControlCenter ? <ControlCenterOverlay /> : <App />}
     </ErrorBoundary>
   </React.StrictMode>
 )

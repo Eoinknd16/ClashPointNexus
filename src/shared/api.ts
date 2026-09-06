@@ -204,6 +204,20 @@ export interface LauncherApi {
      * the main process has already brought the window to the foreground by
      * the time this fires; the listener just needs to open the Quick Menu. */
     onOpenQuickMenu: (callback: () => void) => () => void
+    /** Fired when the PS/Home button is clicked (not held) outside the app —
+     * the main process has already brought Nexus's window back to the
+     * foreground by the time this fires; the listener just needs to
+     * navigate home. A hold instead opens the separate Control Center
+     * window (controlCenter below), which doesn't fire this at all. */
+    onGoHome: (callback: () => void) => () => void
+  }
+  /** The always-on-top overlay window opened by holding PS/Home — a genuinely
+   * separate BrowserWindow (unlike the Quick Menu, which lives inside the
+   * main window), so it renders its own small app via ?view=controlcenter
+   * (see main.tsx) rather than going through the normal screen system. */
+  controlCenter: {
+    returnToNexus: () => Promise<void>
+    close: () => Promise<void>
   }
   apps: {
     list: () => Promise<AppEntry[]>

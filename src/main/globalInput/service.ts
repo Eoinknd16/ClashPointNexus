@@ -18,6 +18,8 @@ let stderrBuffer = ''
 
 let onQuickMenuCombo: (() => void) | null = null
 let onShowDesktopCombo: (() => void) | null = null
+let onPsClick: (() => void) | null = null
+let onControlCenterCombo: (() => void) | null = null
 let onMouseModeChange: ((active: boolean) => void) | null = null
 let onStatusChange: ((status: GlobalInputStatus) => void) | null = null
 
@@ -27,6 +29,19 @@ export function setQuickMenuComboHandler(handler: (() => void) | null): void {
 
 export function setShowDesktopComboHandler(handler: (() => void) | null): void {
   onShowDesktopCombo = handler
+}
+
+/** PS/Home button, released before the hold threshold — "just bring Nexus
+ * back to the foreground", distinct from the L1+R1+Options combo's Quick
+ * Menu (which still uses onQuickMenuCombo, unchanged). */
+export function setPsClickHandler(handler: (() => void) | null): void {
+  onPsClick = handler
+}
+
+/** PS/Home button, held past the threshold — opens the Control Center
+ * overlay without necessarily bringing any other window forward. */
+export function setControlCenterComboHandler(handler: (() => void) | null): void {
+  onControlCenterCombo = handler
 }
 
 export function setMouseModeChangeHandler(handler: ((active: boolean) => void) | null): void {
@@ -71,6 +86,10 @@ function handleLine(line: string): void {
     onQuickMenuCombo?.()
   } else if (line === 'COMBO_SHOWDESKTOP') {
     onShowDesktopCombo?.()
+  } else if (line === 'COMBO_PSCLICK') {
+    onPsClick?.()
+  } else if (line === 'COMBO_CONTROLCENTER') {
+    onControlCenterCombo?.()
   } else if (line === 'MOUSE_MODE_ON') {
     mouseModeActive = true
     onMouseModeChange?.(true)

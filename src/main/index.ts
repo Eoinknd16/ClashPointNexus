@@ -2,9 +2,13 @@ import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { registerAppsIpc } from './apps/ipc'
 import { registerArcadeIpc } from './arcade/ipc'
+import { registerControlCenterIpc, returnToNexus } from './controlCenter/ipc'
+import { toggleControlCenter } from './controlCenter/window'
 import { registerFilesystemIpc } from './filesystem/ipc'
 import { goToDesktop, registerGlobalInputIpc } from './globalInput/ipc'
 import {
+  setControlCenterComboHandler,
+  setPsClickHandler,
   setQuickMenuComboHandler,
   setShowDesktopComboHandler,
   startGlobalInputWatcher,
@@ -104,6 +108,7 @@ app.whenReady().then(async () => {
 
   const mainWindow = createWindow()
   registerGlobalInputIpc(mainWindow)
+  registerControlCenterIpc(mainWindow)
 
   if (!isDev) initAutoUpdater()
 
@@ -119,6 +124,13 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('globalInput:openQuickMenu')
     })
     setShowDesktopComboHandler(() => goToDesktop(mainWindow))
+    // PS/Home button: a quick click just brings Nexus back to the foreground
+    // (same as before, minus the Quick Menu popup — that combo still opens
+    // it via L1+R1+Options above); holding it opens the separate always-on-
+    // top Control Center window instead, which doesn't require switching
+    // away from whatever's running underneath.
+    setPsClickHandler(() => returnToNexus(mainWindow))
+    setControlCenterComboHandler(() => toggleControlCenter())
     startGlobalInputWatcher()
   }
 

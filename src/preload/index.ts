@@ -127,7 +127,16 @@ const api: LauncherApi = {
       const listener = (): void => callback()
       ipcRenderer.on('globalInput:openQuickMenu', listener)
       return () => ipcRenderer.removeListener('globalInput:openQuickMenu', listener)
+    },
+    onGoHome: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('globalInput:goHome', listener)
+      return () => ipcRenderer.removeListener('globalInput:goHome', listener)
     }
+  },
+  controlCenter: {
+    returnToNexus: () => ipcRenderer.invoke('controlCenter:returnToNexus'),
+    close: () => ipcRenderer.invoke('controlCenter:close')
   },
   apps: {
     list: () => ipcRenderer.invoke('apps:list'),
