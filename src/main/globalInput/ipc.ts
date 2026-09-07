@@ -36,6 +36,14 @@ export function goToDesktop(mainWindow: BrowserWindow): void {
   }
 }
 
+/** Whether the user explicitly asked to see the desktop (Show Desktop combo
+ * or Quick Menu) — checked by gameSession's own restore-on-exit so it never
+ * pops Nexus back over a desktop the user deliberately chose to look at
+ * right as a game happens to close. */
+export function isHiddenForDesktop(): boolean {
+  return hiddenForDesktop
+}
+
 export function registerGlobalInputIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle('globalInput:getMouseModeStatus', () => getGlobalInputStatus().mouseModeActive)
   ipcMain.handle('globalInput:getStatus', () => getGlobalInputStatus())

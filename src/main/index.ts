@@ -83,7 +83,6 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
-  registerSteamIpc()
   registerStremioIpc()
   registerSettingsIpc()
   registerPlayerIpc()
@@ -96,7 +95,6 @@ app.whenReady().then(async () => {
   registerWeatherIpc()
   registerHomeIpc()
   registerSystemIpc()
-  registerAppsIpc()
   registerArcadeIpc()
   startTranscodeProxy()
 
@@ -109,6 +107,10 @@ app.whenReady().then(async () => {
   const mainWindow = createWindow()
   registerGlobalInputIpc(mainWindow)
   registerControlCenterIpc(mainWindow)
+  // Both need mainWindow — a launched game/app hides it for the session and
+  // restores it on exit (see gameSession/service.ts).
+  registerSteamIpc(mainWindow)
+  registerAppsIpc(mainWindow)
 
   if (!isDev) initAutoUpdater()
 
@@ -119,6 +121,10 @@ app.whenReady().then(async () => {
   if (!isDev) {
     setQuickMenuComboHandler(() => {
       if (mainWindow.isDestroyed()) return
+      // restore() first — plain show() doesn't reliably un-minimize on
+      // Windows, which matters now that a game session (gameSession/
+      // service.ts) can leave Nexus minimized while it's running.
+      mainWindow.restore()
       mainWindow.show()
       mainWindow.focus()
       mainWindow.webContents.send('globalInput:openQuickMenu')
