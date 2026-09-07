@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Check, Film, Package2, Plus, Star, Tv, X, type LucideIcon } from 'lucide-react'
 import { CategoryRow } from '../components/CategoryRow'
 import { FocusableCard, type CardItem } from '../components/FocusableCard'
@@ -21,6 +21,17 @@ const TAB_LABELS: Record<'movie' | 'series' | 'library' | 'addons', string> = {
   library: 'Library',
   addons: 'Addons'
 }
+
+// The browsing tabs' "Card Size" theme setting scales --card-scale, which
+// CategoryRow's rows read directly (see CategoryRow.tsx) — but this page's
+// standalone pinned-title/shortcut card blocks below use fixed w-44/w-72
+// wrappers that never read that var, so a "Large" browsing card size blew
+// the rows up huge while the standalone cards stayed put, and (on displays
+// where that mismatch pushed a row wider than the viewport) clipped content
+// with no way to reach it. Pinning it back to 1 for this whole page keeps
+// its own rows and cards sized consistently with each other, independent of
+// whatever the user picks for Movies/Series/Store elsewhere.
+const NEUTRAL_CARD_SCALE = { '--card-scale': '1' } as CSSProperties
 
 function toCardItem(item: CatalogItem): CardItem {
   return {
@@ -123,6 +134,20 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
   const [kbRow, setKbRow] = useState(0)
   const [kbCol, setKbCol] = useState(0)
   const [kbPurpose, setKbPurpose] = useState<'newPage' | 'renamePage' | 'titleSearch'>('newPage')
+
+  // Scroll-follows-focus refs — same ref-array + scrollIntoView pairing
+  // TvScreen.tsx already uses for every one of its own focus-driven lists
+  // (addonStoreRefs, expandedRefs, rowRefs, ...). Without these, a D-pad
+  // selection can move past the edge of a scrolling container with no way
+  // to see (or reach) it, which is exactly what was reported for the Add
+  // menu. pillRefs is indexed at pillIndex+1 so the Edit/Done button (index
+  // -1) has a slot too.
+  const pillRefs = useRef<Array<HTMLElement | null>>([])
+  const addMenuRefs = useRef<Array<HTMLDivElement | null>>([])
+  const genreRefs = useRef<Array<HTMLDivElement | null>>([])
+  const addonCatalogRefs = useRef<Array<HTMLDivElement | null>>([])
+  const pagePickRefs = useRef<Array<HTMLDivElement | null>>([])
+  const titleResultsRefs = useRef<Array<HTMLDivElement | null>>([])
 
   const activePage = config?.pages.find((p) => p.id === config.activePageId) ?? null
 
@@ -434,6 +459,36 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
 
   const otherPages = (config?.pages ?? []).filter((p) => p.id !== activePage?.id)
 
+  useEffect(() => {
+    if (zone !== 'pills') return
+    pillRefs.current[pillIndex + 1]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+  }, [zone, pillIndex])
+
+  useEffect(() => {
+    if (zone !== 'addMenu') return
+    addMenuRefs.current[addMenuIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, addMenuIndex])
+
+  useEffect(() => {
+    if (zone !== 'genrePick') return
+    genreRefs.current[subPickIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, subPickIndex])
+
+  useEffect(() => {
+    if (zone !== 'addonCatalogPick') return
+    addonCatalogRefs.current[subPickIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, subPickIndex])
+
+  useEffect(() => {
+    if (zone !== 'pagePick') return
+    pagePickRefs.current[subPickIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, subPickIndex])
+
+  useEffect(() => {
+    if (zone !== 'titleResults') return
+    titleResultsRefs.current[subPickIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, subPickIndex])
+
   useNavListener((action) => {
     if (!active) return
     if (zone === 'keyboard') {
@@ -649,7 +704,9 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
       const pillCount = (config?.pages.length ?? 0) + 1 // + the "New Page" pill
       switch (action) {
         case 'left':
-          setPillIndex((i) => Math.max(0, i - 1))
+          // -1 is the Edit/Done button — a genuine D-pad stop just left of
+          // the first page pill, not just the hidden contextMenu shortcut.
+          setPillIndex((i) => Math.max(-1, i - 1))
           return
         case 'right':
           setPillIndex((i) => Math.min(pillCount - 1, i + 1))
@@ -658,6 +715,10 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
           setZone('content')
           return
         case 'confirm': {
+          if (pillIndex === -1) {
+            toggleEditMode()
+            return
+          }
           const pages = config?.pages ?? []
           if (pillIndex === pages.length) {
             setKbValue('')
@@ -832,51 +893,65 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
   const isEmpty = resolved.length === 0
 
   return (
-    <div className="relative flex flex-1 flex-col gap-5 overflow-hidden" onClickCapture={onActivate}>
-      <div className="flex items-center gap-2 overflow-x-hidden">
+    <div
+      className="relative flex flex-1 flex-col gap-5 overflow-hidden"
+      style={NEUTRAL_CARD_SCALE}
+      onClickCapture={onActivate}
+    >
+      <div className="flex items-center gap-3">
         <button
+          ref={(el) => (pillRefs.current[0] = el)}
           type="button"
-          onClick={toggleEditMode}
-          className={`mr-2 shrink-0 rounded-control px-4 py-2 text-sm font-semibold transition-colors ${
+          onClick={() => {
+            setPillIndex(-1)
+            toggleEditMode()
+          }}
+          className={`shrink-0 rounded-control px-4 py-2 text-sm font-semibold transition-colors ${
             editMode ? 'bg-accent text-white' : 'bg-surface-hi text-muted hover:text-white'
-          }`}
+          } ${zone === 'pills' && pillIndex === -1 ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
         >
           {editMode ? 'Done Editing' : 'Edit Page'}
         </button>
-        {pages.map((page, i) => (
+        <div className="h-6 w-px shrink-0 bg-white/10" />
+        <div className="flex flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {pages.map((page, i) => (
+            <span
+              key={page.id}
+              ref={(el) => (pillRefs.current[i + 1] = el)}
+              onClick={() => {
+                setPillIndex(i)
+                if (editMode) {
+                  setPageMenuIndex(0)
+                  setZone('pageMenu')
+                } else {
+                  void switchToPage(page.id)
+                }
+              }}
+              className={`scroll-m-4 shrink-0 cursor-pointer whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                page.id === activePage?.id ? 'bg-accent text-white' : 'bg-surface text-muted'
+              } ${zone === 'pills' && pillIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
+            >
+              {page.name}
+            </span>
+          ))}
           <span
-            key={page.id}
+            ref={(el) => (pillRefs.current[pages.length + 1] = el)}
             onClick={() => {
-              setPillIndex(i)
-              if (editMode) {
-                setPageMenuIndex(0)
-                setZone('pageMenu')
-              } else {
-                void switchToPage(page.id)
-              }
+              setPillIndex(pages.length)
+              setKbValue('')
+              setKbShift(false)
+              setKbRow(0)
+              setKbCol(0)
+              setKbPurpose('newPage')
+              setZone('keyboard')
             }}
-            className={`cursor-pointer whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-              page.id === activePage?.id ? 'bg-accent text-white' : 'bg-surface text-muted'
-            } ${zone === 'pills' && pillIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
+            className={`scroll-m-4 flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full bg-surface px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-white ${
+              zone === 'pills' && pillIndex === pages.length ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''
+            }`}
           >
-            {page.name}
+            <Plus className="h-3.5 w-3.5" /> New Page
           </span>
-        ))}
-        <span
-          onClick={() => {
-            setKbValue('')
-            setKbShift(false)
-            setKbRow(0)
-            setKbCol(0)
-            setKbPurpose('newPage')
-            setZone('keyboard')
-          }}
-          className={`flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full bg-surface px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-white ${
-            zone === 'pills' && pillIndex === pages.length ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''
-          }`}
-        >
-          <Plus className="h-3.5 w-3.5" /> New Page
-        </span>
+        </div>
       </div>
 
       {isEmpty && !editMode && (
@@ -1010,8 +1085,9 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
             {ADD_MENU_ITEMS.map((item, i) => (
               <div
                 key={item.id}
+                ref={(el) => (addMenuRefs.current[i] = el)}
                 onClick={() => activateAddMenuItem(item)}
-                className={`flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
+                className={`scroll-m-2 flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
                   addMenuIndex === i && zone === 'addMenu' ? 'bg-accent text-white' : 'bg-surface-hi text-muted hover:text-white'
                 }`}
               >
@@ -1032,6 +1108,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
             {GENRES.map((genre, i) => (
               <div
                 key={genre}
+                ref={(el) => (genreRefs.current[i] = el)}
                 onClick={() =>
                   void commitBlock({
                     kind: 'row',
@@ -1039,7 +1116,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
                     source: { kind: 'catalog', catalogType: genrePickType, catalogId: 'top', genre }
                   })
                 }
-                className={`cursor-pointer rounded-xl px-4 py-3 font-medium transition-colors ${
+                className={`scroll-m-2 cursor-pointer rounded-xl px-4 py-3 font-medium transition-colors ${
                   subPickIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted hover:text-white'
                 }`}
               >
@@ -1063,6 +1140,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
             {addonCatalogOptions.map((option, i) => (
               <div
                 key={`${option.addonUrl}:${option.catalogId}`}
+                ref={(el) => (addonCatalogRefs.current[i] = el)}
                 onClick={() =>
                   void commitBlock({
                     kind: 'row',
@@ -1075,7 +1153,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
                     }
                   })
                 }
-                className={`cursor-pointer rounded-xl px-4 py-3 transition-colors ${
+                className={`scroll-m-2 cursor-pointer rounded-xl px-4 py-3 transition-colors ${
                   subPickIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted hover:text-white'
                 }`}
               >
@@ -1116,8 +1194,9 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
             {otherPages.map((page, i) => (
               <div
                 key={page.id}
+                ref={(el) => (pagePickRefs.current[i] = el)}
                 onClick={() => void commitBlock({ kind: 'card', card: { kind: 'pageShortcut', pageId: page.id } })}
-                className={`cursor-pointer rounded-xl px-4 py-3 font-medium transition-colors ${
+                className={`scroll-m-2 cursor-pointer rounded-xl px-4 py-3 font-medium transition-colors ${
                   subPickIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted hover:text-white'
                 }`}
               >
@@ -1137,8 +1216,9 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
             {titleResults.map((item, i) => (
               <div
                 key={`${item.type}:${item.id}`}
+                ref={(el) => (titleResultsRefs.current[i] = el)}
                 onClick={() => void commitBlock({ kind: 'card', card: { kind: 'pinnedTitle', id: item.id, type: item.type } })}
-                className={`flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
+                className={`scroll-m-2 flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
                   subPickIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted hover:text-white'
                 }`}
               >
