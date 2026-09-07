@@ -381,7 +381,7 @@ export function HomeMenu(): JSX.Element {
               setZone('hero')
               activateContinue(continueSuggestion)
             }}
-            className={`absolute bottom-6 left-6 flex w-[26rem] max-w-[80%] cursor-pointer items-center gap-4 rounded-2xl bg-black/40 p-4 shadow-lg ring-1 ring-white/15 backdrop-blur-md transition-shadow ${
+            className={`absolute bottom-6 left-6 flex w-[26rem] max-w-[80%] cursor-pointer items-center gap-4 rounded-panel bg-black/40 p-4 shadow-lg ring-1 ring-white/15 backdrop-blur-md transition-shadow ${
               zone === 'hero' ? 'shadow-focus ring-2 ring-accent' : ''
             }`}
           >
@@ -412,7 +412,7 @@ export function HomeMenu(): JSX.Element {
 
         <div className="absolute right-6 top-6 flex flex-col gap-3">
           {weather && WeatherIcon && (
-            <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
+            <div className="flex w-52 items-center gap-3 rounded-panel bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
               <WeatherIcon className="h-7 w-7" />
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
@@ -421,7 +421,7 @@ export function HomeMenu(): JSX.Element {
             </div>
           )}
           {libraryStats && (
-            <div className="flex w-52 items-center gap-3 rounded-xl bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
+            <div className="flex w-52 items-center gap-3 rounded-panel bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
               <Gamepad2 className="h-7 w-7" />
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{libraryStats.games}</span>
@@ -430,7 +430,7 @@ export function HomeMenu(): JSX.Element {
             </div>
           )}
           {systemStats && (
-            <div className="flex w-52 flex-col gap-2 rounded-xl bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
+            <div className="flex w-52 flex-col gap-2 rounded-panel bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted">CPU</span>
                 <span className="font-semibold">
@@ -460,7 +460,7 @@ export function HomeMenu(): JSX.Element {
 
       <div className="shrink-0">
         <h2 className="mb-3 text-lg font-semibold">Your Apps</h2>
-        <div className="grid grid-cols-7 gap-6">
+        <div className="grid grid-cols-7 gap-[var(--space-grid-gap)]">
           {TILES.map((tile, i) => (
             <motion.div
               key={tile.id}

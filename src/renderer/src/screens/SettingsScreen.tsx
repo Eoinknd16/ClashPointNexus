@@ -5,6 +5,7 @@ import {
   Gamepad2,
   Link2,
   Palette,
+  Plus,
   RefreshCw,
   Settings as SettingsIcon,
   Share2,
@@ -26,6 +27,7 @@ import { openThemesFolder, rescanThemesFolder } from '../themes/themeFolderActio
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
 import type { StartupSettings } from '@shared/settingsTypes'
+import { activeStyleOptionIndex, STYLE_AXES } from '@shared/themeStyle'
 import { COMMUNITY_THEMES_REPO, type ThemeDefinition } from '@shared/themeTypes'
 
 /** The 7 base colors a theme actually defines by hand — everything else
@@ -76,7 +78,8 @@ const FIELD_LABELS: Record<string, string> = {
   steamId64: 'Steam ID64',
   stremioEmail: 'Stremio Email',
   stremioPassword: 'Stremio Password',
-  omdbApiKey: 'OMDb API Key'
+  omdbApiKey: 'OMDb API Key',
+  createThemeName: 'New Theme Name'
 }
 
 function header(id: string, label: string, category: string): SettingsRow {
@@ -129,7 +132,7 @@ export function SettingsScreen(): JSX.Element {
   const [startupSettings, setStartupSettings] = useState<StartupSettings | null>(null)
   const [themesFolderPath, setThemesFolderPath] = useState('')
 
-  const [zone, setZone] = useState<'sidebar' | 'content' | 'keyboard' | 'colorEditor' | 'confirmRemoveTheme'>(
+  const [zone, setZone] = useState<'sidebar' | 'content' | 'keyboard' | 'themeEditor' | 'confirmRemoveTheme'>(
     'sidebar'
   )
   const [categoryIndex, setCategoryIndex] = useState(0)
@@ -139,9 +142,11 @@ export function SettingsScreen(): JSX.Element {
   const [kbCol, setKbCol] = useState(0)
   const [kbValue, setKbValue] = useState('')
   const [kbShift, setKbShift] = useState(false)
-  const [colorEditorTheme, setColorEditorTheme] = useState<ThemeDefinition | null>(null)
+  const [themeEditorTheme, setThemeEditorTheme] = useState<ThemeDefinition | null>(null)
+  const [editorTab, setEditorTab] = useState<'colors' | 'style'>('colors')
   const [colorEditorKeyIndex, setColorEditorKeyIndex] = useState(0)
   const [colorEditorChannel, setColorEditorChannel] = useState(0)
+  const [styleAxisIndex, setStyleAxisIndex] = useState(0)
   const [themeToRemove, setThemeToRemove] = useState<ThemeDefinition | null>(null)
   const [removeConfirmIndex, setRemoveConfirmIndex] = useState(0)
 
@@ -216,9 +221,9 @@ export function SettingsScreen(): JSX.Element {
       return [
         themeRow,
         {
-          id: `editColors-${theme.id}`,
+          id: `customizeTheme-${theme.id}`,
           kind: 'action',
-          label: 'Fine-Tune Colors',
+          label: 'Customize Theme',
           category: 'appearance',
           icon: Palette
         },
@@ -238,6 +243,13 @@ export function SettingsScreen(): JSX.Element {
         }
       ]
     }),
+    {
+      id: 'createTheme',
+      kind: 'action',
+      label: 'Create New Theme',
+      category: 'appearance',
+      icon: Plus
+    },
     header('themePacks', 'Custom Theme Packs', 'appearance'),
     {
       id: 'themesFolderPath',
@@ -481,6 +493,8 @@ export function SettingsScreen(): JSX.Element {
       setOmdbApiKey(trimmed)
       window.api.settings.setOmdbApiKey(trimmed)
       setMessage('OMDb API key saved')
+    } else if (field === 'createThemeName') {
+      void doCreateTheme(value)
     }
   }
 
@@ -568,20 +582,41 @@ export function SettingsScreen(): JSX.Element {
     }
   }
 
-  // Editing a theme's colors implicitly selects it first — the live preview
-  // (colors apply to :root immediately on every adjustment) would otherwise
-  // be previewing a theme that isn't even the one currently showing.
-  function openColorEditor(theme: ThemeDefinition): void {
+  // Editing a theme implicitly selects it first — every adjustment (color OR
+  // style) applies to :root live, which would otherwise be previewing a
+  // theme that isn't even the one currently showing.
+  function openThemeEditor(theme: ThemeDefinition): void {
     if (themeId !== theme.id) setTheme(theme.id)
-    setColorEditorTheme(theme)
+    setThemeEditorTheme(theme)
+    setEditorTab('colors')
     setColorEditorKeyIndex(0)
     setColorEditorChannel(0)
-    setZone('colorEditor')
+    setStyleAxisIndex(0)
+    setZone('themeEditor')
   }
 
-  function closeColorEditor(): void {
+  function closeThemeEditor(): void {
     setZone('content')
-    setColorEditorTheme(null)
+    setThemeEditorTheme(null)
+  }
+
+  // The Theme Editor's "Create New Theme" — makes a real, from-nothing
+  // custom theme (not just a tweak of an installed pack), seeded from
+  // whatever theme is currently active so there's something reasonable to
+  // start tweaking from rather than a jarring reset to plain defaults.
+  async function doCreateTheme(rawName: string): Promise<void> {
+    const name = rawName.trim() || 'My Theme'
+    const seedTheme = allThemes.find((t) => t.id === themeId)
+    setMessage(`Creating ${name}...`)
+    try {
+      const created = await window.api.settings.createCustomTheme(name, seedTheme?.vars ?? {})
+      await refreshCustomThemes()
+      setTheme(created.id)
+      setMessage(`Created ${created.name} — customize it below`)
+      openThemeEditor(created)
+    } catch (error) {
+      setMessage(`Couldn't create theme: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   function openRemoveThemeConfirm(theme: ThemeDefinition): void {
@@ -626,18 +661,35 @@ export function SettingsScreen(): JSX.Element {
   }
 
   function adjustColor(direction: 1 | -1): void {
-    if (!colorEditorTheme) return
+    if (!themeEditorTheme) return
     const colorKey = COLOR_KEYS[colorEditorKeyIndex].key
-    const current = colorEditorTheme.vars[colorKey] ?? '128 128 128'
+    const current = themeEditorTheme.vars[colorKey] ?? '128 128 128'
     const hsl = rgbTripletToHsl(current)
     if (colorEditorChannel === 0) hsl.h = ((hsl.h + direction * 4) % 360 + 360) % 360
     else if (colorEditorChannel === 1) hsl.s = Math.max(0, Math.min(100, hsl.s + direction * 3))
     else hsl.l = Math.max(0, Math.min(100, hsl.l + direction * 3))
 
-    const newBaseVars = { ...colorEditorTheme.vars, [colorKey]: hslToRgbTriplet(hsl.h, hsl.s, hsl.l) }
+    const newBaseVars = { ...themeEditorTheme.vars, [colorKey]: hslToRgbTriplet(hsl.h, hsl.s, hsl.l) }
     const newVars = deriveThemeVars(newBaseVars)
-    const updated: ThemeDefinition = { ...colorEditorTheme, vars: newVars }
-    setColorEditorTheme(updated)
+    const updated: ThemeDefinition = { ...themeEditorTheme, vars: newVars }
+    setThemeEditorTheme(updated)
+    updateThemeVars(updated.id, newVars)
+  }
+
+  // Style's counterpart to adjustColor — cycles the active axis (Typography,
+  // Corner Roundness, Card Size, Spacing, Glow Intensity, Animation Style;
+  // see shared/themeStyle.ts) to its next/previous curated option rather
+  // than a raw numeric adjustment, same "pick from options that always look
+  // good" philosophy as the rest of this editor.
+  function adjustStyle(direction: 1 | -1): void {
+    if (!themeEditorTheme) return
+    const axis = STYLE_AXES[styleAxisIndex]
+    const currentIndex = activeStyleOptionIndex(axis, themeEditorTheme.vars)
+    const nextIndex = (currentIndex + direction + axis.options.length) % axis.options.length
+    const newBaseVars = { ...themeEditorTheme.vars, ...axis.options[nextIndex].vars }
+    const newVars = deriveThemeVars(newBaseVars)
+    const updated: ThemeDefinition = { ...themeEditorTheme, vars: newVars }
+    setThemeEditorTheme(updated)
     updateThemeVars(updated.id, newVars)
   }
 
@@ -664,10 +716,10 @@ export function SettingsScreen(): JSX.Element {
       const id = row.id.replace('theme-', '')
       setTheme(id)
       setMessage(`Theme set to ${row.label}`)
-    } else if (row.id.startsWith('editColors-')) {
-      const id = row.id.replace('editColors-', '')
+    } else if (row.id.startsWith('customizeTheme-')) {
+      const id = row.id.replace('customizeTheme-', '')
       const theme = allThemes.find((t) => t.id === id)
-      if (theme) openColorEditor(theme)
+      if (theme) openThemeEditor(theme)
     } else if (row.id.startsWith('submitTheme-')) {
       const id = row.id.replace('submitTheme-', '')
       const theme = allThemes.find((t) => t.id === id)
@@ -693,6 +745,8 @@ export function SettingsScreen(): JSX.Element {
       openThemesFolder()
     } else if (row.id === 'rescanThemesFolder') {
       void rescanThemesFolder(refreshCustomThemes, setMessage)
+    } else if (row.id === 'createTheme') {
+      openKeyboard('createThemeName', '')
     }
   }
 
@@ -716,30 +770,44 @@ export function SettingsScreen(): JSX.Element {
       }
     }
 
-    if (zone === 'colorEditor') {
+    if (zone === 'themeEditor') {
       switch (action) {
+        // L2/R2 — the shoulder pair right next to L1/R1 (which cycle within
+        // the Colors tab) switches between the two tabs themselves, rather
+        // than reusing any of Up/Down/Left/Right, which already mean
+        // "change channel"/"change axis" and "adjust value" inside each tab.
+        case 'volumeDown':
+          setEditorTab('colors')
+          return
+        case 'volumeUp':
+          setEditorTab('style')
+          return
         case 'prevStream':
-          setColorEditorKeyIndex((i) => (i === 0 ? COLOR_KEYS.length - 1 : i - 1))
+          if (editorTab === 'colors') setColorEditorKeyIndex((i) => (i === 0 ? COLOR_KEYS.length - 1 : i - 1))
           return
         case 'nextStream':
-          setColorEditorKeyIndex((i) => (i + 1) % COLOR_KEYS.length)
+          if (editorTab === 'colors') setColorEditorKeyIndex((i) => (i + 1) % COLOR_KEYS.length)
           return
         case 'up':
-          setColorEditorChannel((c) => (c === 0 ? 2 : c - 1))
+          if (editorTab === 'colors') setColorEditorChannel((c) => (c === 0 ? 2 : c - 1))
+          else setStyleAxisIndex((i) => (i === 0 ? STYLE_AXES.length - 1 : i - 1))
           return
         case 'down':
-          setColorEditorChannel((c) => (c + 1) % 3)
+          if (editorTab === 'colors') setColorEditorChannel((c) => (c + 1) % 3)
+          else setStyleAxisIndex((i) => (i + 1) % STYLE_AXES.length)
           return
         case 'left':
-          adjustColor(-1)
+          if (editorTab === 'colors') adjustColor(-1)
+          else adjustStyle(-1)
           return
         case 'right':
-          adjustColor(1)
+          if (editorTab === 'colors') adjustColor(1)
+          else adjustStyle(1)
           return
         case 'back':
         case 'menu':
         case 'confirm':
-          closeColorEditor()
+          closeThemeEditor()
           return
         default:
           return
@@ -937,64 +1005,118 @@ export function SettingsScreen(): JSX.Element {
 
       <footer className="text-sm text-muted">{message}</footer>
 
-      {zone === 'colorEditor' && colorEditorTheme && (
+      {zone === 'themeEditor' && themeEditorTheme && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
-          <div className="flex w-96 flex-col gap-4 rounded-2xl bg-surface p-8">
-            <div className="flex items-center gap-3">
-              <span
-                className="h-10 w-10 shrink-0 rounded-full ring-1 ring-white/20"
-                style={{
-                  backgroundColor: `rgb(${colorEditorTheme.vars[COLOR_KEYS[colorEditorKeyIndex].key] ?? '128 128 128'})`
-                }}
-              />
-              <div className="flex flex-col leading-tight">
-                <span className="text-xs text-muted">{colorEditorTheme.name}</span>
-                <span className="font-semibold">{COLOR_KEYS[colorEditorKeyIndex].label}</span>
+          <div className="flex w-[30rem] flex-col gap-4 rounded-panel bg-surface p-8">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold">{themeEditorTheme.name}</span>
+              <div className="flex gap-1.5 rounded-full bg-surface-hover p-1">
+                {(['colors', 'style'] as const).map((tab) => (
+                  <span
+                    key={tab}
+                    className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+                      editorTab === tab ? 'bg-accent text-white' : 'text-muted'
+                    }`}
+                  >
+                    {tab}
+                  </span>
+                ))}
               </div>
             </div>
 
-            <div className="flex flex-col gap-3">
-              {CHANNEL_LABELS.map((label, i) => {
-                const hsl = rgbTripletToHsl(
-                  colorEditorTheme.vars[COLOR_KEYS[colorEditorKeyIndex].key] ?? '128 128 128'
-                )
-                const value = i === 0 ? hsl.h : i === 1 ? hsl.s : hsl.l
-                const max = i === 0 ? 360 : 100
-                return (
-                  <div
-                    key={label}
-                    className={`flex flex-col gap-1 rounded-xl px-4 py-3 transition-colors ${
-                      colorEditorChannel === i ? 'bg-surface-hi ring-2 ring-accent' : 'bg-surface-hover'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted">{label}</span>
-                      <span className="font-semibold">
-                        {Math.round(value)}
-                        {i === 0 ? '°' : '%'}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-white/10">
-                      <div
-                        className="h-full rounded-full bg-accent-gradient"
-                        style={{ width: `${(value / max) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            {editorTab === 'colors' ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <span
+                    className="h-10 w-10 shrink-0 rounded-full ring-1 ring-white/20"
+                    style={{
+                      backgroundColor: `rgb(${themeEditorTheme.vars[COLOR_KEYS[colorEditorKeyIndex].key] ?? '128 128 128'})`
+                    }}
+                  />
+                  <span className="font-semibold">{COLOR_KEYS[colorEditorKeyIndex].label}</span>
+                </div>
 
-            <p className="text-xs text-muted">
-              L1/R1: switch color · Up/Down: switch H/S/L · Left/Right: adjust · Back: done
-            </p>
+                <div className="flex flex-col gap-3">
+                  {CHANNEL_LABELS.map((label, i) => {
+                    const hsl = rgbTripletToHsl(
+                      themeEditorTheme.vars[COLOR_KEYS[colorEditorKeyIndex].key] ?? '128 128 128'
+                    )
+                    const value = i === 0 ? hsl.h : i === 1 ? hsl.s : hsl.l
+                    const max = i === 0 ? 360 : 100
+                    return (
+                      <div
+                        key={label}
+                        className={`flex flex-col gap-1 rounded-xl px-4 py-3 transition-colors ${
+                          colorEditorChannel === i ? 'bg-surface-hi ring-2 ring-accent' : 'bg-surface-hover'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted">{label}</span>
+                          <span className="font-semibold">
+                            {Math.round(value)}
+                            {i === 0 ? '°' : '%'}
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-accent-gradient"
+                            style={{ width: `${(value / max) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <p className="text-xs text-muted">
+                  L1/R1: switch color · Up/Down: switch H/S/L · Left/Right: adjust · L2/R2: switch tab · Back: done
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2">
+                  {STYLE_AXES.map((axis, i) => {
+                    const optionIndex = activeStyleOptionIndex(axis, themeEditorTheme.vars)
+                    const option = axis.options[optionIndex]
+                    return (
+                      <div
+                        key={axis.key}
+                        className={`flex flex-col gap-1 rounded-xl px-4 py-3 transition-colors ${
+                          styleAxisIndex === i ? 'bg-surface-hi ring-2 ring-accent' : 'bg-surface-hover'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted">{axis.label}</span>
+                          <span className="font-semibold">{option.label}</span>
+                        </div>
+                        <div className="flex gap-1">
+                          {axis.options.map((opt, optIndex) => (
+                            <span
+                              key={opt.id}
+                              className={`h-1.5 flex-1 rounded-full ${
+                                optIndex === optionIndex ? 'bg-accent-gradient' : 'bg-white/10'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <p className="text-xs text-muted">
+                  {STYLE_AXES[styleAxisIndex].hint} · Up/Down: switch setting · Left/Right: change · L2/R2: switch
+                  tab · Back: done
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}
 
       {zone === 'confirmRemoveTheme' && themeToRemove && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
-          <div className="flex w-96 flex-col gap-4 rounded-2xl bg-surface p-8">
+          <div className="flex w-96 flex-col gap-4 rounded-panel bg-surface p-8">
             <h2 className="text-lg font-semibold">Remove theme "{themeToRemove.name}"?</h2>
             <p className="text-sm text-muted">
               {themeToRemove.id === themeId

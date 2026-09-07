@@ -23,7 +23,7 @@ import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../str
 import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
 import { importStremioHistory } from '../stremio/importHistory'
 import { getStartupSettings, setStartupEnabled } from './startup'
-import { installThemeFromFolder, removeInstalledTheme, scanThemesDropFolder } from './themeInstall'
+import { createCustomTheme, installThemeFromFolder, removeInstalledTheme, scanThemesDropFolder } from './themeInstall'
 import { loadCustomThemes, saveCustomThemes, themesDropRoot } from './themes'
 import { prepareThemeSubmission } from './themeSubmission'
 
@@ -78,6 +78,15 @@ export function registerSettingsIpc(): void {
   })
 
   ipcMain.handle('settings:getCustomThemes', (): ThemeDefinition[] => loadCustomThemes())
+
+  // The Theme Editor's "Create New Theme" — makes one from nothing (seeded
+  // from whatever vars the renderer sends, normally the currently-active
+  // theme's own), rather than only ever editing an installed pack.
+  ipcMain.handle(
+    'settings:createCustomTheme',
+    (_event, name: string, seedVars: Record<string, string>): ThemeDefinition =>
+      createCustomTheme(name, seedVars)
+  )
 
   ipcMain.handle('settings:installTheme', (_event, folderPath: string): Promise<ThemeInstallResult> =>
     installThemeFromFolder(folderPath)

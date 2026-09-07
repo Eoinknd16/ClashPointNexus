@@ -270,3 +270,23 @@ export function removeInstalledTheme(id: string): void {
   saveCustomThemes(existing.filter((t) => t.id !== id))
   rmSync(join(themeAssetsRoot(), id), { recursive: true, force: true })
 }
+
+/**
+ * Creates a brand-new custom theme from nothing — the Theme Editor's
+ * "Create New Theme" action, for actually making a theme in-app rather than
+ * only ever fine-tuning one that arrived as an installed pack. Seeded from
+ * the caller's own vars (normally whichever theme was active when the user
+ * hit "Create"), re-run through deriveThemeVars so it's a complete,
+ * self-consistent bag either way. Doesn't create a heroImage/tileImages —
+ * a from-scratch theme has no source images to seed from, so it falls back
+ * to Home's own CSS/SVG scene and each app tile's flat icon color, same as
+ * any built-in theme without a pack of its own; real imagery still has to
+ * come from a folder-based pack install, same as ever.
+ */
+export function createCustomTheme(name: string, seedVars: Record<string, string>): ThemeDefinition {
+  const existing = loadCustomThemes()
+  const id = uniqueId(slugifyToId(name), new Set(existing.map((t) => t.id)))
+  const theme: ThemeDefinition = { id, name, vars: deriveThemeVars(seedVars) }
+  saveCustomThemes([...existing, theme])
+  return theme
+}

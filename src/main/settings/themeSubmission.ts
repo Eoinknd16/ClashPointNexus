@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { basename, join } from 'path'
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { fileURLToPath } from 'url'
+import { STYLE_DEFAULTS } from '@shared/themeStyle'
 import type { ThemePackManifest, ThemeSubmissionResult } from '@shared/themeTypes'
 import { loadCustomThemes } from './themes'
 
@@ -18,6 +19,11 @@ const BASE_COLOR_KEYS = [
   '--color-accent-2',
   '--color-muted'
 ]
+
+/** Style vars (font/radius/card size/spacing/glow/motion — see
+ * themeStyle.ts) also get exported, on top of the colors above, so sharing a
+ * theme preserves the author's full customization, not just its palette. */
+const EXPORTED_VAR_KEYS = [...BASE_COLOR_KEYS, ...Object.keys(STYLE_DEFAULTS)]
 
 function themeExportsRoot(): string {
   const isDev = !app.isPackaged
@@ -70,7 +76,7 @@ export function prepareThemeSubmission(id: string): ThemeSubmissionResult {
   }
 
   const manifest: ThemePackManifest = {
-    vars: Object.fromEntries(BASE_COLOR_KEYS.filter((key) => theme.vars[key]).map((key) => [key, theme.vars[key]]))
+    vars: Object.fromEntries(EXPORTED_VAR_KEYS.filter((key) => theme.vars[key]).map((key) => [key, theme.vars[key]]))
   }
 
   if (theme.heroImage) {

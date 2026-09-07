@@ -18,6 +18,24 @@
   --shadow-focus: 0 0 0 3px rgba(91, 140, 255, 0.6), 0 0 18px rgba(91, 140, 255, 0.22),
     0 8px 20px rgba(0, 0, 0, 0.45);
   --shadow-panel: -24px 0 60px rgba(0, 0, 0, 0.5);
+
+  /* Style defaults (see shared/themeStyle.ts's STYLE_DEFAULTS) — same
+     anti-flash reasoning as the color vars above: this is what the app
+     looked like before theming existed, so it's what should show for the
+     instant before themeStore.init() applies the real active theme. */
+  --font-sans: 'Segoe UI', 'Segoe UI Variable', system-ui, sans-serif;
+  --radius-card: 1rem;
+  --radius-panel: 1.25rem;
+  --radius-control: 9999px;
+  --card-scale: 1;
+  --space-grid-gap: 2rem;
+  --glow-intensity: 1;
+  --motion-preset: snappy;
+  --motion-stiffness: 420;
+  --motion-damping: 30;
+  --motion-scale-focus: 1.05;
+  --motion-lift: 6;
+  --motion-tap-scale: 0.97;
 }
 
 html,

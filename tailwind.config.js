@@ -17,7 +17,20 @@ module.exports = {
         muted: 'rgb(var(--color-muted) / <alpha-value>)'
       },
       fontFamily: {
-        sans: ['Segoe UI', 'system-ui', 'sans-serif']
+        // var(--font-sans) is itself a full fallback stack (see
+        // themeStyle.ts's FONT_OPTIONS) — these two are just the safety net
+        // for the (practically never reached) case the var is unset.
+        sans: ['var(--font-sans)', 'Segoe UI', 'system-ui', 'sans-serif']
+      },
+      // rounded-card/panel/control — theme-driven corner roundness (see
+      // themeStyle.ts's RADIUS_OPTIONS) in place of a fixed rounded-2xl/xl
+      // wherever a component wants to follow it. rounded-full stays literal
+      // Tailwind everywhere else (pills/avatars/progress bars are always
+      // fully round, regardless of this setting).
+      borderRadius: {
+        card: 'var(--radius-card)',
+        panel: 'var(--radius-panel)',
+        control: 'var(--radius-control)'
       },
       boxShadow: {
         focus: 'var(--shadow-focus)',

@@ -5,6 +5,8 @@
  * no Electron/DOM dependency — shared between the renderer (the color
  * picker) and the main process (theme-pack install, extracting accent
  * colors from a theme's own images). */
+import { resolveStyleVars } from './themeStyle'
+
 export interface Hsl {
   h: number
   s: number
@@ -78,19 +80,31 @@ export function hslToRgbTriplet(hIn: number, sIn: number, lIn: number): string {
  * explicit feedback that the previous, more subtle glow read as too muted —
  * a bright inner ring, a strong accent-colored glow, and a second, softer
  * halo in accent-2 for a two-tone neon look on every theme, built-in or
- * installed alike. */
+ * installed alike.
+ *
+ * Also folds in every style var (font/radius/card size/spacing/motion — see
+ * themeStyle.ts) via resolveStyleVars, so every theme this ever runs on
+ * (built-in, installed pack, in-app-edited) ends up with a complete vars
+ * bag — never missing a key an older/foreign theme predates. --glow-intensity
+ * (also resolved there) scales just the ambient bloom below, not the crisp
+ * focus ring itself, which stays fully visible regardless — that ring is how
+ * a controller user tracks focus at all, not a cosmetic effect. */
 export function deriveThemeVars(base: Record<string, string>): Record<string, string> {
-  const accent = (base['--color-accent'] ?? '91 140 255').trim().replace(/\s+/g, ',')
-  const accent2 = (base['--color-accent-2'] ?? '160 107 255').trim().replace(/\s+/g, ',')
+  const resolved = resolveStyleVars(base)
+  const accent = (resolved['--color-accent'] ?? '91 140 255').trim().replace(/\s+/g, ',')
+  const accent2 = (resolved['--color-accent-2'] ?? '160 107 255').trim().replace(/\s+/g, ',')
+  const glowRaw = parseFloat(resolved['--glow-intensity'] ?? '1')
+  const glow = Number.isFinite(glowRaw) ? Math.max(0, Math.min(2, glowRaw)) : 1
+  const bloom = (alpha: number): number => Math.round(Math.min(1, alpha * glow) * 100) / 100
   return {
-    ...base,
+    ...resolved,
     '--gradient-app-glow':
-      `radial-gradient(ellipse 80% 60% at 15% -10%, rgba(${accent},0.2), transparent 60%), ` +
-      `radial-gradient(ellipse 70% 50% at 100% 10%, rgba(${accent2},0.16), transparent 60%)`,
+      `radial-gradient(ellipse 80% 60% at 15% -10%, rgba(${accent},${bloom(0.2)}), transparent 60%), ` +
+      `radial-gradient(ellipse 70% 50% at 100% 10%, rgba(${accent2},${bloom(0.16)}), transparent 60%)`,
     '--gradient-accent': `linear-gradient(135deg, rgb(${accent}) 0%, rgb(${accent2}) 100%)`,
     '--shadow-focus':
-      `0 0 0 3px rgba(${accent},0.9), 0 0 24px rgba(${accent},0.6), ` +
-      `0 0 48px rgba(${accent2},0.35), 0 8px 20px rgba(0,0,0,0.5)`,
+      `0 0 0 3px rgba(${accent},0.9), 0 0 24px rgba(${accent},${bloom(0.6)}), ` +
+      `0 0 48px rgba(${accent2},${bloom(0.35)}), 0 8px 20px rgba(0,0,0,0.5)`,
     '--shadow-panel': '-24px 0 60px rgba(0,0,0,0.5)'
   }
 }

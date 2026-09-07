@@ -17,7 +17,10 @@ interface CategoryRowProps {
 // Fixed-width columns (via grid-auto-flow: column) let the row scroll
 // horizontally while each FocusableCard still just fills its own column —
 // the same w-full-fills-its-track pattern used everywhere else, so no
-// special-casing needed in FocusableCard itself.
+// special-casing needed in FocusableCard itself. The base 260px/180px track
+// widths are scaled by --card-scale (theme's Card Size setting, see
+// shared/themeStyle.ts) rather than resized on FocusableCard itself, which
+// would fight framer-motion's own transform on that same element.
 //
 // Two separate things have to be accounted for here, not just one:
 // - Padding: overflow-x-hidden forces the vertical axis to clip too (per
@@ -26,10 +29,13 @@ interface CategoryRowProps {
 //   this container's own edges.
 // - Gap: transform: scale() doesn't reserve extra layout space, so a focused
 //   card grows past its own column and can overlap the *next* card — the gap
-//   has to be wide enough to absorb that growth (plus the glow) on its own.
+//   (--space-grid-gap, theme's Spacing setting) has to be wide enough to
+//   absorb that growth (plus the glow) on its own.
 const ROW_CLASSES = {
-  landscape: 'grid auto-cols-[260px] grid-flow-col gap-8 overflow-x-hidden px-4 py-5',
-  portrait: 'grid auto-cols-[180px] grid-flow-col gap-8 overflow-x-hidden px-4 py-5'
+  landscape:
+    'grid auto-cols-[calc(260px*var(--card-scale))] grid-flow-col gap-[var(--space-grid-gap)] overflow-x-hidden px-4 py-5',
+  portrait:
+    'grid auto-cols-[calc(180px*var(--card-scale))] grid-flow-col gap-[var(--space-grid-gap)] overflow-x-hidden px-4 py-5'
 }
 
 export function CategoryRow({
@@ -89,7 +95,7 @@ export function CategoryRow({
           <div
             ref={(el) => (cardRefs.current[items.length] = el)}
             onClick={onSeeMore}
-            className={`scroll-m-8 flex w-full ${ASPECT_CLASSES[aspect]} shrink-0 cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed transition-colors ${
+            className={`scroll-m-8 flex w-full ${ASPECT_CLASSES[aspect]} shrink-0 cursor-pointer items-center justify-center rounded-card border-2 border-dashed transition-colors ${
               focused && focusedIndex === items.length
                 ? 'shadow-focus border-accent text-accent'
                 : 'border-white/10 text-muted'

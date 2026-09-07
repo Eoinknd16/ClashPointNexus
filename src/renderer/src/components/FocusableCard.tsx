@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronRight, Star, type LucideIcon } from 'lucide-react'
+import { useCardMotion } from '../themes/useCardMotion'
 
 export interface CardItem {
   id: string
@@ -112,14 +113,15 @@ export function FocusableCard({
   const showIcon = !showImage && Boolean(item.icon)
   const Icon = item.icon
   const aspectClass = size === 'large' ? ASPECT_CLASSES.large : ASPECT_CLASSES[aspect]
+  const cardMotion = useCardMotion()
 
   return (
     <motion.div
       onClick={onClick}
-      animate={{ scale: focused ? 1.05 : 1, y: focused ? -6 : 0 }}
-      whileTap={{ scale: focused ? 1.02 : 0.97 }}
-      transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-      className={`relative flex w-full ${aspectClass} shrink-0 flex-col justify-end overflow-hidden rounded-2xl ring-1 transition-shadow duration-200 ${
+      animate={{ scale: focused ? cardMotion.scaleFocus : 1, y: focused ? -cardMotion.lift : 0 }}
+      whileTap={{ scale: focused ? cardMotion.scaleFocus * 0.97 : cardMotion.tapScale }}
+      transition={{ type: 'spring', stiffness: cardMotion.stiffness, damping: cardMotion.damping }}
+      className={`relative flex w-full ${aspectClass} shrink-0 flex-col justify-end overflow-hidden rounded-card ring-1 transition-shadow duration-200 ${
         onClick ? 'cursor-pointer' : ''
       } ${
         focused ? 'z-20 shadow-focus ring-2 ring-accent' : 'z-0 ring-accent/25'

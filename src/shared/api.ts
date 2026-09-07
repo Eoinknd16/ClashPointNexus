@@ -92,6 +92,11 @@ export interface LauncherApi {
     resyncStremioAddons: () => Promise<StremioLoginResult>
     importStremioHistory: () => Promise<StremioImportResult>
     getCustomThemes: () => Promise<ThemeDefinition[]>
+    /** Creates a brand-new custom theme from nothing, seeded from the given
+     * vars (normally the currently-active theme's own) — the Theme Editor's
+     * "Create New Theme" action. Never gets a heroImage/tileImages; real
+     * imagery still only comes from a folder-based pack install. */
+    createCustomTheme: (name: string, seedVars: Record<string, string>) => Promise<ThemeDefinition>
     /** folderPath must contain a theme.json plus whatever image files it
      * references — see themeInstall.ts. Reached from File Manager's
      * "Install as Theme" action, never a native file dialog. */
