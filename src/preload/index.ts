@@ -45,6 +45,7 @@ const api: LauncherApi = {
     getStremio: () => ipcRenderer.invoke('settings:getStremio'),
     setStremioAddons: (streamAddons) => ipcRenderer.invoke('settings:setStremioAddons', streamAddons),
     addStremioAddon: (url) => ipcRenderer.invoke('settings:addStremioAddon', url),
+    listCommunityAddons: () => ipcRenderer.invoke('settings:listCommunityAddons'),
     stremioLogin: (email, password) => ipcRenderer.invoke('settings:stremioLogin', email, password),
     resyncStremioAddons: () => ipcRenderer.invoke('settings:resyncStremioAddons'),
     importStremioHistory: () => ipcRenderer.invoke('settings:importStremioHistory'),

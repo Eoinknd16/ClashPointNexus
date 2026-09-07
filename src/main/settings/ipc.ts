@@ -7,7 +7,7 @@ import type {
   StremioLoginResult,
   StremioSettings
 } from '@shared/settingsTypes'
-import type { AddonSummary } from '@shared/stremioTypes'
+import type { AddonSummary, CommunityAddon } from '@shared/stremioTypes'
 import type {
   CommunityThemeSummary,
   ThemeDefinition,
@@ -19,6 +19,7 @@ import { installCommunityTheme, listCommunityThemes } from './communityThemes'
 import { getOmdbApiKey, setOmdbApiKey } from '../ratings/config'
 import { loadSteamConfig, saveSteamConfig } from '../steam/config'
 import { signInWithSteam } from '../steam/openid'
+import { listCommunityAddons } from '../stremio/addonCollection'
 import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../stremio/account'
 import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
 import { importStremioHistory } from '../stremio/importHistory'
@@ -76,6 +77,13 @@ export function registerSettingsIpc(): void {
     saveStremioConfig({ ...config, addons })
     return addons
   })
+
+  // Powers the TV screen's searchable Addon Store — see
+  // stremio/addonCollection.ts for what this actually returns and where
+  // from. Installing a listed addon reuses settings:addStremioAddon above
+  // (transportUrl is already the normalized base-URL form it expects), so
+  // there's no separate "install" handler.
+  ipcMain.handle('settings:listCommunityAddons', (): Promise<CommunityAddon[]> => listCommunityAddons())
 
   ipcMain.handle('settings:getCustomThemes', (): ThemeDefinition[] => loadCustomThemes())
 

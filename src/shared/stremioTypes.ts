@@ -55,6 +55,22 @@ export interface AddonCatalogRow {
   items: CatalogItem[]
 }
 
+/** One entry from Stremio's own public addon collection (see
+ * main/stremio/addonCollection.ts) — everything needed to show it in the
+ * searchable Addon Store and install it on confirm. `transportUrl` is
+ * pre-normalized to the same base-URL form AddonSummary.url uses, so
+ * comparing the two directly (e.g. "is this one already installed?")
+ * doesn't need any URL-shape awareness in the renderer. */
+export interface CommunityAddon {
+  id: string
+  name: string
+  description: string
+  logo: string | null
+  types: string[]
+  resources: string[]
+  transportUrl: string
+}
+
 export interface EpisodeItem {
   /** Full Stremio video id, e.g. "tt1520211:1:4" — what getStreams/getTracks expect. */
   id: string

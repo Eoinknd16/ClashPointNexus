@@ -22,6 +22,7 @@ import type {
   AddonSummary,
   CatalogItem,
   CatalogType,
+  CommunityAddon,
   ExtendedMeta,
   SeriesMeta,
   StreamResult
@@ -102,6 +103,10 @@ export interface LauncherApi {
     getStremio: () => Promise<StremioSettings>
     setStremioAddons: (addons: AddonSummary[]) => Promise<void>
     addStremioAddon: (url: string) => Promise<AddonSummary[]>
+    /** Stremio's own public addon collection (~95 community addons) —
+     * powers the TV screen's searchable Addon Store. Install still goes
+     * through addStremioAddon above with the picked entry's transportUrl. */
+    listCommunityAddons: () => Promise<CommunityAddon[]>
     stremioLogin: (email: string, password: string) => Promise<StremioLoginResult>
     resyncStremioAddons: () => Promise<StremioLoginResult>
     importStremioHistory: () => Promise<StremioImportResult>
