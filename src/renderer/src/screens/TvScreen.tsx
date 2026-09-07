@@ -1440,7 +1440,14 @@ export function TvScreen(): JSX.Element {
       switch (action) {
         case 'confirm':
           if (video) {
-            if (video.paused) void video.play()
+            // A rapid press-then-press-again (or this same toggle firing
+            // from both the nav listener and the video element's own
+            // onClick for one input) can call pause() while the play() just
+            // above is still in flight -- Chromium rejects that in-flight
+            // promise with an expected, harmless AbortError ("interrupted by
+            // a call to pause()"), which an uncaught .play() surfaces as a
+            // scary crash toast for something that isn't actually a bug.
+            if (video.paused) void video.play().catch(() => {})
             else video.pause()
           }
           return
@@ -1865,7 +1872,7 @@ export function TvScreen(): JSX.Element {
           onClick={() => {
             const video = videoRef.current
             if (!video) return
-            if (video.paused) void video.play()
+            if (video.paused) void video.play().catch(() => {})
             else video.pause()
           }}
           onPlay={() => {
