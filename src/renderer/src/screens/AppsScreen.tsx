@@ -162,7 +162,7 @@ export function AppsScreen(): JSX.Element {
         <div className="grid flex-1 auto-rows-min grid-cols-5 gap-[max(2.5rem,var(--tile-grow-pad))] overflow-y-auto p-[var(--tile-grow-pad)]">
           {cards.length === 0 && <span className="text-muted">No apps registered yet.</span>}
           {cards.map((card, i) => (
-            <div key={card.id} ref={(el) => (cardRefs.current[i] = el)} className="scroll-m-10">
+            <div key={card.id} ref={(el) => (cardRefs.current[i] = el)} className="scroll-m-[var(--tile-grow-pad)]">
               <FocusableCard
                 item={card}
                 focused={zone === 'grid' && gridIndex === i}

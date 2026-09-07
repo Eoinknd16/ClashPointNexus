@@ -51,8 +51,17 @@ export function transcodedStreamUrl(
  * Serves the addon's subtitle (always SRT) converted to WebVTT directly from our
  * own already-trusted local origin — simpler and more robust than a renderer-side
  * blob: URL, which dynamically-added <track> elements don't always pick up reliably.
+ *
+ * `startSeconds` mirrors transcodedStreamUrl's own `t` param and must always be
+ * called with whatever offset the *video* is currently using — resuming or
+ * seeking to a position starts a fresh server-side transcode whose own 0:00 is
+ * really `startSeconds` into the real file (see transcodedStreamUrl), so cue
+ * timestamps converted from the original, un-shifted SRT would show whatever
+ * line was said at the video's real elapsed time, not this rebased one — e.g.
+ * resuming 40 minutes in shows dialogue from the first few minutes of the file.
+ * The proxy shifts every cue by this same amount before handing back VTT.
  */
-export function subtitleTrackUrl(sourceUrl: string): string {
-  const params = new URLSearchParams({ url: sourceUrl })
+export function subtitleTrackUrl(sourceUrl: string, startSeconds = 0): string {
+  const params = new URLSearchParams({ url: sourceUrl, t: String(startSeconds) })
   return `http://127.0.0.1:${TRANSCODE_PROXY_PORT}/subtitle?${params.toString()}`
 }

@@ -282,7 +282,11 @@ export function TvScreen(): JSX.Element {
   const [duration, setDuration] = useState<number | null>(null)
   const [volume, setVolume] = useState(1)
   const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([])
-  const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null)
+  // The addon's own raw SRT url — NOT what <track src> actually uses (see
+  // its render site below), which additionally has to carry baseOffset so a
+  // resumed/seeked video's rebased 0:00 gets matching, re-shifted cues
+  // instead of the subtitle silently starting from the real file's 0:00.
+  const [rawSubtitleUrl, setRawSubtitleUrl] = useState<string | null>(null)
   const [subtitlesOn, setSubtitlesOn] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
@@ -535,7 +539,7 @@ export function TvScreen(): JSX.Element {
   useEffect(() => {
     const track = trackRef.current?.track
     if (track) track.mode = subtitlesOn ? 'showing' : 'hidden'
-  }, [subtitlesOn, subtitleUrl])
+  }, [subtitlesOn, rawSubtitleUrl])
 
   useEffect(() => {
     let cancelled = false
@@ -1168,7 +1172,7 @@ export function TvScreen(): JSX.Element {
     mseStopRef.current?.()
     mseStopRef.current = null
     videoRef.current?.pause()
-    setSubtitleUrl(null)
+    setRawSubtitleUrl(null)
     setSubtitlesOn(false)
     setSubtitleTracks([])
     setStreams([])
@@ -1267,9 +1271,9 @@ export function TvScreen(): JSX.Element {
       setMessage('No subtitles available for this title')
       return
     }
-    if (!subtitleUrl) {
+    if (!rawSubtitleUrl) {
       const preferred = subtitleTracks.find((t) => t.lang === 'eng') ?? subtitleTracks[0]
-      setSubtitleUrl(subtitleTrackUrl(preferred.url))
+      setRawSubtitleUrl(preferred.url)
     }
     setSubtitlesOn(true)
   }
@@ -1901,8 +1905,14 @@ export function TvScreen(): JSX.Element {
             }
           }}
         >
-          {subtitleUrl && (
-            <track ref={trackRef} kind="subtitles" src={subtitleUrl} default label="Subtitles" />
+          {rawSubtitleUrl && (
+            <track
+              ref={trackRef}
+              kind="subtitles"
+              src={subtitleTrackUrl(rawSubtitleUrl, baseOffset)}
+              default
+              label="Subtitles"
+            />
           )}
         </video>
 

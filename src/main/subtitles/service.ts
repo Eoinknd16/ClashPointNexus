@@ -63,16 +63,57 @@ export async function fetchSubtitleTracks(type: CatalogType, id: string): Promis
   return results.flat()
 }
 
-/** SRT → WebVTT — the format `<track>` elements require natively. Addons only ever return SRT. */
-function srtToVtt(srt: string): string {
-  const body = srt.replace(/\r+/g, '').replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
-  return `WEBVTT\n\n${body}`
+const TIMESTAMP_PAIR = /(\d{2}):(\d{2}):(\d{2}),(\d{3}) --> (\d{2}):(\d{2}):(\d{2}),(\d{3})/g
+
+function parseTimestamp(h: string, m: string, s: string, ms: string): number {
+  return Number(h) * 3600 + Number(m) * 60 + Number(s) + Number(ms) / 1000
 }
 
-export async function fetchSubtitleVtt(url: string): Promise<string> {
+function formatTimestamp(totalSeconds: number): string {
+  const clamped = Math.max(0, totalSeconds)
+  const h = Math.floor(clamped / 3600)
+  const m = Math.floor((clamped % 3600) / 60)
+  const s = Math.floor(clamped % 60)
+  const ms = Math.round((clamped - Math.floor(clamped)) * 1000)
+  const pad = (n: number, width = 2): string => String(n).padStart(width, '0')
+  return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(ms, 3)}`
+}
+
+/** SRT → WebVTT — the format `<track>` elements require natively. Addons only
+ * ever return SRT.
+ *
+ * `offsetSeconds` rebases every cue for a resumed/seeked video whose own
+ * 0:00 is really `offsetSeconds` into the real file (see subtitleTrackUrl's
+ * own doc comment for why this has to happen at all) — a cue entirely before
+ * the offset is dropped (it can never be reached in the rebased stream), and
+ * one straddling it is clamped to start at 0 rather than going negative.
+ */
+function srtToVtt(srt: string, offsetSeconds: number): string {
+  const normalized = srt.replace(/\r+/g, '')
+  if (offsetSeconds <= 0) {
+    return `WEBVTT\n\n${normalized.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')}`
+  }
+
+  const blocks = normalized.split(/\n\n+/)
+  const shifted = blocks
+    .map((block) => {
+      const match = TIMESTAMP_PAIR.exec(block)
+      TIMESTAMP_PAIR.lastIndex = 0
+      if (!match) return block
+      const start = parseTimestamp(match[1], match[2], match[3], match[4]) - offsetSeconds
+      const end = parseTimestamp(match[5], match[6], match[7], match[8]) - offsetSeconds
+      if (end <= 0) return null // fully before the resume point -- unreachable now
+      return block.replace(TIMESTAMP_PAIR, `${formatTimestamp(start)} --> ${formatTimestamp(end)}`)
+    })
+    .filter((block): block is string => block !== null)
+
+  return `WEBVTT\n\n${shifted.join('\n\n')}`
+}
+
+export async function fetchSubtitleVtt(url: string, offsetSeconds = 0): Promise<string> {
   const response = await fetch(url, { signal: AbortSignal.timeout(10000) })
   if (!response.ok) {
     throw new Error(`Subtitle fetch failed with ${response.status}`)
   }
-  return srtToVtt(await response.text())
+  return srtToVtt(await response.text(), offsetSeconds)
 }

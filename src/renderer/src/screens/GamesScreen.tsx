@@ -544,10 +544,14 @@ export function GamesScreen(): JSX.Element {
             </span>
           )}
           {cards.map((card, i) => (
-            // scroll-m-10 matches the grid's gap-10 — without it, scrollIntoView's
-            // "nearest" snaps this element flush to the scroll container's edge,
-            // then the card scales/glows past that edge with no room left.
-            <div key={card.id} ref={(el) => (cardRefs.current[i] = el)} className="scroll-m-10">
+            // Matches --tile-grow-pad, same as the grid's own gap/padding —
+            // without it, scrollIntoView's "nearest" snaps this element flush
+            // to the scroll container's edge, then the card scales/glows past
+            // that edge with no room left. A flat number here (this used to
+            // be scroll-m-10, matching the grid's own old flat gap-10) falls
+            // out of sync the moment Card Size/Animation Style push actual
+            // growth past whatever it was tuned for.
+            <div key={card.id} ref={(el) => (cardRefs.current[i] = el)} className="scroll-m-[var(--tile-grow-pad)]">
               <FocusableCard
                 item={card}
                 focused={zone === 'grid' && gridIndex === i}

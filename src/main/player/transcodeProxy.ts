@@ -185,8 +185,10 @@ async function handleSubtitle(url: URL, res: import('http').ServerResponse): Pro
     return
   }
 
+  const offsetSeconds = Number(url.searchParams.get('t') ?? '0') || 0
+
   try {
-    const vtt = await fetchSubtitleVtt(sourceUrl)
+    const vtt = await fetchSubtitleVtt(sourceUrl, offsetSeconds)
     // <track> resources are fetched cross-origin (renderer origin vs 127.0.0.1)
     // and Chromium silently drops cues from a response with no CORS header —
     // no console error, it just never shows. This was almost certainly why

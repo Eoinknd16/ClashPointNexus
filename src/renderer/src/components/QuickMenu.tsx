@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Home,
   Monitor,
@@ -67,6 +67,7 @@ export function QuickMenu(): JSX.Element | null {
   const [mouseModeActive, setMouseModeActive] = useState(false)
   const goTo = useNavigationStore((s) => s.goTo)
   const goHome = useNavigationStore((s) => s.goHome)
+  const optionRefs = useRef<Array<HTMLDivElement | null>>([])
 
   // Kept live regardless of whether the menu is open — the physical L1+R1+
   // Back combo can toggle Mouse Mode without ever opening this menu at all,
@@ -76,6 +77,17 @@ export function QuickMenu(): JSX.Element | null {
     window.api.globalInput.getMouseModeStatus().then(setMouseModeActive).catch(() => {})
     return window.api.globalInput.onMouseModeChanged(setMouseModeActive)
   }, [])
+
+  // This menu grew past a full option list (Resume Game + power actions +
+  // everything else) without ever gaining its own scroll — on a smaller
+  // display it renders taller than the actual screen, with no way to reach
+  // whatever fell off the bottom. The list itself scrolls now (see its own
+  // max-h/overflow-y-auto below); this is what keeps a D-pad selection
+  // visible as it moves past that edge.
+  useEffect(() => {
+    if (!open || confirmAction) return
+    optionRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [open, confirmAction, index])
 
   function buildOptions(): Option[] {
     const options: Option[] = []
@@ -233,7 +245,7 @@ export function QuickMenu(): JSX.Element | null {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="flex w-80 flex-col gap-4 rounded-panel bg-surface p-8">
+      <div className="flex max-h-[85vh] w-80 flex-col gap-4 rounded-panel bg-surface p-8">
         {confirmAction ? (
           <>
             <h2 className="text-lg font-semibold">
@@ -262,16 +274,17 @@ export function QuickMenu(): JSX.Element | null {
           </>
         ) : (
           <>
-            <h2 className="text-lg font-semibold">Quick Menu</h2>
-            <div className="flex flex-col gap-2">
+            <h2 className="shrink-0 text-lg font-semibold">Quick Menu</h2>
+            <div className="flex flex-col gap-2 overflow-y-auto">
               {options.map((option, i) => (
                 <div
                   key={option.id}
+                  ref={(el) => (optionRefs.current[i] = el)}
                   onClick={() => {
                     setIndex(i)
                     runAction(option.id)
                   }}
-                  className={`flex cursor-pointer items-center gap-3 rounded-xl px-5 py-3 font-medium transition-colors ${
+                  className={`flex shrink-0 scroll-m-2 cursor-pointer items-center gap-3 rounded-xl px-5 py-3 font-medium transition-colors ${
                     index === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted'
                   }`}
                 >

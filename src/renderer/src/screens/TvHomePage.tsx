@@ -140,9 +140,12 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
   // (addonStoreRefs, expandedRefs, rowRefs, ...). Without these, a D-pad
   // selection can move past the edge of a scrolling container with no way
   // to see (or reach) it, which is exactly what was reported for the Add
-  // menu. pillRefs is indexed at pillIndex+1 so the Edit/Done button (index
-  // -1) has a slot too.
-  const pillRefs = useRef<Array<HTMLElement | null>>([])
+  // menu. The pill row itself (Edit/Done + page pills + New Page) doesn't
+  // need one of these — it wraps instead of scrolling, so everything is
+  // always already visible without having to be scrolled to (see its own
+  // render site for why: a scrolling row's clip boundary is exactly the bug
+  // that kept cutting the focus ring off).
+  const blockRefs = useRef<Array<HTMLElement | null>>([])
   const addMenuRefs = useRef<Array<HTMLDivElement | null>>([])
   const genreRefs = useRef<Array<HTMLDivElement | null>>([])
   const addonCatalogRefs = useRef<Array<HTMLDivElement | null>>([])
@@ -459,10 +462,15 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
 
   const otherPages = (config?.pages ?? []).filter((p) => p.id !== activePage?.id)
 
+  // The content zone (rows/cards, in or out of edit mode) never had this at
+  // all — moving blockIndex just moved which item was highlighted, with
+  // nothing to bring it into view once it scrolled past the edge, on either
+  // a controller or a keyboard. Every other focus-driven list in this app
+  // (and now every one in this file too) already follows this same pattern.
   useEffect(() => {
-    if (zone !== 'pills') return
-    pillRefs.current[pillIndex + 1]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-  }, [zone, pillIndex])
+    if (zone !== 'content') return
+    blockRefs.current[blockIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, blockIndex])
 
   useEffect(() => {
     if (zone !== 'addMenu') return
@@ -898,60 +906,63 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
       style={NEUTRAL_CARD_SCALE}
       onClickCapture={onActivate}
     >
-      <div className="flex items-center gap-3">
+      {/* flex-wrap, not a scrolling row — a scrolling container has to clip
+          somewhere, and there's no padding number that's guaranteed to stay
+          ahead of a focus ring/glow forever (the exact bug this row already
+          had once). Wrapping to a second line instead of scrolling means
+          nothing here ever needs an overflow clip at all, so nothing can cut
+          a ring off no matter how many pages exist. Sized deliberately
+          smaller than a typical row's cards — this is a nav control, not
+          content, and didn't need to take up as much of the screen as it was. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
         <button
-          ref={(el) => (pillRefs.current[0] = el)}
           type="button"
           onClick={() => {
             setPillIndex(-1)
             toggleEditMode()
           }}
-          className={`shrink-0 rounded-control px-4 py-2 text-sm font-semibold transition-colors ${
+          className={`shrink-0 rounded-control px-3 py-1 text-xs font-semibold transition-colors ${
             editMode ? 'bg-accent text-white' : 'bg-surface-hi text-muted hover:text-white'
           } ${zone === 'pills' && pillIndex === -1 ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
         >
           {editMode ? 'Done Editing' : 'Edit Page'}
         </button>
-        <div className="h-6 w-px shrink-0 bg-white/10" />
-        <div className="flex flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {pages.map((page, i) => (
-            <span
-              key={page.id}
-              ref={(el) => (pillRefs.current[i + 1] = el)}
-              onClick={() => {
-                setPillIndex(i)
-                if (editMode) {
-                  setPageMenuIndex(0)
-                  setZone('pageMenu')
-                } else {
-                  void switchToPage(page.id)
-                }
-              }}
-              className={`scroll-m-4 shrink-0 cursor-pointer whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                page.id === activePage?.id ? 'bg-accent text-white' : 'bg-surface text-muted'
-              } ${zone === 'pills' && pillIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
-            >
-              {page.name}
-            </span>
-          ))}
+        <div className="h-4 w-px shrink-0 bg-white/10" />
+        {pages.map((page, i) => (
           <span
-            ref={(el) => (pillRefs.current[pages.length + 1] = el)}
+            key={page.id}
             onClick={() => {
-              setPillIndex(pages.length)
-              setKbValue('')
-              setKbShift(false)
-              setKbRow(0)
-              setKbCol(0)
-              setKbPurpose('newPage')
-              setZone('keyboard')
+              setPillIndex(i)
+              if (editMode) {
+                setPageMenuIndex(0)
+                setZone('pageMenu')
+              } else {
+                void switchToPage(page.id)
+              }
             }}
-            className={`scroll-m-4 flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full bg-surface px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-white ${
-              zone === 'pills' && pillIndex === pages.length ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''
-            }`}
+            className={`shrink-0 cursor-pointer whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              page.id === activePage?.id ? 'bg-accent text-white' : 'bg-surface text-muted'
+            } ${zone === 'pills' && pillIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
           >
-            <Plus className="h-3.5 w-3.5" /> New Page
+            {page.name}
           </span>
-        </div>
+        ))}
+        <span
+          onClick={() => {
+            setPillIndex(pages.length)
+            setKbValue('')
+            setKbShift(false)
+            setKbRow(0)
+            setKbCol(0)
+            setKbPurpose('newPage')
+            setZone('keyboard')
+          }}
+          className={`flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-full bg-surface px-3 py-1 text-xs font-medium text-muted transition-colors hover:text-white ${
+            zone === 'pills' && pillIndex === pages.length ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''
+          }`}
+        >
+          <Plus className="h-3 w-3" /> New Page
+        </span>
       </div>
 
       {isEmpty && !editMode && (
@@ -980,6 +991,8 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
               return (
                 <div
                   key={block.id}
+                  ref={(el) => (blockRefs.current[i] = el)}
+                  style={{ scrollMarginBlock: 'var(--tile-grow-pad)' }}
                   className={`rounded-panel transition-shadow ${
                     editMode && isFocused ? 'shadow-focus ring-2 ring-accent' : ''
                   }`}
@@ -1030,7 +1043,12 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
             // — same look as Home's own app tiles, which this literally is.
             const isPinnedTitle = block.card.kind === 'pinnedTitle'
             return (
-              <div key={block.id} className={isPinnedTitle ? 'w-44' : 'w-72'}>
+              <div
+                key={block.id}
+                ref={(el) => (blockRefs.current[i] = el)}
+                style={{ scrollMarginBlock: 'var(--tile-grow-pad)' }}
+                className={isPinnedTitle ? 'w-44' : 'w-72'}
+              >
                 <FocusableCard
                   item={cardItem}
                   size={isPinnedTitle ? 'default' : 'large'}
@@ -1058,6 +1076,8 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
 
           {editMode && (
             <div
+              ref={(el) => (blockRefs.current[resolved.length] = el)}
+              style={{ scrollMarginBlock: 'var(--tile-grow-pad)' }}
               onClick={() => {
                 setBlockIndex(resolved.length)
                 setAddMenuIndex(0)

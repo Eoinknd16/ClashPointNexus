@@ -73,6 +73,23 @@ function App(): JSX.Element {
     return window.api.globalInput.onMouseModeChanged(setMouseModeActive)
   }, [])
 
+  // Belt-and-suspenders for a real "no Mouse Mode, no controller nav either"
+  // lockup report: the flag above is otherwise purely event-driven, so if
+  // any single globalInput:mouseModeChanged event is ever lost (a dropped
+  // IPC message, a moment where this renderer wasn't ready to receive it),
+  // it stays wrong forever with no way back short of restarting the app —
+  // this periodically re-fetches the real value and self-corrects, so a
+  // missed event heals itself within a few seconds instead of needing an
+  // Alt+F4. The main process's own watchdog (service.ts) covers the other
+  // half of that report — the helper hanging outright instead of just one
+  // event getting lost.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      window.api.globalInput.getMouseModeStatus().then(setMouseModeActive).catch(() => {})
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
   // Cursor visibility (index.css) — shown on any real mouse movement, hidden
   // again on the next controller nav action. Deliberately not gated on Mouse
   // Mode specifically: Mouse Mode's cursor movement is a genuine OS-level

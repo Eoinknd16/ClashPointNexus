@@ -3,6 +3,12 @@ import type { GlobalInputStatus } from '@shared/globalInputTypes'
 import { GLOBAL_INPUT_HELPER_SCRIPT } from './helperScript'
 
 const RESTART_DELAY_MS = 3000
+// The helper writes "TICK" at least every 2s (see helperScript.ts) whenever
+// it's genuinely still looping -- this is deliberately several multiples of
+// that, not a tight timeout, so a slow WinRT call under real load doesn't
+// false-positive a restart.
+const HEARTBEAT_TIMEOUT_MS = 10000
+const WATCHDOG_INTERVAL_MS = 2000
 
 let helperProcess: ChildProcessWithoutNullStreams | null = null
 let mouseModeActive = false
@@ -15,6 +21,8 @@ let hidPsButtonDiagnostic: string | null = null
 let stopped = false
 let stdoutBuffer = ''
 let stderrBuffer = ''
+let lastHeartbeatAt = Date.now()
+let watchdogInterval: ReturnType<typeof setInterval> | null = null
 
 let onQuickMenuCombo: (() => void) | null = null
 let onShowDesktopCombo: (() => void) | null = null
@@ -122,8 +130,14 @@ export function startGlobalInputWatcher(): void {
     { windowsHide: true }
   )
   helperProcess = proc
+  // Freshly spawned -- give it a moment to actually start up and emit
+  // HELPER_STARTED before the watchdog below could mistake spawn/WinRT
+  // init latency for a hang.
+  lastHeartbeatAt = Date.now()
+  startWatchdog()
 
   proc.stdout.on('data', (chunk: Buffer) => {
+    lastHeartbeatAt = Date.now()
     stdoutBuffer += chunk.toString('utf-8')
     let newlineIndex: number
     while ((newlineIndex = stdoutBuffer.indexOf('\n')) >= 0) {
@@ -177,11 +191,33 @@ export function startGlobalInputWatcher(): void {
   })
 }
 
+/** Recovers from a genuine hang (not a clean exit -- proc.on('exit') already
+ * handles that, including the "Mouse Mode stuck on" desync fix described
+ * above) by force-killing a helper that's stopped producing any output at
+ * all despite still technically being alive as a process. Killing it here
+ * is deliberately all this does: proc.on('exit') fires as normal once the
+ * kill takes effect, so every bit of recovery logic (state reset, the
+ * mouseModeActive notify, the restart) runs exactly once, from exactly one
+ * place, whether the helper died on its own or was killed for going quiet. */
+function startWatchdog(): void {
+  if (watchdogInterval) return
+  watchdogInterval = setInterval(() => {
+    if (!helperProcess || stopped) return
+    if (Date.now() - lastHeartbeatAt > HEARTBEAT_TIMEOUT_MS) {
+      helperProcess.kill()
+    }
+  }, WATCHDOG_INTERVAL_MS)
+}
+
 export function stopGlobalInputWatcher(): void {
   stopped = true
   helperProcess?.kill()
   helperProcess = null
   helperRunning = false
+  if (watchdogInterval) {
+    clearInterval(watchdogInterval)
+    watchdogInterval = null
+  }
 }
 
 /** Mirrors the physical L1+R1+Back combo — same toggle, reachable from the

@@ -359,8 +359,21 @@ $prevConnectedState = "unknown"
 $prevHidCaptureLive = $false
 
 Write-Output "HELPER_STARTED"
+$lastHeartbeat = Get-Date
+$HEARTBEAT_INTERVAL_MS = 2000
 
 while ($true) {
+  # Proof-of-life for the Node side's watchdog (see service.ts) -- this loop
+  # only ever writes output on state *changes*, so a genuine hang (a blocked
+  # WinRT/HID call, an unhandled exception inside one of the raw HID threads
+  # taking the runtime down with it) would otherwise look identical to "idle,
+  # nothing to report" from outside, with no way to tell the two apart short
+  # of a periodic, unconditional signal like this one.
+  if ((((Get-Date) - $lastHeartbeat).TotalMilliseconds) -ge $HEARTBEAT_INTERVAL_MS) {
+    Write-Output "TICK"
+    $lastHeartbeat = Get-Date
+  }
+
   if ([ClashPointNativeInput]::ToggleMouseRequested) {
     [ClashPointNativeInput]::ToggleMouseRequested = $false
     $mouseMode = -not $mouseMode
