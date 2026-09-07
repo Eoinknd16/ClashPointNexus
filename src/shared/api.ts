@@ -17,6 +17,7 @@ import type {
 import type { AchievementProgress, GameLaunchTarget, GameStoreInfo, SteamLibraryResult } from './steamTypes'
 import type { WatchAvailability } from './streamingProviders'
 import type { SystemStats } from './systemTypes'
+import type { NewTvHomeBlock, ResolvedTvHomeBlock, TvHomeConfig } from './tvHomeTypes'
 import type {
   AddonCatalogRow,
   AddonSummary,
@@ -196,6 +197,21 @@ export interface LauncherApi {
   }
   home: {
     getContinueSuggestion: () => Promise<ContinueSuggestion | null>
+  }
+  /** The user-built custom TV homepage (see shared/tvHomeTypes.ts) — pages
+   * of rows/cards the user assembles themselves, resolved server-side into
+   * real content via resolvePage since the renderer never needs to know how
+   * to reach Cinemeta/addons/the library store directly. */
+  tvHome: {
+    getConfig: () => Promise<TvHomeConfig>
+    resolvePage: (pageId: string) => Promise<ResolvedTvHomeBlock[]>
+    addPage: (name: string) => Promise<TvHomeConfig>
+    removePage: (pageId: string) => Promise<TvHomeConfig>
+    renamePage: (pageId: string, name: string) => Promise<TvHomeConfig>
+    setActivePage: (pageId: string) => Promise<TvHomeConfig>
+    addBlock: (pageId: string, block: NewTvHomeBlock) => Promise<TvHomeConfig>
+    removeBlock: (pageId: string, blockId: string) => Promise<TvHomeConfig>
+    moveBlock: (pageId: string, blockId: string, direction: 1 | -1) => Promise<TvHomeConfig>
   }
   system: {
     getStats: () => Promise<SystemStats>

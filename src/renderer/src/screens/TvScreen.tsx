@@ -8,6 +8,7 @@ import { BackButton, CloseButton } from '../components/NavButtons'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
+import { TvHomePage } from './TvHomePage'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
 import { useCrashLogStore } from '../state/crashLogStore'
@@ -50,7 +51,7 @@ function describeAddonCapabilities(resources: string[]): string {
   return resources.map((r) => ADDON_CAPABILITY_LABELS[r] ?? r).join(', ')
 }
 
-type BrowseTab = 'movie' | 'series' | 'library' | 'addons'
+type BrowseTab = 'myTv' | 'movie' | 'series' | 'library' | 'addons'
 type Zone =
   | 'filters'
   | 'rows'
@@ -62,6 +63,7 @@ type Zone =
   | 'keyboard'
   | 'addons'
   | 'addonStore'
+  | 'myTvHome'
 type EpisodeSubZone = 'seasons' | 'list'
 type KeyboardPurpose = 'search' | 'addonUrl' | 'addonStoreSearch'
 
@@ -71,7 +73,7 @@ type AddonPanelRow =
   | { kind: 'quickAddTorrentio' }
   | { kind: 'addCustom' }
 
-const TABS: BrowseTab[] = ['movie', 'series', 'library', 'addons']
+const TABS: BrowseTab[] = ['myTv', 'movie', 'series', 'library', 'addons']
 const EXPANDED_COLUMNS = 6
 const EXPANDED_SKIP_CAP = 950
 const ADDON_STORE_COLUMNS = 4
@@ -125,6 +127,7 @@ type ActivePlayback =
     }
 
 function tabLabel(tab: BrowseTab): string {
+  if (tab === 'myTv') return 'My TV'
   if (tab === 'movie') return 'Movies'
   if (tab === 'series') return 'Series'
   if (tab === 'addons') return 'Addons'
@@ -226,7 +229,7 @@ export function TvScreen(): JSX.Element {
   const [libraryItems, setLibraryItems] = useState<LibraryEntry[]>([])
   const [isSelectedInLibrary, setIsSelectedInLibrary] = useState(false)
 
-  const [tab, setTab] = useState<BrowseTab>('movie')
+  const [tab, setTab] = useState<BrowseTab>('myTv')
   const [zone, setZone] = useState<Zone>('filters')
   const [tabIndex, setTabIndex] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
@@ -243,7 +246,7 @@ export function TvScreen(): JSX.Element {
   const [addonStoreIndex, setAddonStoreIndex] = useState(0)
   const [rowIndex, setRowIndex] = useState(0)
   const [colIndex, setColIndex] = useState(0)
-  const [detailReturnZone, setDetailReturnZone] = useState<'rows' | 'expanded'>('rows')
+  const [detailReturnZone, setDetailReturnZone] = useState<'rows' | 'expanded' | 'myTvHome'>('rows')
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null)
   const [detailFocusIndex, setDetailFocusIndex] = useState(0)
   const [progress, setProgress] = useState<WatchProgress | null | undefined>(undefined)
@@ -348,7 +351,7 @@ export function TvScreen(): JSX.Element {
         }
       ]
     }
-    if (tab === 'addons') return []
+    if (tab === 'addons' || tab === 'myTv') return []
     // Addon-provided catalogs don't paginate further in the expanded grid (most
     // addons only ever have the one page they already returned) — source null
     // marks that the same way Continue Watching/My Library already do.
@@ -1638,7 +1641,9 @@ export function TvScreen(): JSX.Element {
           setTabIndex((i) => Math.min(TABS.length, i + 1))
           return
         case 'down':
-          if (tab === 'addons') {
+          if (tab === 'myTv') {
+            setZone('myTvHome')
+          } else if (tab === 'addons') {
             setZone('addons')
             setAddonFocusIndex(0)
           } else {
@@ -1735,6 +1740,12 @@ export function TvScreen(): JSX.Element {
           return
       }
     }
+
+    // TvHomePage owns its own nav listener while active (see its `active`
+    // prop) — without this, its events would also fall through to the
+    // "zone === 'rows'" block below and get misinterpreted as browse-row
+    // navigation, since 'myTvHome' doesn't match any of the ifs above it.
+    if (zone === 'myTvHome') return
 
     // zone === 'rows'
     {
@@ -2109,10 +2120,10 @@ export function TvScreen(): JSX.Element {
       <motion.div layout className="flex flex-1 flex-col gap-6 overflow-hidden px-10 py-8">
         <header className="flex items-center gap-4">
           <BackButton
-            label={inEpisodesView || zone === 'addons' ? 'Back' : 'Home'}
+            label={inEpisodesView || zone === 'addons' || zone === 'myTvHome' ? 'Back' : 'Home'}
             onClick={() => {
               if (inEpisodesView) setZone('detail')
-              else if (zone === 'addons') setZone('filters')
+              else if (zone === 'addons' || zone === 'myTvHome') setZone('filters')
               else goHome()
             }}
           />
@@ -2190,7 +2201,16 @@ export function TvScreen(): JSX.Element {
                 <div
                   key={t}
                   onClick={() => {
-                    setZone('filters')
+                    // Every other tab's actual content (rows/addon panel) is
+                    // already rendered and clickable at zone==='filters', so
+                    // a plain click just selecting the tab is enough — a
+                    // card's own onClick sets zone='rows' etc. as a side
+                    // effect once something inside it is actually clicked.
+                    // My TV's content only renders once zone==='myTvHome'
+                    // (see the early-return above), so a mouse click has to
+                    // jump straight there instead of leaving a mouse user
+                    // stuck looking at an empty pane with no click target.
+                    setZone(t === 'myTv' ? 'myTvHome' : 'filters')
                     setTabIndex(i)
                     setTab(t)
                     setRowIndex(0)
@@ -2222,7 +2242,30 @@ export function TvScreen(): JSX.Element {
               </div>
             </div>
 
-            {tab === 'addons' ? (
+            {tab === 'myTv' ? (
+              <TvHomePage
+                active={zone === 'myTvHome'}
+                onActivate={() => setZone('myTvHome')}
+                onExit={() => setZone('filters')}
+                onSelectItem={(item) => {
+                  setDetailReturnZone('myTvHome')
+                  setSelectedItem(item)
+                  setZone('detail')
+                }}
+                onGoToTab={(target) => {
+                  setTab(target)
+                  setTabIndex(TABS.indexOf(target))
+                  if (target === 'addons') {
+                    setZone('addons')
+                    setAddonFocusIndex(0)
+                  } else {
+                    setZone('rows')
+                    setRowIndex(0)
+                    setColIndex(0)
+                  }
+                }}
+              />
+            ) : tab === 'addons' ? (
               <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-5">
                 <p className="px-1 text-sm text-muted">
                   These are queried directly over the open Stremio addon protocol — no Stremio app or account

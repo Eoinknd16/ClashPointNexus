@@ -28,6 +28,7 @@ import { registerStremioIpc } from './stremio/ipc'
 import { stopStremioServer } from './stremio/server'
 import { registerSubtitlesIpc } from './subtitles/ipc'
 import { registerSystemIpc } from './system/ipc'
+import { registerTvHomeIpc } from './tvHome/ipc'
 import { initAutoUpdater, registerUpdaterIpc } from './updater'
 import { registerWeatherIpc } from './weather/ipc'
 
@@ -98,6 +99,7 @@ app.whenReady().then(async () => {
   registerHomeIpc()
   registerSystemIpc()
   registerArcadeIpc()
+  registerTvHomeIpc()
   startTranscodeProxy()
 
   // Picks up any theme pack folders dropped into the Themes folder since

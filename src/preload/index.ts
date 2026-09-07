@@ -107,6 +107,17 @@ const api: LauncherApi = {
   home: {
     getContinueSuggestion: () => ipcRenderer.invoke('home:getContinueSuggestion')
   },
+  tvHome: {
+    getConfig: () => ipcRenderer.invoke('tvHome:getConfig'),
+    resolvePage: (pageId) => ipcRenderer.invoke('tvHome:resolvePage', pageId),
+    addPage: (name) => ipcRenderer.invoke('tvHome:addPage', name),
+    removePage: (pageId) => ipcRenderer.invoke('tvHome:removePage', pageId),
+    renamePage: (pageId, name) => ipcRenderer.invoke('tvHome:renamePage', pageId, name),
+    setActivePage: (pageId) => ipcRenderer.invoke('tvHome:setActivePage', pageId),
+    addBlock: (pageId, block) => ipcRenderer.invoke('tvHome:addBlock', pageId, block),
+    removeBlock: (pageId, blockId) => ipcRenderer.invoke('tvHome:removeBlock', pageId, blockId),
+    moveBlock: (pageId, blockId, direction) => ipcRenderer.invoke('tvHome:moveBlock', pageId, blockId, direction)
+  },
   system: {
     getStats: () => ipcRenderer.invoke('system:getStats'),
     volumeUp: () => ipcRenderer.invoke('system:volumeUp'),
