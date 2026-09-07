@@ -3,7 +3,7 @@ import { existsSync } from 'fs'
 import { createServer, type Server } from 'http'
 import { join } from 'path'
 import { TRANSCODE_PROXY_PORT, type MediaInfo } from '@shared/playerConstants'
-import { fetchSubtitleVtt } from '../subtitles/opensubtitles'
+import { fetchSubtitleVtt } from '../subtitles/service'
 import { findStremioInstallDir } from '../stremio/paths'
 
 let server: Server | null = null

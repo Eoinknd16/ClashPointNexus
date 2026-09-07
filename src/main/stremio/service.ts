@@ -10,6 +10,7 @@ import { getAllProgressForType } from '../progress/config'
 import { fetchExternalRatings } from '../ratings/omdb'
 import { fetchAccountAddons } from './account'
 import { fetchAddonCatalog } from './addonCatalog'
+import { fetchAddonMetaBackfill } from './addonMeta'
 import { fetchBasicMeta, fetchCastAndCrew, fetchCatalog, fetchReleaseDate, fetchSeriesMeta } from './cinemeta'
 import { loadStremioConfig, saveStremioConfig, type StremioConfig } from './config'
 import { ensureStremioServer, localStreamUrl } from './server'
@@ -83,17 +84,37 @@ export async function getReleaseDate(type: CatalogType, id: string): Promise<str
 /** Cast/director/runtime/IMDb rating come free from Cinemeta; externalRatings
  * (Rotten Tomatoes, Metacritic, ...) only populates once the user's configured
  * their own OMDb API key in Settings — fetchExternalRatings itself no-ops to
- * an empty array otherwise, so this never needs its own fallback logic. */
+ * an empty array otherwise, so this never needs its own fallback logic.
+ *
+ * description/imdbRating additionally get backfilled from any user-installed
+ * meta-resource addon (a "ratings plugin", a deep-dive/enrichment addon,
+ * etc.) whenever Cinemeta's own value is empty — previously these addons
+ * were silently never queried at all once installed. Cinemeta stays
+ * authoritative when it has an answer; this only fills genuine gaps (see
+ * addonMeta.ts's own docs for why it's backfill-only, never override). */
 export async function getExtendedMeta(type: CatalogType, id: string): Promise<ExtendedMeta> {
   const meta = await fetchCastAndCrew(type, id)
   const externalRatings = meta.imdbId ? await fetchExternalRatings(meta.imdbId) : []
+
+  let description = meta.description
+  let imdbRating = meta.imdbRating
+  if (!description || !imdbRating) {
+    const config = loadStremioConfig()
+    const metaAddonUrls = config.addons.filter((a) => a.resources.includes('meta')).map((a) => a.url)
+    if (metaAddonUrls.length > 0) {
+      const backfill = await fetchAddonMetaBackfill(metaAddonUrls, type, id)
+      description = description ?? backfill.description
+      imdbRating = imdbRating ?? backfill.imdbRating
+    }
+  }
+
   return {
     cast: meta.cast,
     director: meta.director,
     runtime: meta.runtime,
-    imdbRating: meta.imdbRating,
+    imdbRating,
     externalRatings,
-    description: meta.description
+    description
   }
 }
 
