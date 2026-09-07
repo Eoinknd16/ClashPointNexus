@@ -11,7 +11,7 @@ import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
 import { useCrashLogStore } from '../state/crashLogStore'
-import { subtitleTrackUrl, transcodedStreamUrl } from '@shared/playerConstants'
+import { subtitleTrackUrl, transcodedStreamUrl, type MediaInfo } from '@shared/playerConstants'
 import { registerActivePlaybackStop } from '../player/activePlayback'
 import { buildMseCodecString } from '../player/codecStrings'
 import { startMsePlayback } from '../player/msePlayer'
@@ -67,6 +67,9 @@ const CURRENT_YEAR = String(new Date().getFullYear())
 // How far back from the reported duration a manual seek stays clamped — see
 // the seek() function below for why.
 const SEEK_END_SAFETY_MARGIN_SECONDS = 3
+// How long seek input has to go quiet before a scrub actually commits — see
+// scheduleSeekCommit.
+const SEEK_DEBOUNCE_MS = 350
 
 // Straight from Cinemeta's own manifest.json (its "top" catalog's declared
 // genre list) — matching the real Stremio app's board, which shows one row
@@ -245,6 +248,12 @@ export function TvScreen(): JSX.Element {
   const [audioIndex, setAudioIndex] = useState<number | undefined>(undefined)
   const [baseOffset, setBaseOffset] = useState(0)
   const [position, setPosition] = useState(0)
+  // Set while a seek is debounced but not yet committed (see seekTo/
+  // scheduleSeekCommit) — the progress bar/time readout show this instead of
+  // `position` so scrubbing feels instant even though the actual transcode
+  // restart it'll trigger is deliberately delayed. Null once nothing is
+  // pending, which is most of the time.
+  const [pendingSeekTarget, setPendingSeekTarget] = useState<number | null>(null)
   const [duration, setDuration] = useState<number | null>(null)
   const [volume, setVolume] = useState(1)
   const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([])
@@ -274,6 +283,26 @@ export function TvScreen(): JSX.Element {
   const isMountedRef = useRef(true)
   const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastProgressSaveRef = useRef(0)
+  // Bumped at the start of every startPlaybackAt call; a call whose number no
+  // longer matches this by the time an await resolves knows a *newer*
+  // playback request has since superseded it and bails out cleanly instead
+  // of clobbering the newer one's video/state — without this, rapid repeated
+  // seeking could have an older, slower-to-arrive request finish *after* a
+  // newer one and visibly snap playback back to a stale position.
+  const playGenerationRef = useRef(0)
+  // probeMediaInfo (duration/audio tracks/video codec) is per-*file*, not
+  // per-position — caching it here means seeking within the same source only
+  // ever re-probes when the source itself changes, not on every single seek.
+  // Re-probing a large remote file on every seek (previously done
+  // unconditionally) was slow, and outright unreliable for a big forward
+  // seek on a file whose container metadata sits at the end (common for
+  // non-faststart releases) — that read could take a very long time or
+  // time out, which is what "the file breaks" on a big forward seek was.
+  const probeCacheRef = useRef<{ url: string; info: MediaInfo } | null>(null)
+  // Coalesces a burst of seek input (D-pad held-repeat, or dragging/clicking
+  // the progress bar) into a single actual transcode restart, fired once
+  // input settles rather than once per keypress/click — see seekTo.
+  const seekDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Kept fresh every render (same pattern as useNavListener's handlerRef) so
   // the unmount effect below always calls the current closure — capturing
   // stopPlayback once at mount time would run it with whatever activePlayback/
@@ -953,10 +982,18 @@ export function TvScreen(): JSX.Element {
     offsetSeconds: number,
     preferredAudioIndex?: number
   ): Promise<void> {
+    // Whichever call is still current when each `await` below resolves is
+    // the one allowed to actually touch the <video> element/state — see
+    // playGenerationRef's own doc comment.
+    const generation = ++playGenerationRef.current
     setBaseOffset(offsetSeconds)
-    setDuration(null)
+    setPendingSeekTarget(null)
 
-    const info = await window.api.player.probeMediaInfo(sourceUrl)
+    const cachedProbe = probeCacheRef.current?.url === sourceUrl ? probeCacheRef.current.info : null
+    if (!cachedProbe) setDuration(null)
+    const info = cachedProbe ?? (await window.api.player.probeMediaInfo(sourceUrl))
+    if (generation !== playGenerationRef.current) return
+    if (!cachedProbe) probeCacheRef.current = { url: sourceUrl, info }
     setDuration(info.duration)
 
     let resolvedAudioIndex = preferredAudioIndex
@@ -971,9 +1008,6 @@ export function TvScreen(): JSX.Element {
       setAudioIndex(resolvedAudioIndex)
     }
 
-    mseStopRef.current?.()
-    mseStopRef.current = null
-
     const video = videoRef.current
     if (!video) return
 
@@ -981,12 +1015,17 @@ export function TvScreen(): JSX.Element {
     const mimeType = buildMseCodecString(info.videoCodec)
     const canUseMse = mimeType && typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(mimeType)
 
+    // Only torn down once we're actually about to replace it — nothing
+    // async has run since the generation check above, so this can't race.
+    mseStopRef.current?.()
+    mseStopRef.current = null
+
     if (canUseMse) {
       try {
         // eslint-disable-next-line no-console
         console.log('[player] using MSE playback:', mimeType)
         const stopMse = await startMsePlayback(video, streamUrl, mimeType, offsetSeconds)
-        if (!isMountedRef.current) {
+        if (generation !== playGenerationRef.current || !isMountedRef.current) {
           stopMse()
           return
         }
@@ -997,6 +1036,7 @@ export function TvScreen(): JSX.Element {
       } catch (error) {
         // eslint-disable-next-line no-console
         console.warn('[player] MSE playback failed, falling back to progressive video', error)
+        if (generation !== playGenerationRef.current) return
       }
     } else {
       // eslint-disable-next-line no-console
@@ -1016,6 +1056,15 @@ export function TvScreen(): JSX.Element {
   }
 
   function stopPlayback(): void {
+    // A pending debounced seek (see scheduleSeekCommit) firing after leaving
+    // the player entirely would restart a transcode nothing is watching
+    // anymore against a stream about to be cleared below.
+    if (seekDebounceRef.current) {
+      clearTimeout(seekDebounceRef.current)
+      seekDebounceRef.current = null
+    }
+    playGenerationRef.current++
+    setPendingSeekTarget(null)
     persistProgress(false)
     mseStopRef.current?.()
     mseStopRef.current = null
@@ -1041,12 +1090,10 @@ export function TvScreen(): JSX.Element {
   }
 
   // Absolute-target version — seek(delta) below is just this plus "current
-  // position + delta"; the click-to-seek progress bar computes an absolute
-  // target from where it was clicked instead, so both go through the same
-  // clamp-and-restart-playback path.
+  // position + delta". Doesn't restart playback immediately: see
+  // scheduleSeekCommit for why a real seek only actually fires once input
+  // settles, same as the click-to-seek progress bar.
   function seekTo(targetSeconds: number): void {
-    const stream = streams[streamIndex]
-    if (!stream?.playableUrl) return
     // A few small seeks compounding can land right at (or past) the reported
     // duration, which ffmpeg can't -ss into if there's no real keyframe left
     // that close to actual EOF — held back from the very end so that mostly
@@ -1055,12 +1102,34 @@ export function TvScreen(): JSX.Element {
     // other half of actually handling it when it does anyway.
     const seekableEnd = duration ? Math.max(0, duration - SEEK_END_SAFETY_MARGIN_SECONDS) : null
     const target = Math.max(0, seekableEnd !== null ? Math.min(seekableEnd, targetSeconds) : targetSeconds)
-    void startPlaybackAt(stream.playableUrl, target, audioIndex)
+    scheduleSeekCommit(target)
   }
 
   function seek(deltaSeconds: number): void {
-    const current = baseOffset + (videoRef.current?.currentTime ?? 0)
+    const current = pendingSeekTarget ?? position
     seekTo(current + deltaSeconds)
+  }
+
+  // Only actually restarts the transcode once seek input has gone quiet for
+  // SEEK_DEBOUNCE_MS. A single seek() call comes from one D-pad press, but
+  // the gamepad repeats that roughly every 150ms while held, and dragging
+  // the progress bar fires many of these in a row too — committing every
+  // single one meant stacking up that many overlapping "spawn ffmpeg, probe,
+  // start MSE" attempts, which (even with startPlaybackAt's generation guard
+  // making sure only the last one ever wins) is real wasted work and made
+  // seeking feel laggy and like it was fighting itself. pendingSeekTarget
+  // still updates instantly on every call, so the progress bar/time readout
+  // track the input immediately — only the actual video jump is delayed,
+  // the same "scrub now, seek on settle" shape as most real video players.
+  function scheduleSeekCommit(targetSeconds: number): void {
+    setPendingSeekTarget(targetSeconds)
+    if (seekDebounceRef.current) clearTimeout(seekDebounceRef.current)
+    seekDebounceRef.current = setTimeout(() => {
+      seekDebounceRef.current = null
+      const stream = streams[streamIndex]
+      if (!stream?.playableUrl) return
+      void startPlaybackAt(stream.playableUrl, targetSeconds, audioIndex)
+    }, SEEK_DEBOUNCE_MS)
   }
 
   function adjustVolume(delta: number): void {
@@ -1282,7 +1351,9 @@ export function TvScreen(): JSX.Element {
         case 'nextStream':
           // Carry the current position forward — reselecting a source mid-playback
           // should pick up where you were, not restart the episode/movie from zero.
-          setResumeOffset(baseOffset + (videoRef.current?.currentTime ?? 0))
+          // Prefers a still-pending scrub target over the actual (stale, since
+          // the debounced seek hasn't committed yet) live position.
+          setResumeOffset(pendingSeekTarget ?? position)
           setSourceIndex(streamIndex)
           setSourcesReturnZone('player')
           setZone('sources')
@@ -1624,7 +1695,13 @@ export function TvScreen(): JSX.Element {
   )
 
   if (inPlayerView) {
-    const progressPct = duration ? Math.min(100, (position / duration) * 100) : 0
+    // While a seek is debounced but not yet committed (see
+    // scheduleSeekCommit), the bar/readout track the pending target instead
+    // of the still-actually-playing-from-before-the-scrub `position` — so
+    // scrubbing feels instant even though the real jump is intentionally
+    // delayed.
+    const displayPosition = pendingSeekTarget ?? position
+    const progressPct = duration ? Math.min(100, (displayPosition / duration) * 100) : 0
     const showBar = controlsVisible || zone === 'sources'
     return (
       <div
@@ -1718,7 +1795,7 @@ export function TvScreen(): JSX.Element {
           </div>
           <div className="flex items-center justify-between text-xs text-muted">
             <span>
-              {formatTime(position)} / {duration ? formatTime(duration) : '--:--'}
+              {formatTime(displayPosition)} / {duration ? formatTime(duration) : '--:--'}
             </span>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
