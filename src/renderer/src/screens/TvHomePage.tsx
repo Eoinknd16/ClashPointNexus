@@ -49,6 +49,8 @@ type Zone =
   | 'pills'
   | 'content'
   | 'blockMenu'
+  | 'pageMenu'
+  | 'confirmDeletePage'
   | 'addMenu'
   | 'genrePick'
   | 'addonCatalogPick'
@@ -108,6 +110,8 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
   const [blockIndex, setBlockIndex] = useState(0)
   const [itemIndex, setItemIndex] = useState(0)
   const [blockMenuIndex, setBlockMenuIndex] = useState(0)
+  const [pageMenuIndex, setPageMenuIndex] = useState(0)
+  const [deletePageConfirmIndex, setDeletePageConfirmIndex] = useState(0)
   const [addMenuIndex, setAddMenuIndex] = useState(0)
   const [subPickIndex, setSubPickIndex] = useState(0)
   const [genrePickType, setGenrePickType] = useState<CatalogType>('movie')
@@ -118,7 +122,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
   const [kbShift, setKbShift] = useState(false)
   const [kbRow, setKbRow] = useState(0)
   const [kbCol, setKbCol] = useState(0)
-  const [kbPurpose, setKbPurpose] = useState<'newPage' | 'titleSearch'>('newPage')
+  const [kbPurpose, setKbPurpose] = useState<'newPage' | 'renamePage' | 'titleSearch'>('newPage')
 
   const activePage = config?.pages.find((p) => p.id === config.activePageId) ?? null
 
@@ -190,6 +194,48 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
     // own for this purpose — unlike title search, which has its own results
     // zone to land in, creating a page has nowhere else to go but back to
     // the pill row, now showing the new page selected.
+    setZone('pills')
+  }
+
+  // pillIndex still points at the right pill throughout the rename flow —
+  // nothing else can move it while the keyboard/pageMenu modals are up.
+  async function submitRenamePage(name: string): Promise<void> {
+    const trimmed = name.trim()
+    const target = (config?.pages ?? [])[pillIndex]
+    if (!trimmed || !target) {
+      setZone('pageMenu')
+      return
+    }
+    const next = await window.api.tvHome.renamePage(target.id, trimmed)
+    refreshConfig(next)
+    setMessage(`Renamed to "${trimmed}"`)
+    setZone('pills')
+  }
+
+  async function deleteTargetPage(): Promise<void> {
+    const target = (config?.pages ?? [])[pillIndex]
+    if (!target) return
+    const before = config?.pages.length ?? 0
+    const next = await window.api.tvHome.removePage(target.id)
+    refreshConfig(next)
+    // removePage silently no-ops rather than leaving zero pages — this is
+    // the one place that no-op needs its own feedback instead of reading as
+    // "nothing happened" with no explanation.
+    if (next.pages.length === before) {
+      setMessage("Can't delete your only page")
+      setZone('pageMenu')
+      return
+    }
+    // Points at wherever the *active* page actually landed, not just
+    // whatever pillIndex used to be — deleting a page earlier in the list
+    // shifts every later index by one, so a plain clamp could leave the
+    // focus ring sitting on the wrong pill even though the right page is
+    // still what's showing as content.
+    setPillIndex(Math.max(0, next.pages.findIndex((p) => p.id === next.activePageId)))
+    setBlockIndex(0)
+    setItemIndex(0)
+    await refreshResolved(next.activePageId)
+    setMessage(`Deleted "${target.name}"`)
     setZone('pills')
   }
 
@@ -369,11 +415,14 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
 
   function submitKeyboard(finalValue: string): void {
     if (kbPurpose === 'newPage') void createPage(finalValue)
+    else if (kbPurpose === 'renamePage') void submitRenamePage(finalValue)
     else void submitTitleSearch(finalValue)
   }
 
   function cancelKeyboard(): void {
-    setZone(kbPurpose === 'newPage' ? 'pills' : 'addMenu')
+    if (kbPurpose === 'newPage') setZone('pills')
+    else if (kbPurpose === 'renamePage') setZone('pageMenu')
+    else setZone('addMenu')
   }
 
   function pressVirtualKey(key: string): void {
@@ -617,6 +666,13 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
             setKbCol(0)
             setKbPurpose('newPage')
             setZone('keyboard')
+          } else if (editMode) {
+            // Same "edit mode changes what Confirm does" rule blocks already
+            // use — a real page pill opens Rename/Delete instead of
+            // switching, so managing a page doesn't require first hunting
+            // for a separate button.
+            setPageMenuIndex(0)
+            setZone('pageMenu')
           } else {
             void switchToPage(pages[pillIndex].id)
           }
@@ -628,6 +684,59 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
         case 'back':
         case 'menu':
           onExit()
+          return
+        default:
+          return
+      }
+    }
+
+    if (zone === 'pageMenu') {
+      const options = ['Rename', 'Delete']
+      switch (action) {
+        case 'up':
+          setPageMenuIndex((i) => (i === 0 ? options.length - 1 : i - 1))
+          return
+        case 'down':
+          setPageMenuIndex((i) => (i + 1) % options.length)
+          return
+        case 'confirm': {
+          const target = (config?.pages ?? [])[pillIndex]
+          if (!target) return
+          if (pageMenuIndex === 0) {
+            setKbValue(target.name)
+            setKbShift(false)
+            setKbRow(0)
+            setKbCol(0)
+            setKbPurpose('renamePage')
+            setZone('keyboard')
+          } else {
+            setDeletePageConfirmIndex(0)
+            setZone('confirmDeletePage')
+          }
+          return
+        }
+        case 'back':
+        case 'menu':
+          setZone('pills')
+          return
+        default:
+          return
+      }
+    }
+
+    if (zone === 'confirmDeletePage') {
+      switch (action) {
+        case 'left':
+        case 'right':
+          setDeletePageConfirmIndex((i) => (i === 0 ? 1 : 0))
+          return
+        case 'confirm':
+          if (deletePageConfirmIndex === 0) void deleteTargetPage()
+          else setZone('pageMenu')
+          return
+        case 'back':
+        case 'menu':
+          setZone('pageMenu')
           return
         default:
           return
@@ -737,7 +846,15 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
         {pages.map((page, i) => (
           <span
             key={page.id}
-            onClick={() => void switchToPage(page.id)}
+            onClick={() => {
+              setPillIndex(i)
+              if (editMode) {
+                setPageMenuIndex(0)
+                setZone('pageMenu')
+              } else {
+                void switchToPage(page.id)
+              }
+            }}
             className={`cursor-pointer whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
               page.id === activePage?.id ? 'bg-accent text-white' : 'bg-surface text-muted'
             } ${zone === 'pills' && pillIndex === i ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
@@ -795,6 +912,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
                   <CategoryRow
                     label={block.label}
                     items={block.items.map(toCardItem)}
+                    aspect="portrait"
                     focused={!editMode && isFocused}
                     focusedIndex={isFocused ? itemIndex : 0}
                     onSelect={(index) => {
@@ -828,11 +946,20 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
                       icon: Package2
                     }
 
+            // Pinned titles carry a real poster (portrait, like every other
+            // movie/series image in this app) — size="large" forces a wide
+            // landscape frame regardless of the `aspect` prop (see
+            // FocusableCard.tsx), which crops a portrait poster down to an
+            // unrecognizable horizontal sliver. Shortcuts have no photo at
+            // all (icon-on-gradient only), so the wide tile reads fine there
+            // — same look as Home's own app tiles, which this literally is.
+            const isPinnedTitle = block.card.kind === 'pinnedTitle'
             return (
-              <div key={block.id} className="w-72">
+              <div key={block.id} className={isPinnedTitle ? 'w-44' : 'w-72'}>
                 <FocusableCard
                   item={cardItem}
-                  size="large"
+                  size={isPinnedTitle ? 'default' : 'large'}
+                  aspect={isPinnedTitle ? 'portrait' : undefined}
                   focused={isFocused}
                   onClick={() => {
                     setBlockIndex(i)
@@ -1052,9 +1179,76 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
         </div>
       )}
 
+      {zone === 'pageMenu' && (config?.pages ?? [])[pillIndex] && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70" onClick={() => setZone('pills')}>
+          <div onClick={(e) => e.stopPropagation()} className="relative flex w-72 flex-col gap-2 rounded-panel bg-surface p-6">
+            <CloseButton className="absolute right-4 top-4" onClick={() => setZone('pills')} />
+            <h2 className="mb-2 pr-8 text-lg font-semibold">{(config?.pages ?? [])[pillIndex]?.name}</h2>
+            {['Rename', 'Delete'].map((label, i) => (
+              <div
+                key={label}
+                onClick={() => {
+                  if (i === 0) {
+                    const target = (config?.pages ?? [])[pillIndex]
+                    if (!target) return
+                    setKbValue(target.name)
+                    setKbShift(false)
+                    setKbRow(0)
+                    setKbCol(0)
+                    setKbPurpose('renamePage')
+                    setZone('keyboard')
+                  } else {
+                    setDeletePageConfirmIndex(0)
+                    setZone('confirmDeletePage')
+                  }
+                }}
+                className={`cursor-pointer rounded-xl px-4 py-3 font-medium transition-colors ${
+                  pageMenuIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted hover:text-white'
+                } ${label === 'Delete' ? 'text-red-400' : ''}`}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {zone === 'confirmDeletePage' && (config?.pages ?? [])[pillIndex] && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70" onClick={() => setZone('pageMenu')}>
+          <div onClick={(e) => e.stopPropagation()} className="relative flex w-80 flex-col gap-4 rounded-panel bg-surface p-8">
+            <h2 className="text-lg font-semibold">
+              Delete "{(config?.pages ?? [])[pillIndex]?.name}"? This removes every row and card on it.
+            </h2>
+            <div className="flex gap-3">
+              {['Delete', 'Cancel'].map((label, i) => (
+                <div
+                  key={label}
+                  onClick={() => {
+                    setDeletePageConfirmIndex(i)
+                    if (i === 0) void deleteTargetPage()
+                    else setZone('pageMenu')
+                  }}
+                  className={`flex-1 cursor-pointer rounded-xl px-5 py-3 text-center font-medium transition-colors ${
+                    deletePageConfirmIndex === i ? 'bg-accent text-white' : 'bg-surface-hi text-muted'
+                  }`}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {zone === 'keyboard' && (
         <OnScreenKeyboard
-          label={kbPurpose === 'newPage' ? 'New Page Name' : 'Search Movies & Series'}
+          label={
+            kbPurpose === 'newPage'
+              ? 'New Page Name'
+              : kbPurpose === 'renamePage'
+                ? 'Rename Page'
+                : 'Search Movies & Series'
+          }
           value={kbValue}
           shift={kbShift}
           focusedRow={kbRow}
