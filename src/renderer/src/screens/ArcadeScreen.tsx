@@ -79,7 +79,7 @@ export function ArcadeScreen(): JSX.Element {
         </div>
       </header>
 
-      <div className="grid grid-cols-7 gap-6">
+      <div className="grid grid-cols-7 gap-[max(1.5rem,var(--tile-grow-pad))] p-[var(--tile-grow-pad)]">
         {GAMES.map((game, i) => (
           <FocusableCard
             key={game.id}

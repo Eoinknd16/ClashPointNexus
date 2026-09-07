@@ -336,7 +336,7 @@ export function StoreScreen(): JSX.Element {
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col gap-8 overflow-y-auto p-5">
+      <div className="flex flex-1 flex-col gap-8 overflow-y-auto p-[var(--tile-grow-pad)]">
         <div ref={(el) => (rowRefs.current[0] = el)} className="w-96">
           <FocusableCard
             item={{

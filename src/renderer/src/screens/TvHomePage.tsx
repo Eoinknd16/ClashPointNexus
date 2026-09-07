@@ -973,7 +973,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
       )}
 
       {!isEmpty && (
-        <div className="flex flex-1 flex-col gap-6 overflow-y-auto">
+        <div className="flex flex-1 flex-col gap-[max(1.5rem,var(--tile-grow-pad))] overflow-y-auto p-[var(--tile-grow-pad)]">
           {resolved.map((block, i) => {
             const isFocused = zone === 'content' && blockIndex === i
             if (block.kind === 'row') {

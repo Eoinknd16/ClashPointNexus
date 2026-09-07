@@ -36,6 +36,21 @@
   --motion-scale-focus: 1.05;
   --motion-lift: 6;
   --motion-tap-scale: 0.97;
+
+  /* Derived, not a raw setting itself — how much empty space a focused
+     card's own growth (scale-up + lift, both from the Animation Style
+     preset above) can visually need beyond its resting box, for grids that
+     don't also scale by --card-scale (Games/Apps/Arcade, Home's tile row,
+     Store's single Steam Store tile — see themeStyle.ts's own note on why
+     those opt out of Card Size). CategoryRow.tsx computes its own padding
+     directly from its real track width instead, since it actually has one;
+     these are fluid, evenly-divided grid columns with no fixed px size to
+     calc() against, so this uses a flat reference height chosen generous
+     enough to cover this app's realistic tile sizes at any resolution it
+     runs at, rather than needing a fresh hand-tuned number every time this
+     silently stops being enough — which is exactly how it kept coming back
+     as "cards getting cut off" on one screen after another. */
+  --tile-grow-pad: calc(400px * (var(--motion-scale-focus) - 1) / 2 + var(--motion-lift) * 1px + 14px);
 }
 
 html,

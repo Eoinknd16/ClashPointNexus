@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 import { ASPECT_CLASSES, FocusableCard, type CardItem } from './FocusableCard'
@@ -21,7 +21,11 @@ interface CategoryRowProps {
 // widths are scaled by --card-scale (theme's Card Size setting, see
 // shared/themeStyle.ts) rather than resized on FocusableCard itself, which
 // would fight framer-motion's own transform on that same element.
-//
+const ROW_CLASSES = {
+  landscape: 'grid auto-cols-[calc(260px*var(--card-scale))] grid-flow-col overflow-x-hidden',
+  portrait: 'grid auto-cols-[calc(180px*var(--card-scale))] grid-flow-col overflow-x-hidden'
+}
+
 // Two separate things have to be accounted for here, not just one:
 // - Padding: overflow-x-hidden forces the vertical axis to clip too (per
 //   spec, an axis set to non-visible forces the other to "auto") — without
@@ -29,13 +33,36 @@ interface CategoryRowProps {
 //   this container's own edges.
 // - Gap: transform: scale() doesn't reserve extra layout space, so a focused
 //   card grows past its own column and can overlap the *next* card — the gap
-//   (--space-grid-gap, theme's Spacing setting) has to be wide enough to
-//   absorb that growth (plus the glow) on its own.
-const ROW_CLASSES = {
-  landscape:
-    'grid auto-cols-[calc(260px*var(--card-scale))] grid-flow-col gap-[var(--space-grid-gap)] overflow-x-hidden px-4 py-5',
-  portrait:
-    'grid auto-cols-[calc(180px*var(--card-scale))] grid-flow-col gap-[var(--space-grid-gap)] overflow-x-hidden px-4 py-5'
+//   has to be wide enough to absorb that growth (plus the glow) before it
+//   reaches the next card.
+//
+// Both used to be flat numbers (px-4/py-5, --space-grid-gap alone) tuned to
+// look right at default Card Size + default Animation Style — which is
+// exactly why cranking either setting up (a "Large" card, a "Bouncy" focus
+// spring) kept silently reopening this same clipping bug on one screen after
+// another. A focused card's real growth is `trackSize * cardScale *
+// (motionScaleFocus - 1) / 2` per side, plus the motion preset's own lift,
+// plus a flat allowance for shadow-focus's crisp ring/inner glow (see
+// colorMath.ts — the ring itself is fixed, only its faint outer 48px halo
+// isn't fully covered here, which is unnoticeable once it's faded that far
+// out) — computing it directly from the same --card-scale/--motion-scale-
+// focus/--motion-lift vars those settings actually write means this is
+// always exactly enough, for any combination the user picks, forever.
+// Gap is wrapped in max() so it never shrinks below the Spacing setting's
+// own --space-grid-gap value, only grows past it when growth demands it.
+const ROW_LAYOUT: Record<'landscape' | 'portrait', CSSProperties> = {
+  landscape: {
+    paddingInline: 'calc(260px * var(--card-scale) * (var(--motion-scale-focus) - 1) / 2 + 14px)',
+    paddingBlock:
+      'calc(130px * var(--card-scale) * (var(--motion-scale-focus) - 1) / 2 + var(--motion-lift) * 1px + 14px)',
+    gap: 'max(var(--space-grid-gap), calc(260px * var(--card-scale) * (var(--motion-scale-focus) - 1) / 2 + 14px))'
+  },
+  portrait: {
+    paddingInline: 'calc(180px * var(--card-scale) * (var(--motion-scale-focus) - 1) / 2 + 14px)',
+    paddingBlock:
+      'calc(270px * var(--card-scale) * (var(--motion-scale-focus) - 1) / 2 + var(--motion-lift) * 1px + 14px)',
+    gap: 'max(var(--space-grid-gap), calc(180px * var(--card-scale) * (var(--motion-scale-focus) - 1) / 2 + 14px))'
+  }
 }
 
 export function CategoryRow({
@@ -79,7 +106,7 @@ export function CategoryRow({
           {label}
         </h2>
       </div>
-      <div className={ROW_CLASSES[aspect]}>
+      <div className={ROW_CLASSES[aspect]} style={ROW_LAYOUT[aspect]}>
         {items.length === 0 && <span className="text-sm text-muted">Nothing here yet</span>}
         {items.map((item, i) => (
           <div key={item.id} ref={(el) => (cardRefs.current[i] = el)} className="scroll-m-8">

@@ -529,7 +529,7 @@ export function GamesScreen(): JSX.Element {
             card grows past its own grid cell — the gap has to be wide enough
             to absorb that growth (plus the glow) before it reaches the next
             card, and the outer padding covers the container's own edges. */}
-        <div className="grid flex-1 auto-rows-min grid-cols-5 gap-10 overflow-y-auto p-5">
+        <div className="grid flex-1 auto-rows-min grid-cols-5 gap-[max(2.5rem,var(--tile-grow-pad))] overflow-y-auto p-[var(--tile-grow-pad)]">
           {cards.length === 0 && (
             <span className="text-muted">
               {trimmedQuery

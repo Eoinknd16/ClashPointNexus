@@ -460,7 +460,7 @@ export function HomeMenu(): JSX.Element {
 
       <div className="shrink-0">
         <h2 className="mb-3 text-lg font-semibold">Your Apps</h2>
-        <div className="grid grid-cols-7 gap-[var(--space-grid-gap)]">
+        <div className="grid grid-cols-7 gap-[max(var(--space-grid-gap),var(--tile-grow-pad))] py-[var(--tile-grow-pad)]">
           {TILES.map((tile, i) => (
             <motion.div
               key={tile.id}
