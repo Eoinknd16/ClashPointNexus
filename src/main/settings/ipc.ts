@@ -1,4 +1,4 @@
-import { ipcMain, shell } from 'electron'
+import { ipcMain, shell, type BrowserWindow } from 'electron'
 import type {
   SteamSettings,
   SteamSignInResult,
@@ -27,8 +27,19 @@ import { getStartupSettings, setStartupEnabled } from './startup'
 import { createCustomTheme, installThemeFromFolder, removeInstalledTheme, scanThemesDropFolder } from './themeInstall'
 import { loadCustomThemes, saveCustomThemes, themesDropRoot } from './themes'
 import { prepareThemeSubmission } from './themeSubmission'
+import { getUiScale, setUiScale } from './uiScale'
 
-export function registerSettingsIpc(): void {
+export function registerSettingsIpc(mainWindow: BrowserWindow): void {
+  ipcMain.handle('settings:getUiScale', () => getUiScale())
+
+  ipcMain.handle('settings:setUiScale', (_event, scale: number) => {
+    setUiScale(scale)
+    // Live — same as picking a theme, no restart needed. mainWindow.
+    // webContents rather than event.sender since this is a single-window
+    // app anyway and it reads more directly than a same-window assumption.
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.setZoomFactor(scale)
+  })
+
   ipcMain.handle('settings:getSteam', (): SteamSettings => {
     const config = loadSteamConfig()
     return { apiKey: config.apiKey, steamId64: config.steamId64 }

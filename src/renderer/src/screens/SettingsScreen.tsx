@@ -31,6 +31,7 @@ import type { GlobalInputStatus } from '@shared/globalInputTypes'
 import type { StartupSettings } from '@shared/settingsTypes'
 import { activeStyleOptionIndex, STYLE_AXES } from '@shared/themeStyle'
 import { COMMUNITY_THEMES_REPO, type ThemeDefinition } from '@shared/themeTypes'
+import { UI_SCALE_PRESETS } from '@shared/uiScale'
 
 /** The 7 base colors a theme actually defines by hand — everything else
  * (--gradient-app-glow, --gradient-accent, --shadow-focus, --shadow-panel)
@@ -136,6 +137,7 @@ export function SettingsScreen(): JSX.Element {
   const [globalInputStatus, setGlobalInputStatus] = useState<GlobalInputStatus | null>(null)
   const [startupSettings, setStartupSettings] = useState<StartupSettings | null>(null)
   const [themesFolderPath, setThemesFolderPath] = useState('')
+  const [uiScale, setUiScaleState] = useState(1)
 
   const [zone, setZone] = useState<'sidebar' | 'content' | 'keyboard' | 'themeEditor' | 'confirmRemoveTheme'>(
     'sidebar'
@@ -194,6 +196,7 @@ export function SettingsScreen(): JSX.Element {
     window.api.updater.getStatus().then(setUpdateStatus).catch(() => {})
     window.api.globalInput.getStatus().then(setGlobalInputStatus).catch(() => {})
     window.api.settings.getStartup().then(setStartupSettings).catch(() => {})
+    window.api.settings.getUiScale().then(setUiScaleState).catch(() => {})
     window.api.settings.getThemesFolderPath().then(setThemesFolderPath).catch(() => {})
     // Mirrors status changes into the footer too — the row label alone is
     // easy to not notice changing in place.
@@ -298,6 +301,12 @@ export function SettingsScreen(): JSX.Element {
             category: 'app'
           }
         ]),
+    {
+      id: 'uiScale',
+      kind: 'action',
+      label: `UI Scale: ${Math.round(uiScale * 100)}% (press to cycle)`,
+      category: 'app'
+    },
 
     {
       id: 'globalInputCombos',
@@ -605,6 +614,19 @@ export function SettingsScreen(): JSX.Element {
     }
   }
 
+  async function doCycleUiScale(): Promise<void> {
+    const currentIndex = UI_SCALE_PRESETS.indexOf(uiScale as (typeof UI_SCALE_PRESETS)[number])
+    const next = UI_SCALE_PRESETS[(Math.max(0, currentIndex) + 1) % UI_SCALE_PRESETS.length]
+    setUiScaleState(next)
+    try {
+      await window.api.settings.setUiScale(next)
+      setMessage(`UI Scale set to ${Math.round(next * 100)}%`)
+    } catch (error) {
+      setUiScaleState(uiScale)
+      setMessage(`Couldn't update UI Scale: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   // Editing a theme implicitly selects it first — every adjustment (color OR
   // style) applies to :root live, which would otherwise be previewing a
   // theme that isn't even the one currently showing.
@@ -787,6 +809,8 @@ export function SettingsScreen(): JSX.Element {
       doCheckForUpdates()
     } else if (row.id === 'toggleStartup') {
       void doToggleStartup()
+    } else if (row.id === 'uiScale') {
+      void doCycleUiScale()
     } else if (row.id === 'openThemesFolder') {
       openThemesFolder()
     } else if (row.id === 'rescanThemesFolder') {

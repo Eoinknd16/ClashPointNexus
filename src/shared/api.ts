@@ -158,6 +158,9 @@ export interface LauncherApi {
     getStartup: () => Promise<StartupSettings>
     /** No-ops in a dev build — see StartupSettings.supported. */
     setStartupEnabled: (enabled: boolean) => Promise<void>
+    getUiScale: () => Promise<number>
+    /** Applies live via webContents.setZoomFactor — no restart needed. */
+    setUiScale: (scale: number) => Promise<void>
   }
   player: {
     probeMediaInfo: (url: string) => Promise<MediaInfo>

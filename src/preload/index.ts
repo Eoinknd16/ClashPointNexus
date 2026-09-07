@@ -63,7 +63,9 @@ const api: LauncherApi = {
     installCommunityTheme: (folder) => ipcRenderer.invoke('settings:installCommunityTheme', folder),
     prepareThemeSubmission: (id) => ipcRenderer.invoke('settings:prepareThemeSubmission', id),
     getStartup: () => ipcRenderer.invoke('settings:getStartup'),
-    setStartupEnabled: (enabled) => ipcRenderer.invoke('settings:setStartupEnabled', enabled)
+    setStartupEnabled: (enabled) => ipcRenderer.invoke('settings:setStartupEnabled', enabled),
+    getUiScale: () => ipcRenderer.invoke('settings:getUiScale'),
+    setUiScale: (scale) => ipcRenderer.invoke('settings:setUiScale', scale)
   },
   player: {
     probeMediaInfo: (url) => ipcRenderer.invoke('player:probeMediaInfo', url)

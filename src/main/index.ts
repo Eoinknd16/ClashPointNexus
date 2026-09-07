@@ -23,6 +23,7 @@ import { registerPowerIpc } from './power/ipc'
 import { registerProgressIpc } from './progress/ipc'
 import { registerSettingsIpc } from './settings/ipc'
 import { scanThemesDropFolder } from './settings/themeInstall'
+import { getUiScale } from './settings/uiScale'
 import { registerSteamIpc } from './steam/ipc'
 import { registerStreamingIpc } from './streaming/ipc'
 import { registerStremioIpc } from './stremio/ipc'
@@ -61,6 +62,18 @@ function createWindow(): BrowserWindow {
     if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' })
   })
 
+  // A UI Scale setting (Settings > App), for a TV/couch-viewing-distance
+  // display where the default size renders too small/large — a browser
+  // zoom on the whole renderer rather than resizing the actual window,
+  // which stays fullscreen at the display's real resolution either way.
+  // Zoom can reset on navigation in Chromium (it's tracked per origin), so
+  // this re-applies on did-finish-load too, not just once up front.
+  const uiScale = getUiScale()
+  mainWindow.webContents.setZoomFactor(uiScale)
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.setZoomFactor(uiScale)
+  })
+
   // Dev-only escape hatch: kiosk builds have no frame/menu, so Escape
   // is the only way out while iterating locally.
   mainWindow.webContents.on('before-input-event', (_event, input) => {
@@ -88,7 +101,6 @@ function createWindow(): BrowserWindow {
 app.whenReady().then(async () => {
   registerStremioIpc()
   registerStreamingIpc()
-  registerSettingsIpc()
   registerPlayerIpc()
   registerSubtitlesIpc()
   registerProgressIpc()
@@ -110,6 +122,7 @@ app.whenReady().then(async () => {
   await scanThemesDropFolder().catch(() => {})
 
   const mainWindow = createWindow()
+  registerSettingsIpc(mainWindow)
   registerGlobalInputIpc(mainWindow)
   registerControlCenterIpc(mainWindow)
   // Both need mainWindow — a launched game/app hides it for the session and
