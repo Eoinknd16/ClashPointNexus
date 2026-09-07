@@ -15,6 +15,7 @@ import type {
   StremioSettings
 } from './settingsTypes'
 import type { AchievementProgress, GameLaunchTarget, GameStoreInfo, SteamLibraryResult } from './steamTypes'
+import type { WatchAvailability } from './streamingProviders'
 import type { SystemStats } from './systemTypes'
 import type {
   AddonCatalogRow,
@@ -65,6 +66,19 @@ export interface LauncherApi {
     getContinueWatching: (type: CatalogType) => Promise<CatalogItem[]>
     getAddonCatalogs: (type: CatalogType) => Promise<AddonCatalogRow[]>
     search: (type: CatalogType, query: string) => Promise<CatalogItem[]>
+  }
+  /** The legal "where to watch" half of Nexus's media engine — knows which
+   * official streaming services carry a title (via the user's own TMDb key)
+   * and hands off to the real one; never plays their content itself. See
+   * shared/streamingProviders.ts and main/streaming/tmdb.ts for why. */
+  streaming: {
+    getApiKey: () => Promise<string>
+    setApiKey: (key: string) => Promise<void>
+    getAvailability: (imdbId: string, type: CatalogType) => Promise<WatchAvailability>
+    /** Opens the given service's search page (title pre-filled) in the
+     * system's default browser — see ipc.ts for why never Nexus's own
+     * embedded webview. */
+    openService: (serviceId: string, title: string) => Promise<void>
   }
   progress: {
     get: (type: CatalogType, id: string) => Promise<WatchProgress | null>

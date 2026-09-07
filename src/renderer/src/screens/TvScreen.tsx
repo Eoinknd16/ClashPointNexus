@@ -12,6 +12,7 @@ import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
 import { useCrashLogStore } from '../state/crashLogStore'
 import { subtitleTrackUrl, transcodedStreamUrl, type MediaInfo } from '@shared/playerConstants'
+import { STREAMING_SERVICES, type WatchAvailability } from '@shared/streamingProviders'
 import { registerActivePlaybackStop } from '../player/activePlayback'
 import { buildMseCodecString } from '../player/codecStrings'
 import { startMsePlayback } from '../player/msePlayer'
@@ -227,6 +228,7 @@ export function TvScreen(): JSX.Element {
   const [detailFocusIndex, setDetailFocusIndex] = useState(0)
   const [progress, setProgress] = useState<WatchProgress | null | undefined>(undefined)
   const [extendedMeta, setExtendedMeta] = useState<ExtendedMeta | null>(null)
+  const [watchAvailability, setWatchAvailability] = useState<WatchAvailability | null>(null)
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([])
   const [episodeSubZone, setEpisodeSubZone] = useState<EpisodeSubZone>('seasons')
   const [seasonIndex, setSeasonIndex] = useState(0)
@@ -732,6 +734,27 @@ export function TvScreen(): JSX.Element {
         )
       }
     })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedItem?.id])
+
+  // Which official streaming services carry this title, if the user's set a
+  // TMDb key — Cinemeta's own item id already IS the IMDb id, no separate
+  // lookup needed. Quietly stays null (nothing rendered) with no key set,
+  // an unfound title, or a failed lookup; this is pure enrichment same as
+  // extendedMeta above, never something the detail panel depends on.
+  useEffect(() => {
+    setWatchAvailability(null)
+    const item = selectedItem
+    if (!item) return
+    let cancelled = false
+    window.api.streaming
+      .getAvailability(item.id, item.type)
+      .then((availability) => {
+        if (!cancelled) setWatchAvailability(availability)
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -2197,6 +2220,27 @@ export function TvScreen(): JSX.Element {
                       {r.source} <span className="text-accent">{r.value}</span>
                     </span>
                   ))}
+                </div>
+              )}
+              {watchAvailability && watchAvailability.serviceIds.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <span className="text-xs uppercase tracking-wide text-muted">Also Streaming On</span>
+                  <div className="flex flex-wrap gap-2">
+                    {watchAvailability.serviceIds.map((serviceId) => {
+                      const service = STREAMING_SERVICES.find((s) => s.id === serviceId)
+                      if (!service) return null
+                      return (
+                        <button
+                          key={service.id}
+                          type="button"
+                          onClick={() => void window.api.streaming.openService(service.id, selectedItem.name)}
+                          className="rounded-full bg-surface-hi px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-hover hover:text-white"
+                        >
+                          {service.name}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </div>

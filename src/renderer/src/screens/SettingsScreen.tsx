@@ -4,6 +4,7 @@ import {
   FolderOpen,
   Gamepad2,
   Link2,
+  MonitorPlay,
   Palette,
   Plus,
   RefreshCw,
@@ -55,6 +56,7 @@ const CATEGORIES: Array<{ id: string; label: string; icon: LucideIcon }> = [
   { id: 'controller', label: 'Controller', icon: Gamepad2 },
   { id: 'steam', label: 'Steam', icon: Link2 },
   { id: 'stremio', label: 'Stremio', icon: Tv },
+  { id: 'streaming', label: 'Streaming', icon: MonitorPlay },
   { id: 'ratings', label: 'Ratings', icon: Star }
 ]
 
@@ -80,6 +82,7 @@ const FIELD_LABELS: Record<string, string> = {
   stremioEmail: 'Stremio Email',
   stremioPassword: 'Stremio Password',
   omdbApiKey: 'OMDb API Key',
+  tmdbApiKey: 'TMDb API Key',
   createThemeName: 'New Theme Name'
 }
 
@@ -122,6 +125,7 @@ function updateActionLabel(status: UpdateStatus | null): string {
 export function SettingsScreen(): JSX.Element {
   const [steamApiKey, setSteamApiKey] = useState('')
   const [omdbApiKey, setOmdbApiKey] = useState('')
+  const [tmdbApiKey, setTmdbApiKey] = useState('')
   const [steamId64, setSteamId64] = useState('')
   const [stremioEmail, setStremioEmail] = useState('')
   const [stremioPassword, setStremioPassword] = useState('')
@@ -177,6 +181,7 @@ export function SettingsScreen(): JSX.Element {
       })
       .catch(() => {})
     window.api.settings.getOmdbApiKey().then(setOmdbApiKey).catch(() => {})
+    window.api.streaming.getApiKey().then(setTmdbApiKey).catch(() => {})
     window.api.settings
       .getStremio()
       .then((s) => {
@@ -436,6 +441,18 @@ export function SettingsScreen(): JSX.Element {
       label: 'Manage individual addons (Torrentio, Debridio, etc.) from the TV screen\'s own Addons tab'
     },
 
+    header('whereToWatch', 'Where to Watch', 'streaming'),
+    { id: 'tmdbApiKey', kind: 'field', label: 'TMDb API Key', category: 'streaming', value: tmdbApiKey, masked: true },
+    {
+      id: 'tmdbApiKeyHint',
+      kind: 'info',
+      category: 'streaming',
+      label:
+        'Optional — shows which official services (Netflix, Prime Video, Disney+...) carry a title, and opens ' +
+        'them there when you pick one. Nexus never plays their content itself — DRM makes that legally off the ' +
+        'table no matter who builds it. Get a free key at themoviedb.org/settings/api'
+    },
+
     { id: 'omdbApiKey', kind: 'field', label: 'OMDb API Key', category: 'ratings', value: omdbApiKey, masked: true },
     {
       id: 'omdbApiKeyHint',
@@ -494,6 +511,11 @@ export function SettingsScreen(): JSX.Element {
       setOmdbApiKey(trimmed)
       window.api.settings.setOmdbApiKey(trimmed)
       setMessage('OMDb API key saved')
+    } else if (field === 'tmdbApiKey') {
+      const trimmed = value.trim()
+      setTmdbApiKey(trimmed)
+      window.api.streaming.setApiKey(trimmed)
+      setMessage('TMDb API key saved')
     } else if (field === 'createThemeName') {
       void doCreateTheme(value)
     }
@@ -1204,7 +1226,8 @@ export function SettingsScreen(): JSX.Element {
           masked={
             editingField === 'steamApiKey' ||
             editingField === 'stremioPassword' ||
-            editingField === 'omdbApiKey'
+            editingField === 'omdbApiKey' ||
+            editingField === 'tmdbApiKey'
           }
           shift={kbShift}
           focusedRow={kbRow}

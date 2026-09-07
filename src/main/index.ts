@@ -23,6 +23,7 @@ import { registerProgressIpc } from './progress/ipc'
 import { registerSettingsIpc } from './settings/ipc'
 import { scanThemesDropFolder } from './settings/themeInstall'
 import { registerSteamIpc } from './steam/ipc'
+import { registerStreamingIpc } from './streaming/ipc'
 import { registerStremioIpc } from './stremio/ipc'
 import { stopStremioServer } from './stremio/server'
 import { registerSubtitlesIpc } from './subtitles/ipc'
@@ -84,6 +85,7 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(async () => {
   registerStremioIpc()
+  registerStreamingIpc()
   registerSettingsIpc()
   registerPlayerIpc()
   registerSubtitlesIpc()

@@ -21,6 +21,12 @@ const api: LauncherApi = {
     getAddonCatalogs: (type) => ipcRenderer.invoke('stremio:getAddonCatalogs', type),
     search: (type, query) => ipcRenderer.invoke('stremio:search', type, query)
   },
+  streaming: {
+    getApiKey: () => ipcRenderer.invoke('streaming:getApiKey'),
+    setApiKey: (key) => ipcRenderer.invoke('streaming:setApiKey', key),
+    getAvailability: (imdbId, type) => ipcRenderer.invoke('streaming:getAvailability', imdbId, type),
+    openService: (serviceId, title) => ipcRenderer.invoke('streaming:openService', serviceId, title)
+  },
   progress: {
     get: (type, id) => ipcRenderer.invoke('progress:get', type, id),
     save: (entry) => ipcRenderer.invoke('progress:save', entry),
