@@ -70,6 +70,14 @@ export function hideControlCenter(): void {
   win?.hide()
 }
 
+/** Checked by the focus guardian (see globalInput/focusGuardian.ts) so it
+ * never fights this window for focus — Control Center taking focus away
+ * from the main window is exactly as legitimate as the main window itself
+ * having it, both are Nexus. */
+export function isControlCenterVisible(): boolean {
+  return Boolean(win && !win.isDestroyed() && win.isVisible())
+}
+
 export function toggleControlCenter(): void {
   if (win && !win.isDestroyed() && win.isVisible()) hideControlCenter()
   else showControlCenter()

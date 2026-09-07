@@ -5,6 +5,7 @@ import { registerArcadeIpc } from './arcade/ipc'
 import { registerControlCenterIpc, returnToNexus } from './controlCenter/ipc'
 import { toggleControlCenter } from './controlCenter/window'
 import { registerFilesystemIpc } from './filesystem/ipc'
+import { startFocusGuardian } from './globalInput/focusGuardian'
 import { goToDesktop, registerGlobalInputIpc } from './globalInput/ipc'
 import {
   setControlCenterComboHandler,
@@ -144,17 +145,24 @@ app.whenReady().then(async () => {
     startGlobalInputWatcher()
   }
 
+  // Also packaged-only (see focusGuardian.ts's own guard) — reclaims
+  // foreground focus if something else takes it (a startup app's own
+  // update/login popup, most commonly) and none of the legitimate "the user
+  // meant this" states apply.
+  const stopFocusGuardian = startFocusGuardian(mainWindow)
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+
+  app.on('will-quit', () => {
+    stopStremioServer()
+    stopTranscodeProxy()
+    stopGlobalInputWatcher()
+    stopFocusGuardian()
   })
 })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
-})
-
-app.on('will-quit', () => {
-  stopStremioServer()
-  stopTranscodeProxy()
-  stopGlobalInputWatcher()
 })

@@ -5,6 +5,15 @@ import { isHiddenForDesktop } from '../globalInput/ipc'
 const isDev = (): boolean => !app.isPackaged
 const STEAM_POLL_INTERVAL_MS = 3000
 
+// Whether a launched game/app session is currently hiding Nexus — checked by
+// the focus guardian (see globalInput/focusGuardian.ts) so it never yanks
+// Nexus back in front of the very game it just launched.
+let sessionActive = false
+
+export function isGameSessionActive(): boolean {
+  return sessionActive
+}
+
 function hideNexusWindow(mainWindow: BrowserWindow): void {
   if (mainWindow.isDestroyed()) return
   if (!isDev()) mainWindow.setFullScreen(false)
@@ -31,8 +40,13 @@ function restoreNexusWindow(mainWindow: BrowserWindow): void {
  * started OK, not sit waiting for the whole play session to finish.
  */
 export async function runGameSession(mainWindow: BrowserWindow, waitForExit: Promise<void>): Promise<void> {
+  sessionActive = true
   hideNexusWindow(mainWindow)
-  await waitForExit
+  try {
+    await waitForExit
+  } finally {
+    sessionActive = false
+  }
   restoreNexusWindow(mainWindow)
 }
 
