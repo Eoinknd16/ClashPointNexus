@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
-import { FolderOpen, Palette, RefreshCw, ShoppingCart } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FolderOpen, Palette, RefreshCw, RotateCw, ShoppingCart } from 'lucide-react'
 import { CategoryRow } from '../components/CategoryRow'
 import { FocusableCard, type CardItem } from '../components/FocusableCard'
+import { BackButton } from '../components/NavButtons'
 import { useNavListener } from '../input/useNavListener'
 import { useNavigationStore } from '../state/navigationStore'
 import { useStatusStore } from '../state/statusStore'
@@ -282,8 +283,34 @@ export function StoreScreen(): JSX.Element {
   if (view === 'steamStore') {
     return (
       <div className="flex h-screen flex-col bg-bg">
-        <header className="flex items-center justify-between border-b border-white/5 px-10 py-5">
-          <h1 className="text-2xl font-bold tracking-tight">Steam Store</h1>
+        <header className="flex items-center gap-4 border-b border-white/5 px-10 py-5">
+          <BackButton label="Store" onClick={() => setView('hub')} />
+          <div className="h-6 w-px shrink-0 bg-white/10" />
+          <button
+            type="button"
+            onClick={() => webviewRef.current?.goBack()}
+            aria-label="Back"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-surface-hi text-white transition-colors hover:bg-surface-hover"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => webviewRef.current?.goForward()}
+            aria-label="Forward"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-surface-hi text-white transition-colors hover:bg-surface-hover"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void webviewRef.current?.loadURL(STORE_URL)}
+            aria-label="Reload"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-surface-hi text-white transition-colors hover:bg-surface-hover"
+          >
+            <RotateCw className="h-4 w-4" />
+          </button>
+          <h1 className="flex-1 text-2xl font-bold tracking-tight">Steam Store</h1>
           <span className="text-xs text-muted">Back/Forward: L1/R1 · Square: Home · Confirm: Click</span>
         </header>
         <div ref={viewportRef} className="relative flex-1">
@@ -301,9 +328,12 @@ export function StoreScreen(): JSX.Element {
 
   return (
     <div className="flex h-screen flex-col gap-6 bg-bg px-10 py-8">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Store</h1>
-        <p className="text-sm text-muted">Buy games, and browse or apply the themes on this machine.</p>
+      <header className="flex items-center gap-4">
+        <BackButton label="Home" onClick={goHome} />
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Store</h1>
+          <p className="text-sm text-muted">Buy games, and browse or apply the themes on this machine.</p>
+        </div>
       </header>
 
       <div className="flex flex-1 flex-col gap-8 overflow-y-auto p-5">

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Trophy } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Pause, Trophy } from 'lucide-react'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
+import { BackButton } from '../components/NavButtons'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
 import type { HighScoreEntry } from '@shared/arcadeTypes'
@@ -411,10 +412,21 @@ export function NexusDashGame({ onExit }: { onExit: () => void }): JSX.Element {
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 
       {(phase === 'playing' || phase === 'paused') && (
-        <div className="pointer-events-none absolute left-8 top-8 flex flex-col gap-1">
+        <div className="absolute left-8 top-8 flex flex-col gap-1">
           <span className="text-sm font-medium uppercase tracking-wide text-muted">Score</span>
           <span className="text-4xl font-bold tabular-nums">{score}</span>
         </div>
+      )}
+
+      {phase === 'playing' && (
+        <button
+          type="button"
+          onClick={() => setPhase('paused')}
+          aria-label="Pause"
+          className="absolute right-8 top-8 flex h-11 w-11 items-center justify-center rounded-control bg-surface/70 text-white ring-1 ring-white/10 backdrop-blur-md transition-colors hover:bg-surface-hover"
+        >
+          <Pause className="h-5 w-5" />
+        </button>
       )}
 
       {phase === 'countdown' && (
@@ -425,16 +437,31 @@ export function NexusDashGame({ onExit }: { onExit: () => void }): JSX.Element {
 
       {phase === 'paused' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-          <div className="flex w-80 flex-col items-center gap-4 rounded-2xl bg-surface p-8 text-center">
+          <div className="flex w-80 flex-col items-center gap-4 rounded-panel bg-surface p-8 text-center">
             <h2 className="text-2xl font-bold">Paused</h2>
-            <p className="text-sm text-muted">Cross: Resume · Circle: Quit to Arcade</p>
+            <button
+              type="button"
+              onClick={() => setPhase('playing')}
+              className="w-full rounded-control bg-accent-gradient px-6 py-3 text-lg font-semibold text-white shadow-focus"
+            >
+              Resume
+            </button>
+            <button
+              type="button"
+              onClick={onExit}
+              className="w-full rounded-control bg-surface-hi px-6 py-3 text-sm font-medium text-muted hover:text-white"
+            >
+              Quit to Arcade
+            </button>
+            <p className="text-xs text-muted">Cross: Resume · Circle: Quit to Arcade</p>
           </div>
         </div>
       )}
 
       {phase === 'ready' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-          <div className="flex w-96 flex-col items-center gap-5 rounded-2xl bg-surface p-8 text-center">
+          <BackButton label="Arcade" onClick={onExit} className="absolute left-8 top-8" />
+          <div className="flex w-96 flex-col items-center gap-5 rounded-panel bg-surface p-8 text-center">
             <h1 className="bg-accent-gradient bg-clip-text text-3xl font-bold text-transparent">Nexus Dash</h1>
             <p className="flex items-center justify-center gap-1 text-sm text-muted">
               <ArrowLeft className="h-3.5 w-3.5" />/<ArrowRight className="h-3.5 w-3.5" /> or D-Pad to dodge ·
@@ -453,14 +480,21 @@ export function NexusDashGame({ onExit }: { onExit: () => void }): JSX.Element {
                 ))}
               </div>
             )}
-            <p className="text-lg font-semibold text-accent">Cross to Start</p>
+            <button
+              type="button"
+              onClick={startGame}
+              className="w-full rounded-control bg-accent-gradient px-6 py-3 text-lg font-semibold text-white shadow-focus"
+            >
+              Start
+            </button>
+            <p className="text-xs text-muted">Cross to Start</p>
           </div>
         </div>
       )}
 
       {phase === 'gameover' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-          <div className="flex w-96 flex-col items-center gap-5 rounded-2xl bg-surface p-8 text-center">
+          <div className="flex w-96 flex-col items-center gap-5 rounded-panel bg-surface p-8 text-center">
             <h2 className="text-2xl font-bold">Game Over</h2>
             <p className="text-4xl font-bold tabular-nums">{lastResult?.score ?? 0}</p>
             {lastResult?.rank != null && (
@@ -486,7 +520,21 @@ export function NexusDashGame({ onExit }: { onExit: () => void }): JSX.Element {
                 ))}
               </div>
             )}
-            <p className="text-sm text-muted">Cross: Play Again · Circle: Back to Arcade</p>
+            <button
+              type="button"
+              onClick={startGame}
+              className="w-full rounded-control bg-accent-gradient px-6 py-3 text-lg font-semibold text-white shadow-focus"
+            >
+              Play Again
+            </button>
+            <button
+              type="button"
+              onClick={onExit}
+              className="w-full rounded-control bg-surface-hi px-6 py-3 text-sm font-medium text-muted hover:text-white"
+            >
+              Back to Arcade
+            </button>
+            <p className="text-xs text-muted">Cross: Play Again · Circle: Back to Arcade</p>
           </div>
         </div>
       )}

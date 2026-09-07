@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Package2, Play, Star, X } from 'lucide-react'
 import { CardArt, FocusableCard, type CardItem } from '../components/FocusableCard'
+import { BackButton, CloseButton } from '../components/NavButtons'
 import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
@@ -148,11 +149,14 @@ export function AppsScreen(): JSX.Element {
   return (
     <div className="relative flex h-screen bg-bg">
       <motion.div layout className="flex flex-1 flex-col gap-6 overflow-hidden px-10 py-8">
-        <header>
-          <h1 className="text-3xl font-bold tracking-tight">Apps</h1>
-          <p className="text-sm text-muted">
-            Add an app: browse to its .exe in Files, click the left stick, then "Add to App Launcher".
-          </p>
+        <header className="flex items-center gap-4">
+          <BackButton label="Home" onClick={goHome} />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Apps</h1>
+            <p className="text-sm text-muted">
+              Add an app: browse to its .exe in Files, click the left stick, then "Add to App Launcher".
+            </p>
+          </div>
         </header>
 
         <div className="grid flex-1 auto-rows-min grid-cols-5 gap-10 overflow-y-auto p-5">
@@ -184,8 +188,15 @@ export function AppsScreen(): JSX.Element {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 60, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="shadow-panel flex w-[420px] shrink-0 flex-col gap-6 bg-surface p-8"
+            className="shadow-panel relative flex w-[420px] shrink-0 flex-col gap-6 bg-surface p-8"
           >
+            <CloseButton
+              className="absolute right-6 top-6 z-10"
+              onClick={() => {
+                setSelectedApp(null)
+                setZone('grid')
+              }}
+            />
             <div className="aspect-[2/1] w-full overflow-hidden rounded-xl bg-surface-hi">
               <CardArt item={selectedCard} className="h-full w-full" />
             </div>

@@ -4,6 +4,7 @@ import { Check, Download, Film, Play, Plus, Search, SkipForward, Star, Trash2, T
 import { CategoryRow } from '../components/CategoryRow'
 import type { CardItem } from '../components/FocusableCard'
 import { CardArt, FocusableCard } from '../components/FocusableCard'
+import { BackButton, CloseButton } from '../components/NavButtons'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
@@ -1039,10 +1040,13 @@ export function TvScreen(): JSX.Element {
     void startPlaybackAt(stream.playableUrl, resumeOffset, undefined)
   }
 
-  function seek(deltaSeconds: number): void {
+  // Absolute-target version — seek(delta) below is just this plus "current
+  // position + delta"; the click-to-seek progress bar computes an absolute
+  // target from where it was clicked instead, so both go through the same
+  // clamp-and-restart-playback path.
+  function seekTo(targetSeconds: number): void {
     const stream = streams[streamIndex]
     if (!stream?.playableUrl) return
-    const current = baseOffset + (videoRef.current?.currentTime ?? 0)
     // A few small seeks compounding can land right at (or past) the reported
     // duration, which ffmpeg can't -ss into if there's no real keyframe left
     // that close to actual EOF — held back from the very end so that mostly
@@ -1050,8 +1054,13 @@ export function TvScreen(): JSX.Element {
     // genuinely-empty result (falling back to progressive playback) is the
     // other half of actually handling it when it does anyway.
     const seekableEnd = duration ? Math.max(0, duration - SEEK_END_SAFETY_MARGIN_SECONDS) : null
-    const target = Math.max(0, seekableEnd !== null ? Math.min(seekableEnd, current + deltaSeconds) : current + deltaSeconds)
+    const target = Math.max(0, seekableEnd !== null ? Math.min(seekableEnd, targetSeconds) : targetSeconds)
     void startPlaybackAt(stream.playableUrl, target, audioIndex)
+  }
+
+  function seek(deltaSeconds: number): void {
+    const current = baseOffset + (videoRef.current?.currentTime ?? 0)
+    seekTo(current + deltaSeconds)
   }
 
   function adjustVolume(delta: number): void {
@@ -1060,6 +1069,25 @@ export function TvScreen(): JSX.Element {
       if (videoRef.current) videoRef.current.volume = next
       return next
     })
+  }
+
+  // Absolute-value counterpart to adjustVolume, for the volume slider's
+  // onChange — a real DOM event's target.value is always fresh, so this
+  // doesn't need adjustVolume's functional-setState trick (that exists to
+  // dodge a stale `volume` closure inside the nav-listener's relative +/-).
+  function setVolumeValue(v: number): void {
+    const next = Math.max(0, Math.min(1, v))
+    setVolume(next)
+    if (videoRef.current) videoRef.current.volume = next
+  }
+
+  // Shared by the player zone's back/menu NavAction and the visible Exit
+  // Player button — leaving playback always means stopping it and landing
+  // back on the episode list (series) or the detail panel (movie).
+  function exitPlayer(): void {
+    const wasSeries = activePlayback?.kind === 'series'
+    stopPlayback()
+    setZone(wasSeries ? 'episodes' : 'detail')
   }
 
   function toggleSubtitles(): void {
@@ -1272,12 +1300,9 @@ export function TvScreen(): JSX.Element {
           skipToNextEpisode()
           return
         case 'back':
-        case 'menu': {
-          const wasSeries = activePlayback?.kind === 'series'
-          stopPlayback()
-          setZone(wasSeries ? 'episodes' : 'detail')
+        case 'menu':
+          exitPlayer()
           return
-        }
         default:
           return
       }
@@ -1572,7 +1597,8 @@ export function TvScreen(): JSX.Element {
 
   const sourcesOverlay = zone === 'sources' && (
     <div className="absolute inset-x-0 bottom-0 z-20 flex h-[45%] flex-col gap-3 overflow-hidden bg-surface/95 p-6 backdrop-blur">
-      <h3 className="text-lg font-semibold">Choose a source ({streams.length})</h3>
+      <CloseButton className="absolute right-4 top-4" onClick={() => setZone(sourcesReturnZone)} />
+      <h3 className="pr-8 text-lg font-semibold">Choose a source ({streams.length})</h3>
       <div className="flex flex-col gap-2 overflow-y-auto">
         {streams.map((s, i) => (
           <div
@@ -1661,6 +1687,14 @@ export function TvScreen(): JSX.Element {
         </video>
 
         <div
+          className={`absolute inset-x-0 top-0 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent p-6 transition-opacity duration-300 ${
+            showBar ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+        >
+          <BackButton label="Exit Player" onClick={exitPlayer} />
+        </div>
+
+        <div
           className={`absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/90 to-transparent p-8 transition-opacity duration-300 ${
             showBar ? 'opacity-100' : 'pointer-events-none opacity-0'
           }`}
@@ -1668,7 +1702,18 @@ export function TvScreen(): JSX.Element {
           <div className="flex items-center justify-between text-sm text-muted">
             <span>{selectedItem?.name}</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-white/20">
+          {/* Click-to-seek: percentage across the bar's own width maps
+              directly to an absolute target time, same clamp as the
+              left/right NavAction's relative seek (see seekTo). */}
+          <div
+            onClick={(event) => {
+              if (!duration) return
+              const rect = event.currentTarget.getBoundingClientRect()
+              const pct = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+              seekTo(pct * duration)
+            }}
+            className="h-1.5 w-full cursor-pointer rounded-full bg-white/20"
+          >
             <div className="h-full rounded-full bg-accent" style={{ width: `${progressPct}%` }} />
           </div>
           <div className="flex items-center justify-between text-xs text-muted">
@@ -1676,8 +1721,27 @@ export function TvScreen(): JSX.Element {
               {formatTime(position)} / {duration ? formatTime(duration) : '--:--'}
             </span>
             <div className="flex items-center gap-4">
-              <span>Vol {Math.round(volume * 100)}%</span>
-              <span>{subtitlesOn ? 'CC On' : 'CC Off'}</span>
+              <div className="flex items-center gap-2">
+                <span>Vol {Math.round(volume * 100)}%</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.round(volume * 100)}
+                  onChange={(event) => setVolumeValue(Number(event.target.value) / 100)}
+                  className="w-24 cursor-pointer accent-accent"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={toggleSubtitles}
+                className={`rounded-lg px-2.5 py-1 font-semibold transition-colors ${
+                  subtitlesOn ? 'bg-accent text-white' : 'bg-white/10 text-muted hover:text-white'
+                }`}
+              >
+                {subtitlesOn ? 'CC On' : 'CC Off'}
+              </button>
               {activePlayback?.kind === 'series' && (
                 <button
                   onClick={skipToNextEpisode}
@@ -1699,7 +1763,8 @@ export function TvScreen(): JSX.Element {
     const row = rows.find((r) => r.key === expandedRowKey)
     return (
       <div className="relative flex h-screen flex-col gap-6 overflow-hidden bg-bg px-10 py-8">
-        <header>
+        <header className="flex items-center gap-4">
+          <BackButton onClick={() => setZone('rows')} />
           <h1 className="text-3xl font-bold tracking-tight">
             {expandedRowKey === 'search' ? `Search: "${searchQuery}"` : (row?.label ?? 'Browse')}
           </h1>
@@ -1766,7 +1831,15 @@ export function TvScreen(): JSX.Element {
   return (
     <div className="relative flex h-screen bg-bg">
       <motion.div layout className="flex flex-1 flex-col gap-6 overflow-hidden px-10 py-8">
-        <header>
+        <header className="flex items-center gap-4">
+          <BackButton
+            label={inEpisodesView || zone === 'addons' ? 'Back' : 'Home'}
+            onClick={() => {
+              if (inEpisodesView) setZone('detail')
+              else if (zone === 'addons') setZone('filters')
+              else goHome()
+            }}
+          />
           <h1 className="text-3xl font-bold tracking-tight">
             {inEpisodesView && selectedItem ? selectedItem.name : 'TV'}
           </h1>
@@ -1982,8 +2055,15 @@ export function TvScreen(): JSX.Element {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 60, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="shadow-panel flex w-[420px] shrink-0 flex-col gap-4 overflow-y-auto bg-surface p-8"
+            className="shadow-panel relative flex w-[420px] shrink-0 flex-col gap-4 overflow-y-auto bg-surface p-8"
           >
+            <CloseButton
+              className="absolute right-6 top-6 z-10"
+              onClick={() => {
+                setSelectedItem(null)
+                setZone(detailReturnZone)
+              }}
+            />
             <div className="aspect-[2/3] w-full overflow-hidden rounded-xl bg-surface-hi">
               <CardArt item={selectedCard} className="h-full w-full" />
             </div>

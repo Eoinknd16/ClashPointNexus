@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Film, Gamepad2, Tv } from 'lucide-react'
 import { CategoryRow } from '../components/CategoryRow'
 import type { CardItem } from '../components/FocusableCard'
+import { BackButton } from '../components/NavButtons'
 import { useNavListener } from '../input/useNavListener'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
@@ -28,7 +29,7 @@ function steamImageCandidates(appId: number): string[] {
   return [`${base}/header.jpg`, `${base}/capsule_616x353.jpg`, `${base}/library_hero.jpg`]
 }
 
-function toCardItem(item: LibraryItem): CardItem {
+function toCardItem(item: LibraryItem, onToggleGameFavorite?: (event: MouseEvent) => void): CardItem {
   if (item.kind === 'game') {
     const g = item.game
     const steamCandidates = g.imageAppId ? steamImageCandidates(g.imageAppId) : []
@@ -40,7 +41,11 @@ function toCardItem(item: LibraryItem): CardItem {
       imageFallbacks: g.imageDataUrl ? undefined : steamCandidates.slice(1),
       icon: Gamepad2,
       gradientDirection: 'bg-gradient-to-br',
-      favorite: g.favorite
+      favorite: g.favorite,
+      // The "Favorite Games" row is otherwise a dead end for a mouse-only
+      // user — there's no detail panel here (unlike Apps/Games/TV) to fall
+      // back to for a click-based favorite toggle.
+      onToggleFavorite: onToggleGameFavorite
     }
   }
   if (item.kind === 'continueMovie') {
@@ -214,9 +219,12 @@ export function LibraryScreen(): JSX.Element {
 
   return (
     <div className="flex h-screen flex-col gap-6 bg-bg px-10 py-8">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Library</h1>
-        <p className="text-sm text-muted">Your favorite games, your shows, and what you're watching.</p>
+      <header className="flex items-center gap-4">
+        <BackButton label="Home" onClick={goHome} />
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Library</h1>
+          <p className="text-sm text-muted">Your favorite games, your shows, and what you're watching.</p>
+        </div>
       </header>
 
       <div className="flex flex-1 flex-col gap-8 overflow-y-auto p-2">
@@ -229,7 +237,9 @@ export function LibraryScreen(): JSX.Element {
           <div key={section.id} ref={(el) => (rowRefs.current[i] = el)}>
             <CategoryRow
               label={section.label}
-              items={section.items.map(toCardItem)}
+              items={section.items.map((item) =>
+                toCardItem(item, item.kind === 'game' ? () => toggleFavorite(item) : undefined)
+              )}
               focused={clampedRowIndex === i}
               focusedIndex={clampedRowIndex === i ? clampedColIndex : 0}
               aspect={section.aspect}

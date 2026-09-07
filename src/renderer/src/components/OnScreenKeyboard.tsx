@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ArrowBigUp, Delete } from 'lucide-react'
+import { ArrowBigUp, Delete, X } from 'lucide-react'
 import { KEY_ROWS } from './onScreenKeyboardLayout'
 
 interface OnScreenKeyboardProps {
@@ -47,7 +47,18 @@ export function OnScreenKeyboard({
 
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/70">
-      <div className="flex w-[720px] flex-col gap-6 rounded-2xl bg-surface p-8">
+      <div className="relative flex w-[720px] flex-col gap-6 rounded-panel bg-surface p-8">
+        {/* Every key below was already a real clickable <button>, but there
+            was previously no way to back out of this overlay with a mouse at
+            all — Escape/Back only. */}
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Cancel"
+          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-control bg-surface-hover text-muted transition-colors hover:bg-surface-hi hover:text-white"
+        >
+          <X className="h-4 w-4" />
+        </button>
         <div>
           <p className="text-sm text-muted">{label}</p>
           <input

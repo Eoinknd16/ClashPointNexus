@@ -18,7 +18,14 @@ function ErrorFallback({ message, onReset }: FallbackProps): JSX.Element {
     <div className="flex h-screen flex-col items-center justify-center gap-4 bg-bg px-10 text-center">
       <h1 className="text-2xl font-bold">Something went wrong</h1>
       <p className="max-w-md text-sm text-muted">{message}</p>
-      <p className="text-sm text-muted">Press Confirm or Back to return home</p>
+      <button
+        type="button"
+        onClick={onReset}
+        className="rounded-control bg-accent-gradient px-6 py-3 font-semibold text-white shadow-focus"
+      >
+        Return Home
+      </button>
+      <p className="text-xs text-muted">Or press Confirm/Back</p>
     </div>
   )
 }

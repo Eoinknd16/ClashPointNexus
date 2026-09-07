@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type MouseEvent } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronRight, Star, type LucideIcon } from 'lucide-react'
 import { useCardMotion } from '../themes/useCardMotion'
@@ -24,6 +24,13 @@ export interface CardItem {
    * whatever custom theme the user has picked. */
   gradientDirection?: string
   favorite?: boolean
+  /** When set, the favorite star becomes a real clickable toggle instead of
+   * just a static badge — Library's "Favorite Games" row is the one place
+   * this was previously impossible to do with a mouse at all (no detail
+   * panel there to fall back to, unlike Apps/Games/TV, which already expose
+   * a favorite toggle inside their own detail panels). Left unset everywhere
+   * else, which keeps the star exactly as it always was: a plain indicator. */
+  onToggleFavorite?: (event: MouseEvent) => void
   /** Two explicit CSS colors for the icon-fallback background, overriding the
    * theme accent entirely — Home's app tiles use this so each one gets its
    * own distinct identity color instead of every tile looking like the same
@@ -155,12 +162,25 @@ export function FocusableCard({
           />
         </div>
       )}
-      {item.favorite && (
-        <Star
-          className="absolute right-3 top-3 z-10 h-5 w-5 text-yellow-400 drop-shadow"
-          fill="currentColor"
-        />
-      )}
+      {item.favorite &&
+        (item.onToggleFavorite ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              item.onToggleFavorite?.(event)
+            }}
+            aria-label="Remove favorite"
+            className="absolute right-3 top-3 z-10 rounded-full p-0.5 transition-transform hover:scale-110"
+          >
+            <Star className="h-5 w-5 text-yellow-400 drop-shadow" fill="currentColor" />
+          </button>
+        ) : (
+          <Star
+            className="absolute right-3 top-3 z-10 h-5 w-5 text-yellow-400 drop-shadow"
+            fill="currentColor"
+          />
+        ))}
       {showChevron && (
         // No backdrop-blur — Home renders one of these per tile (7 at once),
         // and backdrop-filter is one of the most expensive things a browser

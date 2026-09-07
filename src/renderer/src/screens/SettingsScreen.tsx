@@ -16,6 +16,7 @@ import {
   X,
   type LucideIcon
 } from 'lucide-react'
+import { BackButton, CloseButton } from '../components/NavButtons'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
@@ -660,16 +661,43 @@ export function SettingsScreen(): JSX.Element {
     }
   }
 
-  function adjustColor(direction: 1 | -1): void {
+  // Sets one HSL channel to an exact value — shared by adjustColor's D-pad
+  // +/- steps and the mouse-facing <input type="range"> in the modal below,
+  // so dragging a slider and nudging with L1/R1 both go through the same
+  // single write path.
+  function setColorChannelValue(channel: 0 | 1 | 2, newValue: number): void {
     if (!themeEditorTheme) return
     const colorKey = COLOR_KEYS[colorEditorKeyIndex].key
     const current = themeEditorTheme.vars[colorKey] ?? '128 128 128'
     const hsl = rgbTripletToHsl(current)
-    if (colorEditorChannel === 0) hsl.h = ((hsl.h + direction * 4) % 360 + 360) % 360
-    else if (colorEditorChannel === 1) hsl.s = Math.max(0, Math.min(100, hsl.s + direction * 3))
-    else hsl.l = Math.max(0, Math.min(100, hsl.l + direction * 3))
+    if (channel === 0) hsl.h = newValue
+    else if (channel === 1) hsl.s = newValue
+    else hsl.l = newValue
 
     const newBaseVars = { ...themeEditorTheme.vars, [colorKey]: hslToRgbTriplet(hsl.h, hsl.s, hsl.l) }
+    const newVars = deriveThemeVars(newBaseVars)
+    const updated: ThemeDefinition = { ...themeEditorTheme, vars: newVars }
+    setThemeEditorTheme(updated)
+    updateThemeVars(updated.id, newVars)
+  }
+
+  function adjustColor(direction: 1 | -1): void {
+    if (!themeEditorTheme) return
+    const colorKey = COLOR_KEYS[colorEditorKeyIndex].key
+    const hsl = rgbTripletToHsl(themeEditorTheme.vars[colorKey] ?? '128 128 128')
+    if (colorEditorChannel === 0) setColorChannelValue(0, ((hsl.h + direction * 4) % 360 + 360) % 360)
+    else if (colorEditorChannel === 1) setColorChannelValue(1, Math.max(0, Math.min(100, hsl.s + direction * 3)))
+    else setColorChannelValue(2, Math.max(0, Math.min(100, hsl.l + direction * 3)))
+  }
+
+  // Jumps the active axis straight to one specific option — shared by
+  // adjustStyle's D-pad +/- step and clicking a specific dot in the modal
+  // below (which picks that exact option in one click rather than needing
+  // to cycle to it).
+  function selectStyleOption(axisIndex: number, optionIndex: number): void {
+    if (!themeEditorTheme) return
+    const axis = STYLE_AXES[axisIndex]
+    const newBaseVars = { ...themeEditorTheme.vars, ...axis.options[optionIndex].vars }
     const newVars = deriveThemeVars(newBaseVars)
     const updated: ThemeDefinition = { ...themeEditorTheme, vars: newVars }
     setThemeEditorTheme(updated)
@@ -686,11 +714,7 @@ export function SettingsScreen(): JSX.Element {
     const axis = STYLE_AXES[styleAxisIndex]
     const currentIndex = activeStyleOptionIndex(axis, themeEditorTheme.vars)
     const nextIndex = (currentIndex + direction + axis.options.length) % axis.options.length
-    const newBaseVars = { ...themeEditorTheme.vars, ...axis.options[nextIndex].vars }
-    const newVars = deriveThemeVars(newBaseVars)
-    const updated: ThemeDefinition = { ...themeEditorTheme, vars: newVars }
-    setThemeEditorTheme(updated)
-    updateThemeVars(updated.id, newVars)
+    selectStyleOption(styleAxisIndex, nextIndex)
   }
 
   function doCheckForUpdates(): void {
@@ -903,7 +927,8 @@ export function SettingsScreen(): JSX.Element {
 
   return (
     <div className="flex h-screen flex-col gap-6 bg-bg px-10 py-8">
-      <header>
+      <header className="flex items-center gap-4">
+        <BackButton label="Home" onClick={goHome} />
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
       </header>
 
@@ -1006,16 +1031,21 @@ export function SettingsScreen(): JSX.Element {
       <footer className="text-sm text-muted">{message}</footer>
 
       {zone === 'themeEditor' && themeEditorTheme && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
-          <div className="flex w-[30rem] flex-col gap-4 rounded-panel bg-surface p-8">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70" onClick={closeThemeEditor}>
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="relative flex w-[30rem] flex-col gap-4 rounded-panel bg-surface p-8"
+          >
+            <CloseButton className="absolute right-4 top-4" onClick={closeThemeEditor} />
+            <div className="flex items-center justify-between pr-8">
               <span className="font-semibold">{themeEditorTheme.name}</span>
               <div className="flex gap-1.5 rounded-full bg-surface-hover p-1">
                 {(['colors', 'style'] as const).map((tab) => (
                   <span
                     key={tab}
-                    className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-                      editorTab === tab ? 'bg-accent text-white' : 'text-muted'
+                    onClick={() => setEditorTab(tab)}
+                    className={`cursor-pointer rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+                      editorTab === tab ? 'bg-accent text-white' : 'text-muted hover:text-white'
                     }`}
                   >
                     {tab}
@@ -1026,15 +1056,22 @@ export function SettingsScreen(): JSX.Element {
 
             {editorTab === 'colors' ? (
               <>
-                <div className="flex items-center gap-3">
-                  <span
-                    className="h-10 w-10 shrink-0 rounded-full ring-1 ring-white/20"
-                    style={{
-                      backgroundColor: `rgb(${themeEditorTheme.vars[COLOR_KEYS[colorEditorKeyIndex].key] ?? '128 128 128'})`
-                    }}
-                  />
-                  <span className="font-semibold">{COLOR_KEYS[colorEditorKeyIndex].label}</span>
+                <div className="flex items-center gap-2">
+                  {COLOR_KEYS.map((colorKey, i) => (
+                    <span
+                      key={colorKey.key}
+                      onClick={() => setColorEditorKeyIndex(i)}
+                      title={colorKey.label}
+                      className={`h-8 w-8 shrink-0 cursor-pointer rounded-full ring-2 transition-all ${
+                        colorEditorKeyIndex === i ? 'ring-accent' : 'ring-white/10 hover:ring-white/30'
+                      }`}
+                      style={{ backgroundColor: `rgb(${themeEditorTheme.vars[colorKey.key] ?? '128 128 128'})` }}
+                    />
+                  ))}
                 </div>
+                <span className="-mt-2 text-sm font-semibold text-muted">
+                  {COLOR_KEYS[colorEditorKeyIndex].label}
+                </span>
 
                 <div className="flex flex-col gap-3">
                   {CHANNEL_LABELS.map((label, i) => {
@@ -1046,7 +1083,8 @@ export function SettingsScreen(): JSX.Element {
                     return (
                       <div
                         key={label}
-                        className={`flex flex-col gap-1 rounded-xl px-4 py-3 transition-colors ${
+                        onClick={() => setColorEditorChannel(i)}
+                        className={`flex cursor-pointer flex-col gap-1.5 rounded-xl px-4 py-3 transition-colors ${
                           colorEditorChannel === i ? 'bg-surface-hi ring-2 ring-accent' : 'bg-surface-hover'
                         }`}
                       >
@@ -1057,12 +1095,19 @@ export function SettingsScreen(): JSX.Element {
                             {i === 0 ? '°' : '%'}
                           </span>
                         </div>
-                        <div className="h-1.5 w-full rounded-full bg-white/10">
-                          <div
-                            className="h-full rounded-full bg-accent-gradient"
-                            style={{ width: `${(value / max) * 100}%` }}
-                          />
-                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={max}
+                          step={1}
+                          value={value}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => {
+                            setColorEditorChannel(i)
+                            setColorChannelValue(i as 0 | 1 | 2, Number(event.target.value))
+                          }}
+                          className="h-1.5 w-full cursor-pointer accent-accent"
+                        />
                       </div>
                     )
                   })}
@@ -1081,7 +1126,8 @@ export function SettingsScreen(): JSX.Element {
                     return (
                       <div
                         key={axis.key}
-                        className={`flex flex-col gap-1 rounded-xl px-4 py-3 transition-colors ${
+                        onClick={() => setStyleAxisIndex(i)}
+                        className={`flex cursor-pointer flex-col gap-1.5 rounded-xl px-4 py-3 transition-colors ${
                           styleAxisIndex === i ? 'bg-surface-hi ring-2 ring-accent' : 'bg-surface-hover'
                         }`}
                       >
@@ -1093,7 +1139,13 @@ export function SettingsScreen(): JSX.Element {
                           {axis.options.map((opt, optIndex) => (
                             <span
                               key={opt.id}
-                              className={`h-1.5 flex-1 rounded-full ${
+                              title={opt.label}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setStyleAxisIndex(i)
+                                selectStyleOption(i, optIndex)
+                              }}
+                              className={`h-2.5 flex-1 cursor-pointer rounded-full transition-transform hover:scale-y-150 ${
                                 optIndex === optionIndex ? 'bg-accent-gradient' : 'bg-white/10'
                               }`}
                             />
@@ -1105,8 +1157,7 @@ export function SettingsScreen(): JSX.Element {
                 </div>
 
                 <p className="text-xs text-muted">
-                  {STYLE_AXES[styleAxisIndex].hint} · Up/Down: switch setting · Left/Right: change · L2/R2: switch
-                  tab · Back: done
+                  {STYLE_AXES[styleAxisIndex].hint} · Click a dot to pick it directly · L2/R2: switch tab · Back: done
                 </p>
               </>
             )}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
 import { ChevronLeft, ChevronRight, Home as HomeIcon, RotateCw, type LucideIcon } from 'lucide-react'
+import { BackButton } from '../components/NavButtons'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
@@ -295,6 +296,11 @@ export function BrowseScreen(): JSX.Element {
   return (
     <div className="flex h-screen flex-col bg-bg">
       <div className="flex items-center gap-3 border-b border-white/5 bg-surface px-6 py-4">
+        {/* Distinct from the "home" browser-toolbar icon below (which just
+            loads HOME_URL inside the webview) — this is the only way to
+            actually leave Browse and get back to Nexus with a mouse. */}
+        <BackButton label="Nexus Home" onClick={goHome} />
+        <div className="h-6 w-px shrink-0 bg-white/10" />
         {(['back', 'forward', 'reload', 'home'] as const).map((item, i) => {
           const Icon = TOOLBAR_ICONS[item]
           return (

@@ -233,7 +233,7 @@ export function QuickMenu(): JSX.Element | null {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="flex w-80 flex-col gap-4 rounded-2xl bg-surface p-8">
+      <div className="flex w-80 flex-col gap-4 rounded-panel bg-surface p-8">
         {confirmAction ? (
           <>
             <h2 className="text-lg font-semibold">

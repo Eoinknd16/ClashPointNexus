@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Joystick } from 'lucide-react'
 import { FocusableCard } from '../components/FocusableCard'
+import { BackButton } from '../components/NavButtons'
 import { useNavListener } from '../input/useNavListener'
 import { useNavigationStore } from '../state/navigationStore'
 import { NexusDashGame } from './NexusDashGame'
@@ -70,9 +71,12 @@ export function ArcadeScreen(): JSX.Element {
 
   return (
     <div className="flex h-screen flex-col gap-6 bg-bg px-10 py-8">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Arcade</h1>
-        <p className="text-sm text-muted">Built-in games, and anything else you add down the line.</p>
+      <header className="flex items-center gap-4">
+        <BackButton label="Home" onClick={goHome} />
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Arcade</h1>
+          <p className="text-sm text-muted">Built-in games, and anything else you add down the line.</p>
+        </div>
       </header>
 
       <div className="grid grid-cols-7 gap-6">

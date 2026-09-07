@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { File, Folder } from 'lucide-react'
+import { File, Folder, MoreVertical } from 'lucide-react'
 import { useNavListener } from '../input/useNavListener'
 import { useNavigationStore } from '../state/navigationStore'
+import { BackButton, CloseButton } from '../components/NavButtons'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import type { FileEntry } from '@shared/filesystemTypes'
@@ -136,6 +137,24 @@ export function FileManagerScreen(): JSX.Element {
     void window.api.filesystem.getParentPath(currentPath).then((parent) => {
       setCurrentPath(parent)
     })
+  }
+
+  // Shared by the nav bus's back/menu action and the header's clickable
+  // BackButton, so a mouse click behaves identically to Backspace/Circle.
+  function handleBack(): void {
+    if (searchQuery) {
+      setSearchQuery('')
+      setFocusIndex(0)
+      return
+    }
+    goUp()
+  }
+
+  function openContextMenuFor(index: number): void {
+    if (currentPath === null) return
+    setFocusIndex(index)
+    setMenuIndex(0)
+    setZone('contextMenu')
   }
 
   function buildMenuOptions(): MenuOption[] {
@@ -415,12 +434,7 @@ export function FileManagerScreen(): JSX.Element {
         return
       case 'back':
       case 'menu':
-        if (searchQuery) {
-          setSearchQuery('')
-          setFocusIndex(0)
-          return
-        }
-        goUp()
+        handleBack()
         return
       default:
         return
@@ -434,6 +448,7 @@ export function FileManagerScreen(): JSX.Element {
     <div className="flex h-screen flex-col gap-4 bg-bg px-10 py-8">
       <header className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
+          <BackButton label={isRoot ? 'Home' : 'Up'} onClick={handleBack} />
           <h1 className="truncate text-3xl font-bold tracking-tight">{currentPath ?? 'This PC'}</h1>
           {searchQuery && (
             <span className="shrink-0 rounded-full bg-surface-hi px-3 py-1 text-sm text-accent">
@@ -443,7 +458,7 @@ export function FileManagerScreen(): JSX.Element {
         </div>
         {!isRoot && (
           <span className="shrink-0 text-sm text-muted">
-            Search: Triangle · Options: click left stick (L3)
+            Search: Triangle · Options: right-click or the ⋮ button
           </span>
         )}
       </header>
@@ -473,7 +488,11 @@ export function FileManagerScreen(): JSX.Element {
               setFocusIndex(i)
               activateEntry(entry)
             }}
-            className={`flex cursor-pointer items-center gap-4 rounded-xl px-5 py-3 transition-colors ${
+            onContextMenu={(event) => {
+              event.preventDefault()
+              openContextMenuFor(i)
+            }}
+            className={`group flex cursor-pointer items-center gap-4 rounded-xl px-5 py-3 transition-colors ${
               focusIndex === i && zone === 'list' ? 'bg-surface-hi shadow-focus' : 'bg-surface'
             } ${clipboard?.path === entry.path && clipboard.mode === 'cut' ? 'opacity-50' : ''}`}
           >
@@ -486,6 +505,20 @@ export function FileManagerScreen(): JSX.Element {
                 <span className="w-24 shrink-0 text-right text-sm text-muted">
                   {entry.isDirectory ? '' : formatSize(entry.size)}
                 </span>
+                {/* Right-click also opens the same menu (onContextMenu above)
+                    — this is the discoverable equivalent for anyone who
+                    wouldn't think to try that. */}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    openContextMenuFor(i)
+                  }}
+                  aria-label="Options"
+                  className="shrink-0 rounded-control p-1.5 text-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-white group-hover:opacity-100"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
               </>
             )}
           </div>
@@ -495,9 +528,18 @@ export function FileManagerScreen(): JSX.Element {
       <footer className="text-sm text-muted">{message}</footer>
 
       {zone === 'contextMenu' && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
-          <div className="flex w-80 flex-col gap-2 rounded-2xl bg-surface p-6">
-            <h2 className="mb-2 truncate text-lg font-semibold">{visibleEntries[focusIndex]?.name ?? 'Folder'}</h2>
+        <div
+          className="fixed inset-0 z-20 flex items-center justify-center bg-black/70"
+          onClick={() => setZone('list')}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="relative flex w-80 flex-col gap-2 rounded-panel bg-surface p-6"
+          >
+            <CloseButton className="absolute right-4 top-4" onClick={() => setZone('list')} />
+            <h2 className="mb-2 truncate pr-8 text-lg font-semibold">
+              {visibleEntries[focusIndex]?.name ?? 'Folder'}
+            </h2>
             {menuOptions.map((option, i) => (
               <div
                 key={option.id}
@@ -515,7 +557,7 @@ export function FileManagerScreen(): JSX.Element {
 
       {zone === 'confirmDelete' && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70">
-          <div className="flex w-80 flex-col gap-4 rounded-2xl bg-surface p-8">
+          <div className="flex w-80 flex-col gap-4 rounded-panel bg-surface p-8">
             <h2 className="text-lg font-semibold">
               Move "{visibleEntries[focusIndex]?.name}" to the Recycle Bin?
             </h2>
