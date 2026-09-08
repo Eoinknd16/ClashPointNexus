@@ -11,6 +11,7 @@ import type { CommunityPluginSummary, PluginPermission } from '@shared/pluginTyp
 const STORE_COLUMNS = 4
 
 const CATEGORY_LABELS: Record<string, string> = {
+  game: 'Game',
   media: 'Media',
   widget: 'Widget',
   system: 'System',

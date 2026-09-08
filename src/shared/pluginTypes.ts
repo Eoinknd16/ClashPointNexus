@@ -16,7 +16,7 @@
  * is a separate, later piece of work (a real sandboxed loader), not
  * something a manifest being well-formed implies is safe to skip.
  */
-export type PluginCategory = 'media' | 'widget' | 'system' | 'input' | 'social' | 'other'
+export type PluginCategory = 'game' | 'media' | 'widget' | 'system' | 'input' | 'social' | 'other'
 
 /** Each maps to a real capability a plugin might need — kept small and
  * specific (not a blanket "full access") so a permission list is actually
@@ -74,7 +74,7 @@ export interface CommunityPluginSummary {
  * the moment it's created under a different name. */
 export const COMMUNITY_PLUGINS_REPO = { owner: 'Eoinknd16', name: 'ClashPointNexus-Plugins', branch: 'main' } as const
 
-const PLUGIN_CATEGORIES: PluginCategory[] = ['media', 'widget', 'system', 'input', 'social', 'other']
+const PLUGIN_CATEGORIES: PluginCategory[] = ['game', 'media', 'widget', 'system', 'input', 'social', 'other']
 const PLUGIN_PERMISSIONS: PluginPermission[] = [
   'network',
   'filesystem',
