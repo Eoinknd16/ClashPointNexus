@@ -544,12 +544,24 @@ export function HomeMenu(): JSX.Element {
       {pageCount > 1 && (
         <div className="flex shrink-0 justify-center gap-2">
           {Array.from({ length: pageCount }, (_, i) => (
-            <span
+            // -m-2/p-2 is a bigger click/touch target than the visible dot
+            // itself without changing the row's visual spacing — matters
+            // for mouse/touch input (remote desktop, a trackpad), not just
+            // controller, since dots have no D-pad stop of their own.
+            <div
               key={i}
-              className={`h-1.5 rounded-full transition-all ${
-                i === currentPage ? 'w-6 bg-accent' : 'w-1.5 bg-white/20'
-              }`}
-            />
+              onClick={() => {
+                setZone('tiles')
+                setTileIndex(i * TILES_PER_PAGE)
+              }}
+              className="-m-2 cursor-pointer p-2"
+            >
+              <span
+                className={`block h-1.5 rounded-full transition-all ${
+                  i === currentPage ? 'w-6 bg-accent' : 'w-1.5 bg-white/20'
+                }`}
+              />
+            </div>
           ))}
         </div>
       )}
