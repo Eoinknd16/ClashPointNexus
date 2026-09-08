@@ -26,9 +26,11 @@ import { useNavigationStore } from '../state/navigationStore'
 import { useThemeStore } from '../state/themeStore'
 import { deriveThemeVars, hslToRgbTriplet, rgbTripletToHsl } from '../themes/colorUtils'
 import { openThemesFolder, rescanThemesFolder } from '../themes/themeFolderActions'
+import { PluginHost } from '../plugins/PluginHost'
 import { TvAddonsPanel } from '../plugins/TvAddonsPanel'
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
+import type { InstalledPlugin } from '@shared/pluginTypes'
 import type { StartupSettings } from '@shared/settingsTypes'
 import { activeStyleOptionIndex, STYLE_AXES } from '@shared/themeStyle'
 import { COMMUNITY_THEMES_REPO, type ThemeDefinition } from '@shared/themeTypes'
@@ -123,6 +125,8 @@ export function SettingsScreen(): JSX.Element {
   const [startupSettings, setStartupSettings] = useState<StartupSettings | null>(null)
   const [themesFolderPath, setThemesFolderPath] = useState('')
   const [uiScale, setUiScaleState] = useState(1)
+  const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[]>([])
+  const [runningPlugin, setRunningPlugin] = useState<{ id: string; name: string } | null>(null)
 
   const [zone, setZone] = useState<'sidebar' | 'content' | 'keyboard' | 'themeEditor' | 'confirmRemoveTheme'>(
     'sidebar'
@@ -175,6 +179,7 @@ export function SettingsScreen(): JSX.Element {
     window.api.globalInput.getStatus().then(setGlobalInputStatus).catch(() => {})
     window.api.settings.getStartup().then(setStartupSettings).catch(() => {})
     window.api.settings.getUiScale().then(setUiScaleState).catch(() => {})
+    window.api.plugins.listInstalled().then(setInstalledPlugins).catch(() => {})
     window.api.settings.getThemesFolderPath().then(setThemesFolderPath).catch(() => {})
     // Mirrors status changes into the footer too — the row label alone is
     // easy to not notice changing in place.
@@ -390,6 +395,29 @@ export function SettingsScreen(): JSX.Element {
       category: 'plugins',
       label: 'TV Addons — catalogs, streams & subtitles'
     },
+    ...(installedPlugins.length === 0
+      ? [
+          {
+            id: 'noInstalledPlugins',
+            kind: 'info' as const,
+            category: 'plugins',
+            label: 'Nothing installed from the Plugin Store yet.'
+          }
+        ]
+      : installedPlugins.flatMap((p) => [
+          {
+            id: `openInstalledPlugin-${p.manifest.id}`,
+            kind: 'action' as const,
+            category: 'plugins',
+            label: `Open ${p.manifest.name}`
+          },
+          {
+            id: `uninstallPlugin-${p.manifest.id}`,
+            kind: 'action' as const,
+            category: 'plugins',
+            label: `Uninstall ${p.manifest.name}`
+          }
+        ])),
 
     header('whereToWatch', 'Where to Watch', 'streaming'),
     { id: 'tmdbApiKey', kind: 'field', label: 'TMDb API Key', category: 'streaming', value: tmdbApiKey, masked: true },
@@ -507,6 +535,13 @@ export function SettingsScreen(): JSX.Element {
       setStartupSettings({ ...startupSettings, enabled: !next })
       setMessage(`Couldn't update startup setting: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  async function doUninstallPlugin(id: string): Promise<void> {
+    const plugin = installedPlugins.find((p) => p.manifest.id === id)
+    await window.api.plugins.uninstall(id)
+    setInstalledPlugins((prev) => prev.filter((p) => p.manifest.id !== id))
+    setMessage(plugin ? `Uninstalled "${plugin.manifest.name}"` : 'Uninstalled')
   }
 
   async function doCycleUiScale(): Promise<void> {
@@ -697,6 +732,13 @@ export function SettingsScreen(): JSX.Element {
       void doSteamSignIn()
     } else if (row.id === 'openTvAddonsPlugin') {
       setActivePlugin('tvAddons')
+    } else if (row.id.startsWith('openInstalledPlugin-')) {
+      const id = row.id.replace('openInstalledPlugin-', '')
+      const plugin = installedPlugins.find((p) => p.manifest.id === id)
+      if (plugin) setRunningPlugin({ id, name: plugin.manifest.name })
+    } else if (row.id.startsWith('uninstallPlugin-')) {
+      const id = row.id.replace('uninstallPlugin-', '')
+      void doUninstallPlugin(id)
     } else if (row.id === 'checkForUpdates') {
       doCheckForUpdates()
     } else if (row.id === 'toggleStartup') {
@@ -1151,6 +1193,13 @@ export function SettingsScreen(): JSX.Element {
       )}
 
       {activePlugin === 'tvAddons' && <TvAddonsPanel onClose={() => setActivePlugin(null)} />}
+      {runningPlugin && (
+        <PluginHost
+          pluginId={runningPlugin.id}
+          pluginName={runningPlugin.name}
+          onClose={() => setRunningPlugin(null)}
+        />
+      )}
     </div>
   )
 }

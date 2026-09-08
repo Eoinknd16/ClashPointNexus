@@ -4,7 +4,12 @@ import type { GlobalInputStatus } from './globalInputTypes'
 import type { ContinueSuggestion } from './homeTypes'
 import type { LibraryEntry } from './libraryTypes'
 import type { MediaInfo } from './playerConstants'
-import type { CommunityPluginSummary } from './pluginTypes'
+import type {
+  CommunityPluginSummary,
+  InstalledPlugin,
+  PluginInstallResult,
+  PluginLaunchResult
+} from './pluginTypes'
 import type { WatchProgress } from './progressTypes'
 import type {
   SteamSettings,
@@ -270,5 +275,13 @@ export interface LauncherApi {
     /** Browses the community plugins repo — describes what's available,
      * doesn't download or run anything. See pluginTypes.ts. */
     listCommunity: () => Promise<CommunityPluginSummary[]>
+    listInstalled: () => Promise<InstalledPlugin[]>
+    install: (folder: string) => Promise<PluginInstallResult>
+    uninstall: (id: string) => Promise<void>
+    /** Locks down the plugin's session (see main/plugins/session.ts) and
+     * re-verifies its bundle hasn't changed since install, THEN returns
+     * what PluginHost.tsx needs to actually create the <webview> — never
+     * call this and use its result out of order with anything else. */
+    prepareLaunch: (id: string) => Promise<PluginLaunchResult>
   }
 }

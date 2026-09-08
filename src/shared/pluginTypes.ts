@@ -57,9 +57,9 @@ export interface PluginManifest {
   minAppVersion?: string
 }
 
-/** One plugin folder listed in the public community repo (Settings >
- * Plugins > Browse Plugin Store) — enough to render a card without
- * downloading anything beyond the manifest + icon. */
+/** One plugin folder listed in the public community repo (Store > Plugin
+ * Store) — enough to render a card without downloading anything beyond
+ * the manifest + icon. */
 export interface CommunityPluginSummary {
   /** Folder name in the repo. */
   folder: string
@@ -67,6 +67,42 @@ export interface CommunityPluginSummary {
   /** Hot-linked CDN URL for the plugin's own icon, or null if it has none. */
   iconUrl: string | null
 }
+
+/** A plugin actually downloaded onto this machine (userData/Plugins/<id>/)
+ * — the manifest here is what was re-verified at install time, not
+ * whatever the Store's cached summary said a moment earlier, since that
+ * cache is exactly the kind of thing a compromised CDN edge or a
+ * time-of-check/time-of-use gap could get away with swapping. grantedAt
+ * records when the user actually consented to this plugin's permission
+ * list (see PluginStorePanel's install confirmation) — re-shown/re-granted
+ * on every reinstall, never silently carried over from a previous version
+ * of the same plugin. bundleSha256 is what actually runs — a future launch
+ * can re-hash the file on disk against this and refuse to load a bundle
+ * that's changed since it was reviewed and installed. */
+export interface InstalledPlugin {
+  manifest: PluginManifest
+  installedAt: number
+  grantedAt: number
+  bundleSha256: string
+}
+
+export interface PluginInstallResult {
+  success: boolean
+  error: string | null
+  plugin: InstalledPlugin | null
+}
+
+/** What PluginHost.tsx needs to actually create the <webview> — handed
+ * back only once the plugin's session (see main/plugins/session.ts) is
+ * already locked down, never before, so there's no window where a request
+ * could slip through unguarded. */
+export interface PluginLaunchInfo {
+  indexUrl: string
+  preloadPath: string
+  partition: string
+}
+
+export type PluginLaunchResult = { ok: true; info: PluginLaunchInfo } | { ok: false; error: string }
 
 /** The public repo the Plugin Store reads from — same distribution model
  * as COMMUNITY_THEMES_REPO (see themeTypes.ts), open to third-party pull

@@ -14,6 +14,7 @@ declare global {
         src?: string
         allowpopups?: boolean
         partition?: string
+        preload?: string
       }
     }
   }

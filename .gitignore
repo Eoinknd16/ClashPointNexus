@@ -16,3 +16,5 @@ game-favorites.config.json
 apps.config.json
 steam-store-cache.json
 uiScale.config.json
+plugins.config.json
+plugin-files/

@@ -164,7 +164,11 @@ const api: LauncherApi = {
     launch: (executablePath, args) => ipcRenderer.invoke('apps:launch', executablePath, args)
   },
   plugins: {
-    listCommunity: () => ipcRenderer.invoke('plugins:listCommunity')
+    listCommunity: () => ipcRenderer.invoke('plugins:listCommunity'),
+    listInstalled: () => ipcRenderer.invoke('plugins:listInstalled'),
+    install: (folder) => ipcRenderer.invoke('plugins:install', folder),
+    uninstall: (id) => ipcRenderer.invoke('plugins:uninstall', id),
+    prepareLaunch: (id) => ipcRenderer.invoke('plugins:prepareLaunch', id)
   }
 }
 

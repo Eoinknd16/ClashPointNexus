@@ -38,18 +38,23 @@ type Zone = 'grid' | 'detail' | 'keyboard'
 /**
  * Settings > Plugins > Browse Plugin Store — browses the community plugins
  * repo (open to third-party submissions, see pluginTypes.ts) and shows what
- * each one would need permission to do before Install is ever pressed.
- * Install itself is deliberately a stub for now: downloading and actually
- * running a plugin's bundle needs a real sandboxed loader, which doesn't
- * exist yet — this panel is the first piece (discovery + informed consent
- * surface), not the whole pipeline. Full-screen overlay with its own
- * exclusive nav, same pattern as TvAddonsPanel.
+ * each one would need permission to do before Install is ever pressed —
+ * that review IS the consent step; there's no second confirmation dialog
+ * behind it. Install itself is real: main/plugins/install.ts re-fetches
+ * and re-validates the manifest fresh (never trusting this panel's own
+ * cached summary), downloads the bundle, and hashes it so a later launch
+ * can detect if it's ever changed on disk. Actually running an installed
+ * plugin happens elsewhere (see PluginHost.tsx, opened from Settings >
+ * Plugins) — this panel's own job stays discovery + install. Full-screen
+ * overlay with its own exclusive nav, same pattern as TvAddonsPanel.
  */
 export function PluginStorePanel({ onClose }: { onClose: () => void }): JSX.Element {
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
 
   const [plugins, setPlugins] = useState<CommunityPluginSummary[]>([])
+  const [installedIds, setInstalledIds] = useState<Set<string>>(new Set())
+  const [installingId, setInstallingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [zone, setZone] = useState<Zone>('grid')
   const [query, setQuery] = useState('')
@@ -68,6 +73,10 @@ export function PluginStorePanel({ onClose }: { onClose: () => void }): JSX.Elem
       .then(setPlugins)
       .catch(() => setPlugins([]))
       .finally(() => setLoading(false))
+    window.api.plugins
+      .listInstalled()
+      .then((installed) => setInstalledIds(new Set(installed.map((p) => p.manifest.id))))
+      .catch(() => {})
   }, [])
 
   const filtered = (() => {
@@ -113,11 +122,22 @@ export function PluginStorePanel({ onClose }: { onClose: () => void }): JSX.Elem
     if (result.done) submitKeyboard(result.value)
   }
 
-  function doInstall(plugin: CommunityPluginSummary): void {
-    // The honest stub: browsing + reviewing permissions is real, actually
-    // downloading and running a plugin's bundle needs a sandboxed loader
-    // that doesn't exist yet — see this panel's own doc comment.
-    setMessage(`Installing plugins isn't available yet — "${plugin.manifest.name}" will be installable in a future update`)
+  async function doInstall(plugin: CommunityPluginSummary): Promise<void> {
+    setInstallingId(plugin.manifest.id)
+    setMessage(`Installing ${plugin.manifest.name}...`)
+    try {
+      const result = await window.api.plugins.install(plugin.folder)
+      if (result.success && result.plugin) {
+        setInstalledIds((prev) => new Set(prev).add(result.plugin!.manifest.id))
+        setMessage(`Installed "${result.plugin.manifest.name}" — open it from Settings > Plugins`)
+      } else {
+        setMessage(`Couldn't install ${plugin.manifest.name}: ${result.error}`)
+      }
+    } catch (error) {
+      setMessage(`Couldn't install ${plugin.manifest.name}: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setInstallingId(null)
+    }
   }
 
   useExclusiveNavListener((action) => {
@@ -165,7 +185,7 @@ export function PluginStorePanel({ onClose }: { onClose: () => void }): JSX.Elem
     if (zone === 'detail') {
       switch (action) {
         case 'confirm':
-          if (selected) doInstall(selected)
+          if (selected) void doInstall(selected)
           return
         case 'back':
         case 'menu':
@@ -253,11 +273,21 @@ export function PluginStorePanel({ onClose }: { onClose: () => void }): JSX.Elem
             </div>
 
             <div
-              onClick={() => doInstall(selected)}
+              onClick={() => void doInstall(selected)}
               className="mt-2 flex w-64 cursor-pointer items-center justify-center gap-2 rounded-control bg-accent-gradient px-6 py-3 font-semibold text-white shadow-focus"
             >
-              <Check className="h-4 w-4" /> Install
+              <Check className="h-4 w-4" />
+              {installingId === selected.manifest.id
+                ? 'Installing...'
+                : installedIds.has(selected.manifest.id)
+                  ? 'Reinstall'
+                  : 'Install'}
             </div>
+            {installedIds.has(selected.manifest.id) && installingId !== selected.manifest.id && (
+              <p className="text-xs text-muted">
+                Already installed — open it from Settings &gt; Plugins, or reinstall to pull the latest version.
+              </p>
+            )}
           </div>
         </>
       ) : (
@@ -289,7 +319,9 @@ export function PluginStorePanel({ onClose }: { onClose: () => void }): JSX.Elem
                 const item: CardItem = {
                   id: plugin.manifest.id,
                   title: plugin.manifest.name,
-                  subtitle: `${plugin.manifest.author} · ${priceLabel(plugin.manifest.price)}`,
+                  subtitle: installedIds.has(plugin.manifest.id)
+                    ? `Installed · ${plugin.manifest.author}`
+                    : `${plugin.manifest.author} · ${priceLabel(plugin.manifest.price)}`,
                   imageUrl: plugin.iconUrl ?? undefined,
                   icon: Puzzle,
                   gradientDirection: 'bg-gradient-to-br'
