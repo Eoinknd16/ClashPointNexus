@@ -14,7 +14,6 @@ import {
   Gamepad2,
   Globe,
   Home,
-  Joystick,
   Menu,
   Monitor,
   Package2,
@@ -92,14 +91,6 @@ const TILES: Array<{
     icon: Package2,
     iconColors: ['#6d28d9', '#db2777'],
     screen: 'apps'
-  },
-  {
-    id: 'arcade',
-    title: 'Arcade',
-    subtitle: 'Nexus Dash · High Scores',
-    icon: Joystick,
-    iconColors: ['#a21caf', '#0891b2'],
-    screen: 'arcade'
   },
   {
     id: 'desktop',
@@ -460,7 +451,7 @@ export function HomeMenu(): JSX.Element {
 
       <div className="shrink-0">
         <h2 className="mb-3 text-lg font-semibold">Your Apps</h2>
-        <div className="grid grid-cols-7 gap-[max(var(--space-grid-gap),var(--tile-grow-pad))] py-[var(--tile-grow-pad)]">
+        <div className="grid grid-cols-6 gap-[max(var(--space-grid-gap),var(--tile-grow-pad))] py-[var(--tile-grow-pad)]">
           {TILES.map((tile, i) => (
             <motion.div
               key={tile.id}

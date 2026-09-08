@@ -6,26 +6,10 @@ export interface SteamSettings {
 }
 
 export interface StremioSettings {
+  /** Manually-added addon URLs (Settings > Plugins > TV Addons) — Stremio
+   * account login/sync was deliberately removed from core, to come back
+   * later as its own plugin instead. */
   addons: AddonSummary[]
-  authKey: string | null
-  email: string | null
-  /** When the addon collection was last pulled from the account — null if
-   * never synced. Auto-refreshed periodically (see stremio/service.ts), not
-   * just on a manual "Re-sync" press, so this is mostly informational. */
-  lastAddonsSyncedAt: number | null
-}
-
-export interface StremioLoginResult {
-  success: boolean
-  error: string | null
-  addonsSynced: number
-}
-
-export interface StremioImportResult {
-  success: boolean
-  error: string | null
-  progressImported: number
-  libraryImported: number
 }
 
 export interface SteamSignInResult {

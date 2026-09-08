@@ -4,14 +4,10 @@ import { join } from 'path'
 import type { AddonSummary } from '@shared/stremioTypes'
 
 export interface StremioConfig {
-  /** Every addon from your Stremio account (or manually added) — same set as the real app. */
+  /** Manually-added addon URLs (Settings > Plugins > TV Addons) — Stremio
+   * account login/sync was deliberately removed from core, so this is no
+   * longer ever populated from an account. */
   addons: AddonSummary[]
-  authKey?: string
-  email?: string
-  /** When the addon collection was last pulled from the account (login or a
-   * resync, manual or automatic) — lets service.ts refresh it opportunistically
-   * before it goes stale, rather than only on a manual "Re-sync" button press. */
-  lastAddonsSyncedAt?: number
 }
 
 const DEFAULT_CONFIG: StremioConfig = { addons: [] }

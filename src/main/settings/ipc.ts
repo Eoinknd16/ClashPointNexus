@@ -1,12 +1,5 @@
 import { ipcMain, shell, type BrowserWindow } from 'electron'
-import type {
-  SteamSettings,
-  SteamSignInResult,
-  StartupSettings,
-  StremioImportResult,
-  StremioLoginResult,
-  StremioSettings
-} from '@shared/settingsTypes'
+import type { SteamSettings, SteamSignInResult, StartupSettings, StremioSettings } from '@shared/settingsTypes'
 import type { AddonSummary, CommunityAddon } from '@shared/stremioTypes'
 import type {
   CommunityThemeSummary,
@@ -20,9 +13,8 @@ import { getOmdbApiKey, setOmdbApiKey } from '../ratings/config'
 import { loadSteamConfig, saveSteamConfig } from '../steam/config'
 import { signInWithSteam } from '../steam/openid'
 import { listCommunityAddons } from '../stremio/addonCollection'
-import { fetchAccountAddons, fetchAddonManifestInfo, stremioLogin } from '../stremio/account'
+import { fetchAddonManifestInfo } from '../stremio/addonManifest'
 import { loadStremioConfig, saveStremioConfig } from '../stremio/config'
-import { importStremioHistory } from '../stremio/importHistory'
 import { getStartupSettings, setStartupEnabled } from './startup'
 import { createCustomTheme, installThemeFromFolder, removeInstalledTheme, scanThemesDropFolder } from './themeInstall'
 import { loadCustomThemes, saveCustomThemes, themesDropRoot } from './themes'
@@ -59,13 +51,7 @@ export function registerSettingsIpc(mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle('settings:getStremio', (): StremioSettings => {
-    const config = loadStremioConfig()
-    return {
-      addons: config.addons,
-      authKey: config.authKey ?? null,
-      email: config.email ?? null,
-      lastAddonsSyncedAt: config.lastAddonsSyncedAt ?? null
-    }
+    return { addons: loadStremioConfig().addons }
   })
 
   ipcMain.handle('settings:setStremioAddons', (_event, addons: AddonSummary[]) => {
@@ -156,45 +142,6 @@ export function registerSettingsIpc(mainWindow: BrowserWindow): void {
     existing[index] = { ...existing[index], vars }
     saveCustomThemes(existing)
   })
-
-  ipcMain.handle(
-    'settings:stremioLogin',
-    async (_event, email: string, password: string): Promise<StremioLoginResult> => {
-      try {
-        const authKey = await stremioLogin(email, password)
-        const addons = await fetchAccountAddons(authKey)
-        const config = loadStremioConfig()
-        saveStremioConfig({ ...config, authKey, email, addons, lastAddonsSyncedAt: Date.now() })
-        return { success: true, error: null, addonsSynced: addons.length }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-          addonsSynced: 0
-        }
-      }
-    }
-  )
-
-  ipcMain.handle('settings:resyncStremioAddons', async (): Promise<StremioLoginResult> => {
-    const config = loadStremioConfig()
-    if (!config.authKey) {
-      return { success: false, error: 'Not logged in', addonsSynced: 0 }
-    }
-    try {
-      const addons = await fetchAccountAddons(config.authKey)
-      saveStremioConfig({ ...config, addons, lastAddonsSyncedAt: Date.now() })
-      return { success: true, error: null, addonsSynced: addons.length }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-        addonsSynced: 0
-      }
-    }
-  })
-
-  ipcMain.handle('settings:importStremioHistory', (): Promise<StremioImportResult> => importStremioHistory())
 
   ipcMain.handle('settings:getStartup', (): StartupSettings => getStartupSettings())
 

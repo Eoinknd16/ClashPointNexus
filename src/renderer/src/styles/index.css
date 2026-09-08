@@ -40,7 +40,7 @@
   /* Derived, not a raw setting itself — how much empty space a focused
      card's own growth (scale-up + lift, both from the Animation Style
      preset above) can visually need beyond its resting box, for grids that
-     don't also scale by --card-scale (Games/Apps/Arcade, Home's tile row,
+     don't also scale by --card-scale (Games/Apps, Home's tile row,
      Store's single Steam Store tile — see themeStyle.ts's own note on why
      those opt out of Card Size). CategoryRow.tsx computes its own padding
      directly from its real track width instead, since it actually has one;

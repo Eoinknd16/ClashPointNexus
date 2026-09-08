@@ -10,7 +10,6 @@ export type ScreenId =
   | 'browse'
   | 'files'
   | 'apps'
-  | 'arcade'
   | 'settings'
   | 'library'
   | 'store'

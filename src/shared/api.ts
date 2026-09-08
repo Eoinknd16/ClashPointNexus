@@ -1,5 +1,4 @@
 import type { AppEntry } from './appsTypes'
-import type { HighScoreEntry, ScoreSubmitResult } from './arcadeTypes'
 import type { DirectoryListing, FileEntry } from './filesystemTypes'
 import type { GlobalInputStatus } from './globalInputTypes'
 import type { ContinueSuggestion } from './homeTypes'
@@ -10,8 +9,6 @@ import type {
   SteamSettings,
   SteamSignInResult,
   StartupSettings,
-  StremioImportResult,
-  StremioLoginResult,
   StremioSettings
 } from './settingsTypes'
 import type { AchievementProgress, GameLaunchTarget, GameStoreInfo, SteamLibraryResult } from './steamTypes'
@@ -108,9 +105,6 @@ export interface LauncherApi {
      * powers the TV screen's searchable Addon Store. Install still goes
      * through addStremioAddon above with the picked entry's transportUrl. */
     listCommunityAddons: () => Promise<CommunityAddon[]>
-    stremioLogin: (email: string, password: string) => Promise<StremioLoginResult>
-    resyncStremioAddons: () => Promise<StremioLoginResult>
-    importStremioHistory: () => Promise<StremioImportResult>
     getCustomThemes: () => Promise<ThemeDefinition[]>
     /** Creates a brand-new custom theme from nothing, seeded from the given
      * vars (normally the currently-active theme's own) — the Theme Editor's
@@ -270,10 +264,5 @@ export interface LauncherApi {
     toggleFavorite: (id: string) => Promise<boolean>
     /** Resolves to an error message on failure, null on success. */
     launch: (executablePath: string, args: string) => Promise<string | null>
-  }
-  arcade: {
-    getHighScores: () => Promise<HighScoreEntry[]>
-    /** Local-only leaderboard for now — see arcadeTypes.ts. */
-    submitScore: (name: string, score: number) => Promise<ScoreSubmitResult>
   }
 }

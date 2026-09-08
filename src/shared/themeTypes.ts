@@ -11,8 +11,7 @@ export interface ThemeDefinition {
   heroImage?: string
   /** file:// URLs to an installed theme pack's per-tile images, keyed by the
    * Home screen's tile id ("games", "tv", "browse", "files", "apps",
-   * "arcade", "settings") — any tile not present here keeps its default
-   * flat color. */
+   * "desktop") — any tile not present here keeps its default flat color. */
   tileImages?: Record<string, string>
 }
 

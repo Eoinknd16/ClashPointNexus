@@ -1,7 +1,6 @@
 import { deriveThemeVars } from '@shared/colorMath'
 import type { ThemeDefinition } from '@shared/themeTypes'
 import defaultThemeApps from '../assets/defaultTheme/apps.jpg'
-import defaultThemeArcade from '../assets/defaultTheme/arcade.jpg'
 import defaultThemeGames from '../assets/defaultTheme/games.jpg'
 import defaultThemeHero from '../assets/defaultTheme/hero.jpg'
 import defaultThemeTv from '../assets/defaultTheme/tv.jpg'
@@ -48,8 +47,7 @@ const BASE_THEMES: BaseTheme[] = [
     tileImages: {
       games: defaultThemeGames,
       tv: defaultThemeTv,
-      apps: defaultThemeApps,
-      arcade: defaultThemeArcade
+      apps: defaultThemeApps
     }
   },
   {

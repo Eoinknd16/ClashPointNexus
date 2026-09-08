@@ -15,11 +15,10 @@ const GENRES = [
   'Family', 'Fantasy', 'History', 'Horror', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller'
 ]
 
-const TAB_LABELS: Record<'movie' | 'series' | 'library' | 'addons', string> = {
+const TAB_LABELS: Record<'movie' | 'series' | 'library', string> = {
   movie: 'Movies',
   series: 'Series',
-  library: 'Library',
-  addons: 'Addons'
+  library: 'Library'
 }
 
 // The browsing tabs' "Card Size" theme setting scales --card-scale, which
@@ -96,7 +95,7 @@ interface TvHomePageProps {
    * within this component) — hands focus back to TvScreen's shared tab row. */
   onExit: () => void
   onSelectItem: (item: CatalogItem) => void
-  onGoToTab: (tab: 'movie' | 'series' | 'library' | 'addons') => void
+  onGoToTab: (tab: 'movie' | 'series' | 'library') => void
 }
 
 /**
@@ -619,7 +618,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
     }
 
     if (zone === 'tabPick') {
-      const tabs: Array<'movie' | 'series' | 'library' | 'addons'> = ['movie', 'series', 'library', 'addons']
+      const tabs: Array<'movie' | 'series' | 'library'> = ['movie', 'series', 'library']
       switch (action) {
         case 'up':
           setSubPickIndex((i) => Math.max(0, i - 1))
@@ -1154,7 +1153,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
             <h2 className="mb-2 pr-8 text-lg font-semibold">Pick an Addon Catalog</h2>
             {addonCatalogOptions.length === 0 && (
               <p className="text-sm text-muted">
-                No catalog addons installed yet — add one from the Addons tab's Addon Store first.
+                No catalog addons installed yet — add one from Settings &gt; Plugins &gt; TV Addons first.
               </p>
             )}
             {addonCatalogOptions.map((option, i) => (
@@ -1190,7 +1189,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
           <div onClick={(e) => e.stopPropagation()} className="relative flex w-80 flex-col gap-2 rounded-panel bg-surface p-6">
             <CloseButton className="absolute right-4 top-4" onClick={() => setZone('addMenu')} />
             <h2 className="mb-2 pr-8 text-lg font-semibold">Shortcut to Which Tab?</h2>
-            {(['movie', 'series', 'library', 'addons'] as const).map((tab, i) => (
+            {(['movie', 'series', 'library'] as const).map((tab, i) => (
               <div
                 key={tab}
                 onClick={() => void commitBlock({ kind: 'card', card: { kind: 'tabShortcut', tab } })}

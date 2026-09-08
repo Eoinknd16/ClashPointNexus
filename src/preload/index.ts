@@ -46,9 +46,6 @@ const api: LauncherApi = {
     setStremioAddons: (streamAddons) => ipcRenderer.invoke('settings:setStremioAddons', streamAddons),
     addStremioAddon: (url) => ipcRenderer.invoke('settings:addStremioAddon', url),
     listCommunityAddons: () => ipcRenderer.invoke('settings:listCommunityAddons'),
-    stremioLogin: (email, password) => ipcRenderer.invoke('settings:stremioLogin', email, password),
-    resyncStremioAddons: () => ipcRenderer.invoke('settings:resyncStremioAddons'),
-    importStremioHistory: () => ipcRenderer.invoke('settings:importStremioHistory'),
     getCustomThemes: () => ipcRenderer.invoke('settings:getCustomThemes'),
     createCustomTheme: (name, seedVars) => ipcRenderer.invoke('settings:createCustomTheme', name, seedVars),
     installTheme: (folderPath) => ipcRenderer.invoke('settings:installTheme', folderPath),
@@ -165,10 +162,6 @@ const api: LauncherApi = {
     remove: (id) => ipcRenderer.invoke('apps:remove', id),
     toggleFavorite: (id) => ipcRenderer.invoke('apps:toggleFavorite', id),
     launch: (executablePath, args) => ipcRenderer.invoke('apps:launch', executablePath, args)
-  },
-  arcade: {
-    getHighScores: () => ipcRenderer.invoke('arcade:getHighScores'),
-    submitScore: (name, score) => ipcRenderer.invoke('arcade:submitScore', name, score)
   }
 }
 

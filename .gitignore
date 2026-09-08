@@ -14,6 +14,5 @@ progress.config.json
 library.config.json
 game-favorites.config.json
 apps.config.json
-arcade-scores.json
 steam-store-cache.json
 uiScale.config.json

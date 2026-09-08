@@ -7,13 +7,13 @@ import {
   MonitorPlay,
   Palette,
   Plus,
+  Puzzle,
   RefreshCw,
   Settings as SettingsIcon,
   Share2,
   Star,
   Trash2,
   TriangleAlert,
-  Tv,
   X,
   type LucideIcon
 } from 'lucide-react'
@@ -26,6 +26,7 @@ import { useNavigationStore } from '../state/navigationStore'
 import { useThemeStore } from '../state/themeStore'
 import { deriveThemeVars, hslToRgbTriplet, rgbTripletToHsl } from '../themes/colorUtils'
 import { openThemesFolder, rescanThemesFolder } from '../themes/themeFolderActions'
+import { TvAddonsPanel } from '../plugins/TvAddonsPanel'
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
 import type { StartupSettings } from '@shared/settingsTypes'
@@ -56,7 +57,7 @@ const CATEGORIES: Array<{ id: string; label: string; icon: LucideIcon }> = [
   { id: 'app', label: 'App', icon: SettingsIcon },
   { id: 'controller', label: 'Controller', icon: Gamepad2 },
   { id: 'steam', label: 'Steam', icon: Link2 },
-  { id: 'stremio', label: 'Stremio', icon: Tv },
+  { id: 'plugins', label: 'Plugins', icon: Puzzle },
   { id: 'streaming', label: 'Streaming', icon: MonitorPlay },
   { id: 'ratings', label: 'Ratings', icon: Star }
 ]
@@ -80,8 +81,6 @@ interface SettingsRow {
 const FIELD_LABELS: Record<string, string> = {
   steamApiKey: 'Steam API Key',
   steamId64: 'Steam ID64',
-  stremioEmail: 'Stremio Email',
-  stremioPassword: 'Stremio Password',
   omdbApiKey: 'OMDb API Key',
   tmdbApiKey: 'TMDb API Key',
   createThemeName: 'New Theme Name'
@@ -89,16 +88,6 @@ const FIELD_LABELS: Record<string, string> = {
 
 function header(id: string, label: string, category: string): SettingsRow {
   return { id, kind: 'header', label, category }
-}
-
-function describeSyncAge(lastSyncedAt: number | null): string {
-  if (lastSyncedAt === null) return 'Never synced'
-  const minutes = Math.round((Date.now() - lastSyncedAt) / 60000)
-  if (minutes < 1) return 'Synced just now'
-  if (minutes < 60) return `Synced ${minutes} min ago`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `Synced ${hours}h ago`
-  return `Synced ${Math.round(hours / 24)}d ago`
 }
 
 function updateActionLabel(status: UpdateStatus | null): string {
@@ -128,10 +117,6 @@ export function SettingsScreen(): JSX.Element {
   const [omdbApiKey, setOmdbApiKey] = useState('')
   const [tmdbApiKey, setTmdbApiKey] = useState('')
   const [steamId64, setSteamId64] = useState('')
-  const [stremioEmail, setStremioEmail] = useState('')
-  const [stremioPassword, setStremioPassword] = useState('')
-  const [loggedIn, setLoggedIn] = useState(false)
-  const [lastAddonsSyncedAt, setLastAddonsSyncedAt] = useState<number | null>(null)
   const [appVersion, setAppVersion] = useState('')
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [globalInputStatus, setGlobalInputStatus] = useState<GlobalInputStatus | null>(null)
@@ -149,6 +134,7 @@ export function SettingsScreen(): JSX.Element {
   const [kbCol, setKbCol] = useState(0)
   const [kbValue, setKbValue] = useState('')
   const [kbShift, setKbShift] = useState(false)
+  const [activePlugin, setActivePlugin] = useState<'tvAddons' | null>(null)
   const [themeEditorTheme, setThemeEditorTheme] = useState<ThemeDefinition | null>(null)
   const [editorTab, setEditorTab] = useState<'colors' | 'style'>('colors')
   const [colorEditorKeyIndex, setColorEditorKeyIndex] = useState(0)
@@ -184,14 +170,6 @@ export function SettingsScreen(): JSX.Element {
       .catch(() => {})
     window.api.settings.getOmdbApiKey().then(setOmdbApiKey).catch(() => {})
     window.api.streaming.getApiKey().then(setTmdbApiKey).catch(() => {})
-    window.api.settings
-      .getStremio()
-      .then((s) => {
-        setLoggedIn(Boolean(s.authKey))
-        setStremioEmail(s.email ?? '')
-        setLastAddonsSyncedAt(s.lastAddonsSyncedAt)
-      })
-      .catch(() => {})
     window.api.updater.getVersion().then(setAppVersion).catch(() => {})
     window.api.updater.getStatus().then(setUpdateStatus).catch(() => {})
     window.api.globalInput.getStatus().then(setGlobalInputStatus).catch(() => {})
@@ -399,55 +377,18 @@ export function SettingsScreen(): JSX.Element {
     },
     { id: 'steamId64', kind: 'field', label: 'Steam ID64 (manual entry)', category: 'steam', value: steamId64 },
 
-    header('stremioAccount', 'Stremio Account', 'stremio'),
+    header('pluginsHeader', 'Plugins', 'plugins'),
     {
-      id: 'stremioStatus',
+      id: 'pluginsIntro',
       kind: 'info',
-      category: 'stremio',
-      label: loggedIn ? `Logged in as ${stremioEmail}` : 'Not logged in to Stremio',
-      icon: loggedIn ? Check : undefined
-    },
-    ...(loggedIn
-      ? [
-          {
-            id: 'stremioSyncAge',
-            kind: 'info' as const,
-            category: 'stremio',
-            label: `Addon list: ${describeSyncAge(lastAddonsSyncedAt)} — auto-refreshes every few hours, or tap Re-sync below`
-          }
-        ]
-      : []),
-    { id: 'stremioEmail', kind: 'field', label: 'Stremio Email', category: 'stremio', value: stremioEmail },
-    {
-      id: 'stremioPassword',
-      kind: 'field',
-      label: 'Stremio Password',
-      category: 'stremio',
-      value: stremioPassword,
-      masked: true
+      category: 'plugins',
+      label: 'Optional modules, managed separately from the core app — each opens its own dedicated panel.'
     },
     {
-      id: 'stremioLogin',
+      id: 'openTvAddonsPlugin',
       kind: 'action',
-      category: 'stremio',
-      label: loggedIn ? 'Re-sync Addons From Stremio Account' : 'Log In & Sync Addons'
-    },
-    ...(loggedIn
-      ? [
-          {
-            id: 'importHistory',
-            kind: 'action' as const,
-            category: 'stremio',
-            label: 'Import Watch History & Library From Stremio'
-          }
-        ]
-      : []),
-
-    {
-      id: 'addonsMoved',
-      kind: 'info',
-      category: 'stremio',
-      label: 'Manage individual addons (Torrentio, Debridio, etc.) from the TV screen\'s own Addons tab'
+      category: 'plugins',
+      label: 'TV Addons — catalogs, streams & subtitles'
     },
 
     header('whereToWatch', 'Where to Watch', 'streaming'),
@@ -511,10 +452,6 @@ export function SettingsScreen(): JSX.Element {
       setSteamId64(trimmed)
       window.api.settings.setSteam({ apiKey: steamApiKey, steamId64: trimmed })
       setMessage('Steam ID64 saved')
-    } else if (field === 'stremioEmail') {
-      setStremioEmail(value)
-    } else if (field === 'stremioPassword') {
-      setStremioPassword(value)
     } else if (field === 'omdbApiKey') {
       const trimmed = value.trim()
       setOmdbApiKey(trimmed)
@@ -556,48 +493,6 @@ export function SettingsScreen(): JSX.Element {
       setMessage(`Linked to SteamID ${result.steamId64}`)
     } else {
       setMessage(`Steam sign-in failed: ${result.error}`)
-    }
-  }
-
-  async function doLogin(): Promise<void> {
-    setMessage('Logging in to Stremio...')
-    const result = await window.api.settings.stremioLogin(stremioEmail, stremioPassword)
-    if (result.success) {
-      setLoggedIn(true)
-      setStremioPassword('')
-      setMessage(`Logged in — synced ${result.addonsSynced} addon(s), all of them, not just stream ones`)
-      const updated = await window.api.settings.getStremio()
-      setLastAddonsSyncedAt(updated.lastAddonsSyncedAt)
-    } else {
-      setMessage(`Login failed: ${result.error}`)
-    }
-  }
-
-  // Stremio keeps Continue Watching and the Library page in one account-wide
-  // collection — split here across our own separate progress/library stores.
-  async function doImportHistory(): Promise<void> {
-    setMessage('Importing watch history and library from Stremio...')
-    const result = await window.api.settings.importStremioHistory()
-    if (result.success) {
-      setMessage(
-        `Imported ${result.progressImported} in-progress title(s) and ${result.libraryImported} library title(s)`
-      )
-    } else {
-      setMessage(`Import failed: ${result.error}`)
-    }
-  }
-
-  // Uses the already-stored auth key — no need to retype the password just to
-  // pick up newly-added addons or (e.g.) their catalog lists.
-  async function doResync(): Promise<void> {
-    setMessage('Re-syncing addons...')
-    const result = await window.api.settings.resyncStremioAddons()
-    if (result.success) {
-      setMessage(`Re-synced ${result.addonsSynced} addon(s)`)
-      const updated = await window.api.settings.getStremio()
-      setLastAddonsSyncedAt(updated.lastAddonsSyncedAt)
-    } else {
-      setMessage(`Re-sync failed: ${result.error}`)
     }
   }
 
@@ -800,11 +695,8 @@ export function SettingsScreen(): JSX.Element {
       openKeyboard(row.id, row.value ?? '')
     } else if (row.id === 'steamSignIn') {
       void doSteamSignIn()
-    } else if (row.id === 'stremioLogin') {
-      if (loggedIn) void doResync()
-      else void doLogin()
-    } else if (row.id === 'importHistory') {
-      void doImportHistory()
+    } else if (row.id === 'openTvAddonsPlugin') {
+      setActivePlugin('tvAddons')
     } else if (row.id === 'checkForUpdates') {
       doCheckForUpdates()
     } else if (row.id === 'toggleStartup') {
@@ -1040,9 +932,7 @@ export function SettingsScreen(): JSX.Element {
                   row.kind === 'info' ? '' : 'cursor-pointer'
                 } ${
                   row.kind === 'info'
-                    ? loggedIn && row.id === 'stremioStatus'
-                      ? 'bg-accent/20 text-accent ring-accent/30'
-                      : 'bg-surface text-muted ring-accent/10'
+                    ? 'bg-surface text-muted ring-accent/10'
                     : zone === 'content' && activeIndex === i
                       ? 'bg-surface-hi shadow-focus ring-2 ring-accent'
                       : 'bg-surface ring-accent/15'
@@ -1248,10 +1138,7 @@ export function SettingsScreen(): JSX.Element {
           label={editingField ? (FIELD_LABELS[editingField] ?? '') : ''}
           value={kbValue}
           masked={
-            editingField === 'steamApiKey' ||
-            editingField === 'stremioPassword' ||
-            editingField === 'omdbApiKey' ||
-            editingField === 'tmdbApiKey'
+            editingField === 'steamApiKey' || editingField === 'omdbApiKey' || editingField === 'tmdbApiKey'
           }
           shift={kbShift}
           focusedRow={kbRow}
@@ -1262,6 +1149,8 @@ export function SettingsScreen(): JSX.Element {
           onKeyPress={pressVirtualKey}
         />
       )}
+
+      {activePlugin === 'tvAddons' && <TvAddonsPanel onClose={() => setActivePlugin(null)} />}
     </div>
   )
 }

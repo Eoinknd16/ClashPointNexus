@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, Download, Film, Play, Plus, Search, SkipForward, Star, Store, Trash2, Tv } from 'lucide-react'
+import { Check, Film, Play, Plus, Search, SkipForward, Star, Tv } from 'lucide-react'
 import { CategoryRow } from '../components/CategoryRow'
 import type { CardItem } from '../components/FocusableCard'
 import { CardArt, FocusableCard } from '../components/FocusableCard'
@@ -23,60 +23,21 @@ import type { WatchProgress } from '@shared/progressTypes'
 import { seasonSortKey } from '@shared/stremioTypes'
 import type {
   AddonCatalogRow,
-  AddonSummary,
   CatalogItem,
   CatalogType,
-  CommunityAddon,
   EpisodeItem,
   ExtendedMeta,
   StreamOption,
   StreamResult
 } from '@shared/stremioTypes'
 
-// The one addon with a fixed, public, no-config manifest URL worth offering
-// as a one-tap default — everything else (Debridio included) is personalized
-// per account, so there's no fixed URL to guess; those go through the plain
-// "Add Addon URL" flow with the user pasting their own generated link.
-const TORRENTIO_URL = 'https://torrentio.strem.fun/manifest.json'
-
-const ADDON_CAPABILITY_LABELS: Record<string, string> = {
-  stream: 'Stream',
-  catalog: 'Catalog',
-  meta: 'Meta',
-  subtitles: 'Subtitles',
-  addon_catalog: 'Addon Catalog'
-}
-
-function describeAddonCapabilities(resources: string[]): string {
-  return resources.map((r) => ADDON_CAPABILITY_LABELS[r] ?? r).join(', ')
-}
-
-type BrowseTab = 'myTv' | 'movie' | 'series' | 'library' | 'addons'
-type Zone =
-  | 'filters'
-  | 'rows'
-  | 'detail'
-  | 'episodes'
-  | 'expanded'
-  | 'sources'
-  | 'player'
-  | 'keyboard'
-  | 'addons'
-  | 'addonStore'
-  | 'myTvHome'
+type BrowseTab = 'myTv' | 'movie' | 'series' | 'library'
+type Zone = 'filters' | 'rows' | 'detail' | 'episodes' | 'expanded' | 'sources' | 'player' | 'keyboard' | 'myTvHome'
 type EpisodeSubZone = 'seasons' | 'list'
-type KeyboardPurpose = 'search' | 'addonUrl' | 'addonStoreSearch'
 
-type AddonPanelRow =
-  | { kind: 'addon'; addon: AddonSummary }
-  | { kind: 'browseStore' }
-  | { kind: 'quickAddTorrentio' }
-  | { kind: 'addCustom' }
-
-const TABS: BrowseTab[] = ['myTv', 'movie', 'series', 'library', 'addons']
+const TABS: BrowseTab[] = ['myTv', 'movie', 'series', 'library']
 const EXPANDED_COLUMNS = 6
 const EXPANDED_SKIP_CAP = 950
-const ADDON_STORE_COLUMNS = 4
 // A row only ever shows a handful of cards on screen at once — rendering a
 // full ~50-item catalog page into the DOM for every one of the ~25 rows on a
 // tab adds up fast. "See All" still paginates the true underlying catalog;
@@ -130,7 +91,6 @@ function tabLabel(tab: BrowseTab): string {
   if (tab === 'myTv') return 'My TV'
   if (tab === 'movie') return 'Movies'
   if (tab === 'series') return 'Series'
-  if (tab === 'addons') return 'Addons'
   return 'My Library'
 }
 
@@ -237,13 +197,6 @@ export function TvScreen(): JSX.Element {
   const [kbCol, setKbCol] = useState(0)
   const [kbValue, setKbValue] = useState('')
   const [kbShift, setKbShift] = useState(false)
-  const [kbPurpose, setKbPurpose] = useState<KeyboardPurpose>('search')
-  const [configuredAddons, setConfiguredAddons] = useState<AddonSummary[]>([])
-  const [addonFocusIndex, setAddonFocusIndex] = useState(0)
-  const [communityAddons, setCommunityAddons] = useState<CommunityAddon[]>([])
-  const [communityAddonsLoading, setCommunityAddonsLoading] = useState(false)
-  const [addonStoreQuery, setAddonStoreQuery] = useState('')
-  const [addonStoreIndex, setAddonStoreIndex] = useState(0)
   const [rowIndex, setRowIndex] = useState(0)
   const [colIndex, setColIndex] = useState(0)
   const [detailReturnZone, setDetailReturnZone] = useState<'rows' | 'expanded' | 'myTvHome'>('rows')
@@ -300,8 +253,6 @@ export function TvScreen(): JSX.Element {
   const episodeRefs = useRef<Array<HTMLDivElement | null>>([])
   const expandedRefs = useRef<Array<HTMLDivElement | null>>([])
   const rowRefs = useRef<Array<HTMLDivElement | null>>([])
-  const addonRowRefs = useRef<Array<HTMLDivElement | null>>([])
-  const addonStoreRefs = useRef<Array<HTMLDivElement | null>>([])
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const trackRef = useRef<HTMLTrackElement | null>(null)
   const mseStopRef = useRef<(() => void) | null>(null)
@@ -355,7 +306,7 @@ export function TvScreen(): JSX.Element {
         }
       ]
     }
-    if (tab === 'addons' || tab === 'myTv') return []
+    if (tab === 'myTv') return []
     // Addon-provided catalogs don't paginate further in the expanded grid (most
     // addons only ever have the one page they already returned) — source null
     // marks that the same way Continue Watching/My Library already do.
@@ -423,23 +374,6 @@ export function TvScreen(): JSX.Element {
     return seriesRows
   })()
 
-  const addonPanelRows: AddonPanelRow[] = [
-    { kind: 'browseStore' },
-    ...configuredAddons.map((addon): AddonPanelRow => ({ kind: 'addon', addon })),
-    { kind: 'quickAddTorrentio' },
-    { kind: 'addCustom' }
-  ]
-  const clampedAddonFocusIndex = Math.min(addonFocusIndex, Math.max(0, addonPanelRows.length - 1))
-
-  const filteredCommunityAddons = (() => {
-    const q = addonStoreQuery.trim().toLowerCase()
-    if (!q) return communityAddons
-    return communityAddons.filter(
-      (a) => a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
-    )
-  })()
-  const clampedAddonStoreIndex = Math.min(addonStoreIndex, Math.max(0, filteredCommunityAddons.length - 1))
-
   const inEpisodesView = zone === 'episodes'
   const inPlayerView = zone === 'player' || (zone === 'sources' && sourcesReturnZone === 'player')
 
@@ -498,19 +432,9 @@ export function TvScreen(): JSX.Element {
   }, [zone, seasonIndex])
 
   useEffect(() => {
-    if (zone !== 'addons') return
-    addonRowRefs.current[clampedAddonFocusIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-  }, [zone, clampedAddonFocusIndex])
-
-  useEffect(() => {
     if (zone !== 'expanded') return
     expandedRefs.current[expandedIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [zone, expandedIndex])
-
-  useEffect(() => {
-    if (zone !== 'addonStore') return
-    addonStoreRefs.current[clampedAddonStoreIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-  }, [zone, clampedAddonStoreIndex])
 
   useEffect(() => {
     if (zone !== 'rows') return
@@ -637,13 +561,6 @@ export function TvScreen(): JSX.Element {
     window.api.stremio.getContinueWatching('movie').then(setContinueWatchingMovies).catch(() => {})
     window.api.stremio.getContinueWatching('series').then(setContinueWatchingSeries).catch(() => {})
   }, [zone])
-
-  // Fetched once — add/remove already update this list locally without a
-  // round trip, and this whole screen remounts on navigating away and back,
-  // so there's no case where a stale list would otherwise linger.
-  useEffect(() => {
-    window.api.settings.getStremio().then((s) => setConfiguredAddons(s.addons)).catch(() => {})
-  }, [])
 
   // Pulls a row per movie/series catalog declared by the user's own configured
   // Stremio addons — not just Cinemeta's Popular/New defaults. Fetched once per
@@ -875,80 +792,12 @@ export function TvScreen(): JSX.Element {
     setZone('expanded')
   }
 
-  function openKeyboard(initialValue: string, purpose: KeyboardPurpose = 'search'): void {
-    setKbPurpose(purpose)
+  function openKeyboard(initialValue: string): void {
     setKbValue(initialValue)
     setKbShift(false)
     setKbRow(0)
     setKbCol(0)
     setZone('keyboard')
-  }
-
-  async function submitAddonUrl(url: string): Promise<void> {
-    setZone('addons')
-    const trimmed = url.trim()
-    if (!trimmed) return
-    setMessage('Adding addon...')
-    try {
-      const next = await window.api.settings.addStremioAddon(trimmed)
-      setConfiguredAddons(next)
-      setMessage(`Added "${next[next.length - 1]?.name}"`)
-    } catch (error) {
-      setMessage(`Couldn't add addon: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  // Lazy-loaded (only once, on first visit) rather than fetched whenever the
-  // Addons tab mounts — most sessions never open the store at all, and the
-  // main process caches the ~300KB collection for an hour regardless, so
-  // there's nothing to gain by fetching earlier than the user actually asks.
-  function openAddonStore(): void {
-    setZone('addonStore')
-    setAddonStoreIndex(0)
-    if (communityAddons.length > 0 || communityAddonsLoading) return
-    setCommunityAddonsLoading(true)
-    window.api.settings
-      .listCommunityAddons()
-      .then(setCommunityAddons)
-      .catch(() => setCommunityAddons([]))
-      .finally(() => setCommunityAddonsLoading(false))
-  }
-
-  async function installCommunityAddon(addon: CommunityAddon): Promise<void> {
-    if (configuredAddons.some((a) => a.url === addon.transportUrl)) {
-      setMessage(`${addon.name} is already added`)
-      return
-    }
-    setMessage(`Installing ${addon.name}...`)
-    try {
-      const next = await window.api.settings.addStremioAddon(addon.transportUrl)
-      setConfiguredAddons(next)
-      setMessage(`Installed "${addon.name}"`)
-    } catch (error) {
-      setMessage(`Couldn't install ${addon.name}: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  async function quickAddTorrentio(): Promise<void> {
-    if (configuredAddons.some((a) => a.url === TORRENTIO_URL)) {
-      setMessage('Torrentio is already added')
-      return
-    }
-    setMessage('Adding Torrentio...')
-    try {
-      const next = await window.api.settings.addStremioAddon(TORRENTIO_URL)
-      setConfiguredAddons(next)
-      setMessage(`Added "${next[next.length - 1]?.name}"`)
-    } catch (error) {
-      setMessage(`Couldn't add Torrentio: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  async function removeAddon(addon: AddonSummary): Promise<void> {
-    const next = configuredAddons.filter((a) => a.url !== addon.url)
-    setConfiguredAddons(next)
-    await window.api.settings.setStremioAddons(next)
-    setMessage(`Removed "${addon.name}"`)
   }
 
   async function submitSearch(query: string): Promise<void> {
@@ -986,18 +835,11 @@ export function TvScreen(): JSX.Element {
   }
 
   function submitKeyboard(finalValue: string): void {
-    if (kbPurpose === 'addonUrl') void submitAddonUrl(finalValue)
-    else if (kbPurpose === 'addonStoreSearch') {
-      setAddonStoreQuery(finalValue.trim())
-      setAddonStoreIndex(0)
-      setZone('addonStore')
-    } else void submitSearch(finalValue)
+    void submitSearch(finalValue)
   }
 
   function cancelKeyboard(): void {
-    if (kbPurpose === 'addonUrl') setZone('addons')
-    else if (kbPurpose === 'addonStoreSearch') setZone('addonStore')
-    else setZone('filters')
+    setZone('filters')
   }
 
   function pressVirtualKey(key: string): void {
@@ -1654,9 +1496,6 @@ export function TvScreen(): JSX.Element {
         case 'down':
           if (tab === 'myTv') {
             setZone('myTvHome')
-          } else if (tab === 'addons') {
-            setZone('addons')
-            setAddonFocusIndex(0)
           } else {
             setZone('rows')
             setRowIndex(0)
@@ -1685,67 +1524,6 @@ export function TvScreen(): JSX.Element {
         case 'back':
         case 'menu':
           goHome()
-          return
-        default:
-          return
-      }
-    }
-
-    if (zone === 'addons') {
-      switch (action) {
-        case 'up':
-          setAddonFocusIndex((i) => Math.max(0, i - 1))
-          return
-        case 'down':
-          setAddonFocusIndex((i) => Math.min(addonPanelRows.length - 1, i + 1))
-          return
-        case 'confirm': {
-          const row = addonPanelRows[clampedAddonFocusIndex]
-          if (!row) return
-          if (row.kind === 'addon') void removeAddon(row.addon)
-          else if (row.kind === 'browseStore') openAddonStore()
-          else if (row.kind === 'quickAddTorrentio') void quickAddTorrentio()
-          else openKeyboard('', 'addonUrl')
-          return
-        }
-        case 'back':
-        case 'menu':
-          setZone('filters')
-          return
-        default:
-          return
-      }
-    }
-
-    if (zone === 'addonStore') {
-      const cols = ADDON_STORE_COLUMNS
-      switch (action) {
-        case 'search':
-          openKeyboard(addonStoreQuery, 'addonStoreSearch')
-          return
-        case 'up':
-          setAddonStoreIndex((i) => Math.max(0, i - cols))
-          return
-        case 'down':
-          setAddonStoreIndex((i) => (i + cols < filteredCommunityAddons.length ? i + cols : i))
-          return
-        case 'left':
-          setAddonStoreIndex((i) => (i % cols === 0 ? i : i - 1))
-          return
-        case 'right':
-          setAddonStoreIndex((i) =>
-            i % cols === cols - 1 || i === filteredCommunityAddons.length - 1 ? i : i + 1
-          )
-          return
-        case 'confirm': {
-          const addon = filteredCommunityAddons[clampedAddonStoreIndex]
-          if (addon) void installCommunityAddon(addon)
-          return
-        }
-        case 'back':
-        case 'menu':
-          setZone('addons')
-          setAddonStoreQuery('')
           return
         default:
           return
@@ -2050,73 +1828,6 @@ export function TvScreen(): JSX.Element {
     )
   }
 
-  if (zone === 'addonStore') {
-    return (
-      <div className="relative flex h-screen flex-col gap-6 overflow-hidden bg-bg px-10 py-8">
-        <header className="flex items-center gap-4">
-          <BackButton
-            label="Addons"
-            onClick={() => {
-              setZone('addons')
-              setAddonStoreQuery('')
-            }}
-          />
-          <h1 className="text-3xl font-bold tracking-tight">Addon Store</h1>
-          <div
-            onClick={() => openKeyboard(addonStoreQuery, 'addonStoreSearch')}
-            className="ml-auto flex w-72 cursor-pointer items-center gap-2 rounded-full bg-surface-hi px-4 py-2 text-sm text-muted transition-colors hover:text-white"
-          >
-            <Search className="h-4 w-4 shrink-0" />
-            {addonStoreQuery ? `"${addonStoreQuery}"` : 'Search addons...'}
-          </div>
-        </header>
-        <p className="-mt-4 text-sm text-muted">
-          {communityAddons.length > 0
-            ? `${filteredCommunityAddons.length} of ${communityAddons.length} addons from Stremio's public collection`
-            : "Stremio's public addon collection — the same one its own Community Addons board uses."}
-        </p>
-
-        {communityAddonsLoading ? (
-          <p className="text-muted">Loading addon collection...</p>
-        ) : filteredCommunityAddons.length === 0 ? (
-          <p className="text-muted">{addonStoreQuery ? `No addons match "${addonStoreQuery}"` : 'No addons found.'}</p>
-        ) : (
-          <div className="grid flex-1 auto-rows-min grid-cols-4 gap-8 overflow-y-auto p-5">
-            {filteredCommunityAddons.map((addon, i) => {
-              const isInstalled = configuredAddons.some((a) => a.url === addon.transportUrl)
-              return (
-                // Keyed on transportUrl, not manifest.id — a couple of real
-                // entries in Stremio's own collection share the same
-                // declared id across genuinely different addons/instances
-                // (confirmed against the live collection), so id alone
-                // isn't actually unique.
-                <div key={addon.transportUrl} ref={(el) => (addonStoreRefs.current[i] = el)} className="scroll-m-10">
-                  <FocusableCard
-                    item={{
-                      id: addon.transportUrl,
-                      title: addon.name,
-                      subtitle: isInstalled ? `Installed · ${describeAddonCapabilities(addon.resources)}` : addon.description,
-                      imageUrl: addon.logo ?? undefined,
-                      icon: Store,
-                      gradientDirection: 'bg-gradient-to-br'
-                    }}
-                    focused={addonStoreIndex === i}
-                    onClick={() => {
-                      setAddonStoreIndex(i)
-                      void installCommunityAddon(addon)
-                    }}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        <footer className="text-sm text-muted">{message}</footer>
-      </div>
-    )
-  }
-
   const selectedCard = selectedItem ? toCardItem(selectedItem) : null
   const releaseDate = selectedItem ? formatReleaseDate(selectedItem.released) : null
 
@@ -2137,10 +1848,10 @@ export function TvScreen(): JSX.Element {
       <motion.div layout className="flex flex-1 flex-col gap-6 overflow-hidden px-10 py-8">
         <header className="flex items-center gap-4">
           <BackButton
-            label={inEpisodesView || zone === 'addons' || zone === 'myTvHome' ? 'Back' : 'Home'}
+            label={inEpisodesView || zone === 'myTvHome' ? 'Back' : 'Home'}
             onClick={() => {
               if (inEpisodesView) setZone('detail')
-              else if (zone === 'addons' || zone === 'myTvHome') setZone('filters')
+              else if (zone === 'myTvHome') setZone('filters')
               else goHome()
             }}
           />
@@ -2218,8 +1929,8 @@ export function TvScreen(): JSX.Element {
                 <div
                   key={t}
                   onClick={() => {
-                    // Every other tab's actual content (rows/addon panel) is
-                    // already rendered and clickable at zone==='filters', so
+                    // Every other tab's actual content (its rows) is already
+                    // rendered and clickable at zone==='filters', so
                     // a plain click just selecting the tab is enough — a
                     // card's own onClick sets zone='rows' etc. as a side
                     // effect once something inside it is actually clicked.
@@ -2272,105 +1983,11 @@ export function TvScreen(): JSX.Element {
                 onGoToTab={(target) => {
                   setTab(target)
                   setTabIndex(TABS.indexOf(target))
-                  if (target === 'addons') {
-                    setZone('addons')
-                    setAddonFocusIndex(0)
-                  } else {
-                    setZone('rows')
-                    setRowIndex(0)
-                    setColIndex(0)
-                  }
+                  setZone('rows')
+                  setRowIndex(0)
+                  setColIndex(0)
                 }}
               />
-            ) : tab === 'addons' ? (
-              <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-5">
-                <p className="px-1 text-sm text-muted">
-                  These are queried directly over the open Stremio addon protocol — no Stremio app or account
-                  needed. Debridio and similar debrid-backed addons generate a personalized URL on their own
-                  site; paste that in below.
-                </p>
-                {addonPanelRows.map((row, i) => {
-                  const focused = zone === 'addons' && clampedAddonFocusIndex === i
-                  if (row.kind === 'browseStore') {
-                    return (
-                      <div
-                        key="browseStore"
-                        ref={(el) => (addonRowRefs.current[i] = el)}
-                        onClick={() => {
-                          setAddonFocusIndex(i)
-                          openAddonStore()
-                        }}
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl px-5 py-4 ring-1 transition-colors ${
-                          focused ? 'bg-surface-hi shadow-focus ring-2 ring-accent' : 'bg-surface ring-accent/15'
-                        }`}
-                      >
-                        <Store className="h-4 w-4 shrink-0 text-accent" />
-                        <span className="font-medium">Browse Addon Store</span>
-                        <span className="text-xs text-muted">Search & install from Stremio's public collection</span>
-                      </div>
-                    )
-                  }
-                  if (row.kind === 'quickAddTorrentio') {
-                    return (
-                      <div
-                        key="quickAddTorrentio"
-                        ref={(el) => (addonRowRefs.current[i] = el)}
-                        onClick={() => {
-                          setZone('addons')
-                          setAddonFocusIndex(i)
-                          void quickAddTorrentio()
-                        }}
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl px-5 py-4 ring-1 transition-colors ${
-                          focused ? 'bg-surface-hi shadow-focus ring-2 ring-accent' : 'bg-surface ring-accent/15'
-                        }`}
-                      >
-                        <Download className="h-4 w-4 shrink-0" />
-                        <span className="font-medium">Quick Add Torrentio</span>
-                        <span className="text-xs text-muted">Public, no account needed</span>
-                      </div>
-                    )
-                  }
-                  if (row.kind === 'addCustom') {
-                    return (
-                      <div
-                        key="addCustom"
-                        ref={(el) => (addonRowRefs.current[i] = el)}
-                        onClick={() => {
-                          setZone('addons')
-                          setAddonFocusIndex(i)
-                          openKeyboard('', 'addonUrl')
-                        }}
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl px-5 py-4 ring-1 transition-colors ${
-                          focused ? 'bg-surface-hi shadow-focus ring-2 ring-accent' : 'bg-surface ring-accent/15'
-                        }`}
-                      >
-                        <Plus className="h-4 w-4 shrink-0" />
-                        <span className="font-medium">Add Addon URL</span>
-                      </div>
-                    )
-                  }
-                  return (
-                    <div
-                      key={row.addon.url}
-                      ref={(el) => (addonRowRefs.current[i] = el)}
-                      onClick={() => {
-                        setZone('addons')
-                        setAddonFocusIndex(i)
-                        void removeAddon(row.addon)
-                      }}
-                      className={`flex cursor-pointer items-center justify-between rounded-xl px-5 py-4 ring-1 transition-colors ${
-                        focused ? 'bg-surface-hi shadow-focus ring-2 ring-accent' : 'bg-surface ring-accent/15'
-                      }`}
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-medium">{row.addon.name}</span>
-                        <span className="text-xs text-muted">{describeAddonCapabilities(row.addon.resources)}</span>
-                      </div>
-                      <Trash2 className="h-4 w-4 shrink-0 text-muted" />
-                    </div>
-                  )
-                })}
-              </div>
             ) : (
               <div className="flex flex-1 flex-col gap-8 overflow-y-auto">
                 {rows.map((row, i) => (
@@ -2558,13 +2175,7 @@ export function TvScreen(): JSX.Element {
       {zone === 'keyboard' && (
         <OnScreenKeyboard
           label={
-            kbPurpose === 'addonUrl'
-              ? 'Addon Manifest URL'
-              : kbPurpose === 'addonStoreSearch'
-                ? 'Search Addon Store'
-                : tab === 'library'
-                  ? 'Search My Library'
-                  : `Search ${tabLabel(tab)}`
+            tab === 'library' ? 'Search My Library' : `Search ${tabLabel(tab)}`
           }
           value={kbValue}
           shift={kbShift}

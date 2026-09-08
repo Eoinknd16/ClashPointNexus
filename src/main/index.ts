@@ -1,7 +1,6 @@
 import { app, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { registerAppsIpc } from './apps/ipc'
-import { registerArcadeIpc } from './arcade/ipc'
 import { registerControlCenterIpc, returnToNexus } from './controlCenter/ipc'
 import { toggleControlCenter } from './controlCenter/window'
 import { registerFilesystemIpc } from './filesystem/ipc'
@@ -111,7 +110,6 @@ app.whenReady().then(async () => {
   registerWeatherIpc()
   registerHomeIpc()
   registerSystemIpc()
-  registerArcadeIpc()
   registerTvHomeIpc()
   startTranscodeProxy()
 

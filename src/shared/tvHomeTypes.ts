@@ -2,8 +2,9 @@ import type { CatalogType } from './stremioTypes'
 
 /** Where a row's items come from — each variant maps directly onto an
  * already-existing fetch this app has elsewhere (built-in Cinemeta catalogs
- * power Movies/Series today; addon catalogs power the Addons tab's own
- * rows; continueWatching/library power the Library tab) — this page doesn't
+ * power Movies/Series today; addon catalogs are what configured addons
+ * (Settings > Plugins > TV Addons) contribute; continueWatching/library
+ * power the Library tab) — this page doesn't
  * introduce a new data source, just lets the user choose which of the
  * existing ones shows up, and where. */
 export type TvHomeRowSource =
@@ -15,7 +16,7 @@ export type TvHomeRowSource =
 /** A single prominent card rather than a scrolling row. */
 export type TvHomeCard =
   | { kind: 'pinnedTitle'; id: string; type: CatalogType }
-  | { kind: 'tabShortcut'; tab: 'movie' | 'series' | 'library' | 'addons' }
+  | { kind: 'tabShortcut'; tab: 'movie' | 'series' | 'library' }
   | { kind: 'pageShortcut'; pageId: string }
 
 export type TvHomeBlock =
@@ -58,6 +59,6 @@ export type ResolvedTvHomeBlock =
       kind: 'card'
       card:
         | { kind: 'pinnedTitle'; item: import('./stremioTypes').CatalogItem | null }
-        | { kind: 'tabShortcut'; tab: 'movie' | 'series' | 'library' | 'addons' }
+        | { kind: 'tabShortcut'; tab: 'movie' | 'series' | 'library' }
         | { kind: 'pageShortcut'; pageId: string; pageName: string | null }
     }
