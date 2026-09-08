@@ -1,7 +1,8 @@
 import { app } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import type { InstalledPlugin } from '@shared/pluginTypes'
+import { pathToFileURL } from 'url'
+import type { InstalledPlugin, PluginManifest } from '@shared/pluginTypes'
 
 interface PluginsConfig {
   installed: InstalledPlugin[]
@@ -29,12 +30,24 @@ export function pluginDir(id: string): string {
   return join(pluginFilesRoot(), id)
 }
 
+/** file:// URL to a plugin's own downloaded icon, or null — the icon file
+ * itself lives at pluginDir(id)/<manifest.icon>, written alongside the
+ * bundle at install time (see install.ts). Recomputed here rather than
+ * trusted from a saved config file so it can never point at a stale path
+ * (e.g. a dev vs. packaged userData root) or a file that's since vanished. */
+export function pluginIconUrl(id: string, manifest: PluginManifest): string | null {
+  if (!manifest.icon) return null
+  const path = join(pluginDir(id), manifest.icon)
+  return existsSync(path) ? pathToFileURL(path).toString() : null
+}
+
 export function loadInstalledPlugins(): InstalledPlugin[] {
   const path = configPath()
   if (!existsSync(path)) return []
   try {
     const raw = JSON.parse(readFileSync(path, 'utf-8'))
-    return Array.isArray(raw?.installed) ? raw.installed : []
+    const installed: InstalledPlugin[] = Array.isArray(raw?.installed) ? raw.installed : []
+    return installed.map((p) => ({ ...p, iconUrl: pluginIconUrl(p.manifest.id, p.manifest) }))
   } catch {
     return []
   }

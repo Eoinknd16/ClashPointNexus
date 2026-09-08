@@ -26,6 +26,7 @@ function toCardItem(entry: Entry): CardItem {
       id: `plugin:${entry.plugin.manifest.id}`,
       title: entry.plugin.manifest.name,
       subtitle: 'Plugin',
+      imageUrl: entry.plugin.iconUrl ?? undefined,
       icon: Puzzle,
       gradientDirection: 'bg-gradient-to-br'
     }

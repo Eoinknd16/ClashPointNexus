@@ -104,6 +104,11 @@ export interface InstalledPlugin {
   installedAt: number
   grantedAt: number
   bundleSha256: string
+  /** file:// URL to the icon downloaded alongside the bundle at install
+   * time, or null if the manifest declared none — recomputed from disk on
+   * every load rather than trusted verbatim from a saved config file, same
+   * reasoning as everything else in this type. */
+  iconUrl: string | null
 }
 
 export interface PluginInstallResult {

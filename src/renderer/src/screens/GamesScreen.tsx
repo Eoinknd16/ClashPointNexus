@@ -106,6 +106,7 @@ function pluginToCardItem(plugin: InstalledPlugin): CardItem {
     id: `plugin:${plugin.manifest.id}`,
     title: plugin.manifest.name,
     subtitle: 'Plugin',
+    imageUrl: plugin.iconUrl ?? undefined,
     icon: Puzzle,
     gradientDirection: 'bg-gradient-to-br'
   }

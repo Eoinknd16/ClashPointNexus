@@ -8,7 +8,7 @@ import {
   type PluginInstallResult,
   type PluginManifest
 } from '@shared/pluginTypes'
-import { loadInstalledPlugins, pluginDir, saveInstalledPlugins } from './config'
+import { loadInstalledPlugins, pluginDir, pluginIconUrl, saveInstalledPlugins } from './config'
 import { writePluginShell } from './pluginShell'
 
 const { owner: REPO_OWNER, name: REPO_NAME, branch: REPO_BRANCH } = COMMUNITY_PLUGINS_REPO
@@ -86,7 +86,13 @@ export async function installPlugin(folder: string): Promise<PluginInstallResult
 
   const bundleSha256 = createHash('sha256').update(bundleBytes).digest('hex')
   const now = Date.now()
-  const installedPlugin: InstalledPlugin = { manifest, installedAt: now, grantedAt: now, bundleSha256 }
+  const installedPlugin: InstalledPlugin = {
+    manifest,
+    installedAt: now,
+    grantedAt: now,
+    bundleSha256,
+    iconUrl: pluginIconUrl(manifest.id, manifest)
+  }
 
   const existing = loadInstalledPlugins().filter((p) => p.manifest.id !== manifest.id)
   saveInstalledPlugins([...existing, installedPlugin])
