@@ -1,10 +1,14 @@
-import { app, type BrowserWindow } from 'electron'
+import { app, powerMonitor, type BrowserWindow } from 'electron'
 import { isControlCenterVisible } from '../controlCenter/window'
 import { isGameSessionActive } from '../gameSession/service'
 import { isHiddenForDesktop } from './ipc'
 import { getGlobalInputStatus } from './service'
 
 const CHECK_INTERVAL_MS = 1500
+// How long the system has to have seen literally no input (mouse or
+// keyboard, anywhere) before this will reclaim focus -- see the real
+// incident this guards against in the doc comment below.
+const IDLE_GRACE_SECONDS = 3
 
 /**
  * Nexus is meant to behave like a console's own shell, not just another
@@ -21,10 +25,26 @@ const CHECK_INTERVAL_MS = 1500
  * something else has taken it, reclaims it — unless one of the genuinely
  * legitimate "the user meant this" states applies: a launched game/app
  * session, an explicit Show Desktop, Mouse Mode (deliberately driving the
- * real desktop with a virtual cursor), or Control Center (still Nexus,
- * just a second window). Anything else — including a plain manual alt-tab —
- * gets pulled back, which is the actual point: "stay top level unless I say
- * otherwise" doesn't carve out an exception for casually switching away.
+ * real desktop with a virtual cursor), Control Center (still Nexus, just a
+ * second window), or — see IDLE_GRACE_SECONDS — actively using whatever
+ * else currently has focus right now.
+ *
+ * That last one is the fix for a real incident: this used to reclaim focus
+ * unconditionally, on the theory that a plain manual alt-tab should get
+ * pulled back same as anything else ("stay top level unless I say
+ * otherwise" with no exception for casually switching away) — but yanking
+ * focus mid-keystroke doesn't just switch windows, it can hand Nexus
+ * whatever key or click was actually meant for the other app. A stray
+ * Space landing on the player is a real HTML5 <video> default (play/pause),
+ * with no code of this app's own involved at all — confirmed as the actual
+ * cause of a real "video silently paused itself while I was doing something
+ * else on the PC" report. powerMonitor.getSystemIdleTime() is system-wide,
+ * not per-window, but that's actually sufficient here: if it reads near
+ * zero while Nexus itself doesn't have focus, that input can only have gone
+ * to whatever else does. The original problem (an update/login popup
+ * stealing focus with the user not touching anything) still recovers fine
+ * under this — nothing providing input means idle time climbs past the
+ * grace period within a couple of ticks either way.
  *
  * Packaged builds only — a developer alt-tabbing to a terminal/editor while
  * iterating is the normal workflow, not a bug to fight.
@@ -39,6 +59,7 @@ export function startFocusGuardian(mainWindow: BrowserWindow): () => void {
     if (isHiddenForDesktop()) return
     if (isGameSessionActive()) return
     if (getGlobalInputStatus().mouseModeActive) return
+    if (powerMonitor.getSystemIdleTime() < IDLE_GRACE_SECONDS) return
 
     mainWindow.restore()
     mainWindow.setFullScreen(true)
