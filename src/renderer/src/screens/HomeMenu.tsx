@@ -35,6 +35,11 @@ import type { ContinueSuggestion } from '@shared/homeTypes'
 import type { WeatherData } from '@shared/weatherTypes'
 import type { SystemStats } from '@shared/systemTypes'
 
+// Matches the tile grid's own grid-cols-6 below — a "page" is exactly one
+// full row, so this is the single source of truth both the grid and the
+// pagination math derive from.
+const TILES_PER_PAGE = 6
+
 // Each tile gets its own explicit two-color identity (FocusableCard's
 // iconColors override) instead of every tile deriving from the same theme
 // accent color — the latter is what made every tile look like the same flat
@@ -94,14 +99,6 @@ const TILES: Array<{
     screen: 'apps'
   },
   {
-    id: 'arcade',
-    title: 'Arcade',
-    subtitle: 'Emulated games',
-    icon: Joystick,
-    iconColors: ['#0f766e', '#4338ca'],
-    screen: 'arcade'
-  },
-  {
     id: 'desktop',
     title: 'Desktop',
     subtitle: 'Minimize & show Windows',
@@ -112,6 +109,21 @@ const TILES: Array<{
   // Settings deliberately not a tile here anymore — it's already reachable
   // from the top nav, and having it twice was redundant.
 ]
+
+// Arcade doesn't ship with Nexus — it's an optional plugin (see
+// main/plugins/trustedPlugins.ts), so unlike every tile above it only
+// appears once it's actually installed (checked below), appended after the
+// built-in tiles rather than interleaved — the same "additive, never a
+// hardcoded slot" rule every other installed-plugin surface already
+// follows (AppsScreen, GamesScreen).
+const ARCADE_TILE: (typeof TILES)[number] = {
+  id: 'arcade',
+  title: 'Arcade',
+  subtitle: 'Emulated games',
+  icon: Joystick,
+  iconColors: ['#0f766e', '#4338ca'],
+  action: () => useNavigationStore.getState().goTo('arcade')
+}
 
 // System-wide sections, reachable from Home directly rather than only via
 // the tile grid below — Library ("your stuff": owned games + movies/shows)
@@ -155,6 +167,7 @@ export function HomeMenu(): JSX.Element {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [libraryStats, setLibraryStats] = useState<LibraryStats | null>(null)
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
+  const [arcadeInstalled, setArcadeInstalled] = useState(false)
   const goTo = useNavigationStore((s) => s.goTo)
   const allThemes = useThemeStore((s) => s.allThemes)
   const themeId = useThemeStore((s) => s.themeId)
@@ -176,7 +189,18 @@ export function HomeMenu(): JSX.Element {
         })
       })
       .catch(() => setLibraryStats(null))
+    // Arcade doesn't ship with Nexus — see ARCADE_TILE's own doc comment —
+    // so whether its tile shows up at all comes from the same installed-
+    // plugins check every other plugin surface already makes.
+    window.api.plugins
+      .listInstalled()
+      .then((installed) => setArcadeInstalled(installed.some((p) => p.manifest.id === 'arcade')))
+      .catch(() => setArcadeInstalled(false))
   }, [])
+
+  const tiles = arcadeInstalled ? [...TILES, ARCADE_TILE] : TILES
+  const pageCount = Math.max(1, Math.ceil(tiles.length / TILES_PER_PAGE))
+  const currentPage = Math.min(pageCount - 1, Math.floor(tileIndex / TILES_PER_PAGE))
 
   function activateContinue(suggestion: ContinueSuggestion): void {
     if (suggestion.kind === 'game') {
@@ -244,10 +268,10 @@ export function HomeMenu(): JSX.Element {
         setTileIndex((i) => Math.max(0, i - 1))
         return
       case 'right':
-        setTileIndex((i) => Math.min(TILES.length - 1, i + 1))
+        setTileIndex((i) => Math.min(tiles.length - 1, i + 1))
         return
       case 'confirm':
-        activateTile(TILES[tileIndex])
+        activateTile(tiles[tileIndex])
         return
       default:
         return
@@ -460,45 +484,75 @@ export function HomeMenu(): JSX.Element {
 
       <div className="shrink-0">
         <h2 className="mb-3 text-lg font-semibold">Your Apps</h2>
-        <div className="grid grid-cols-6 gap-[max(var(--space-grid-gap),var(--tile-grow-pad))] py-[var(--tile-grow-pad)]">
-          {TILES.map((tile, i) => (
-            <motion.div
-              key={tile.id}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: i * 0.06, ease: 'easeOut' }}
-            >
-              <FocusableCard
-                size="large"
-                showChevron
-                item={{
-                  id: tile.id,
-                  title: tile.title,
-                  subtitle: tile.subtitle,
-                  icon: tile.icon,
-                  imageUrl: activeTheme?.tileImages?.[tile.id],
-                  iconColors: tile.iconColors
-                }}
-                focused={zone === 'tiles' && tileIndex === i}
-                onClick={() => {
-                  setZone('tiles')
-                  setTileIndex(i)
-                  activateTile(tile)
-                }}
-              />
-            </motion.div>
-          ))}
+        {/* One page per full row (TILES_PER_PAGE) — overflow-hidden here is
+            the carousel viewport; the flex track below it is left at its
+            natural width (fits the viewport) with each page pinned to
+            w-full/shrink-0, so its content overflows visually and gets
+            clipped only by this wrapper, not by anything closer to the
+            tiles themselves. Horizontal padding is reserved the same way
+            the vertical padding already is (--tile-grow-pad, scaled to the
+            live theme's card-size/focus-scale/lift settings) so a focused
+            tile's glow at the left/right edge of a page never gets cut off
+            by this same wrapper it needs for the slide. */}
+        <div className="overflow-hidden">
+          <motion.div
+            className="flex"
+            animate={{ x: `-${currentPage * 100}%` }}
+            transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+          >
+            {Array.from({ length: pageCount }, (_, page) => (
+              <div
+                key={page}
+                className="grid w-full shrink-0 grid-cols-6 gap-[max(var(--space-grid-gap),var(--tile-grow-pad))] px-[var(--tile-grow-pad)] py-[var(--tile-grow-pad)]"
+              >
+                {tiles.slice(page * TILES_PER_PAGE, page * TILES_PER_PAGE + TILES_PER_PAGE).map((tile, iInPage) => {
+                  const i = page * TILES_PER_PAGE + iInPage
+                  return (
+                    <motion.div
+                      key={tile.id}
+                      initial={{ opacity: 0, y: 24 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: iInPage * 0.06, ease: 'easeOut' }}
+                    >
+                      <FocusableCard
+                        size="large"
+                        showChevron
+                        item={{
+                          id: tile.id,
+                          title: tile.title,
+                          subtitle: tile.subtitle,
+                          icon: tile.icon,
+                          imageUrl: activeTheme?.tileImages?.[tile.id],
+                          iconColors: tile.iconColors
+                        }}
+                        focused={zone === 'tiles' && tileIndex === i}
+                        onClick={() => {
+                          setZone('tiles')
+                          setTileIndex(i)
+                          activateTile(tile)
+                        }}
+                      />
+                    </motion.div>
+                  )
+                })}
+              </div>
+            ))}
+          </motion.div>
         </div>
       </div>
 
-      <div className="flex shrink-0 justify-center gap-2">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className={`h-1.5 rounded-full transition-all ${i === 0 ? 'w-6 bg-accent' : 'w-1.5 bg-white/20'}`}
-          />
-        ))}
-      </div>
+      {pageCount > 1 && (
+        <div className="flex shrink-0 justify-center gap-2">
+          {Array.from({ length: pageCount }, (_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 rounded-full transition-all ${
+                i === currentPage ? 'w-6 bg-accent' : 'w-1.5 bg-white/20'
+              }`}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="pointer-events-none fixed bottom-6 right-8 flex items-center gap-4 text-xs text-muted">
         <span className="flex items-center gap-1.5">
