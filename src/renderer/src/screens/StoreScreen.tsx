@@ -22,13 +22,17 @@ function cursorTransform(x: number, y: number): string {
   return `translate(${x - CURSOR_RADIUS}px, ${y - CURSOR_RADIUS}px)`
 }
 
+// Display only, not an activation surface — see StoreScreen's own doc
+// comment on "My Themes" for why. Active is still worth showing (real
+// information about what's already selected), but there's no "Tap to
+// Apply" implication for anything else here anymore.
 function themeToCardItem(theme: ThemeDefinition, activeThemeId: string): CardItem {
   const accent = theme.vars['--color-accent'] ?? '91 140 255'
   const accent2 = theme.vars['--color-accent-2'] ?? '160 107 255'
   return {
     id: `theme:${theme.id}`,
     title: theme.name,
-    subtitle: theme.id === activeThemeId ? 'Active' : 'Tap to Apply',
+    subtitle: theme.id === activeThemeId ? 'Active' : undefined,
     imageUrl: theme.heroImage,
     icon: Palette,
     iconColors: [`rgb(${accent})`, `rgb(${accent2})`]
@@ -61,20 +65,23 @@ const HUB_ROWS: HubRow[] = ['steam', 'plugins', 'themes', 'community', 'actions'
 /**
  * The mockup's "Store" nav item, rebuilt as its own real page instead of
  * dropping straight into the Steam storefront — a single hub (like Home)
- * with a Steam Store card and a Themes shelf for browsing/applying
- * installed themes, since there's no actual online theme marketplace to
- * pull from; "discover" here means "everything already on this machine,
- * shown properly" rather than a fake storefront for content that doesn't
- * exist. The Steam webview itself is unchanged from before — same
- * virtual-cursor-over-a-webview technique — just moved a level deeper,
- * reached by picking the Steam Store card instead of being the only thing
- * this screen ever shows.
+ * with a Steam Store card, a shelf of the custom themes already on this
+ * machine, and one for discovering/installing more from the community.
+ * "My Themes" deliberately excludes the built-in themes that ship with
+ * Nexus — they're not something you "have" from here, they're always
+ * there, and activating/customizing/removing a theme is Settings >
+ * Appearance's job now (see its own per-theme accordion), not this
+ * screen's — so this shelf is purely a "here's what you've added" display,
+ * not a second, competing way to apply one. The Steam webview itself is
+ * unchanged from before — same virtual-cursor-over-a-webview technique —
+ * just moved a level deeper, reached by picking the Steam Store card
+ * instead of being the only thing this screen ever shows.
  */
 export function StoreScreen(): JSX.Element {
   const goHome = useNavigationStore((s) => s.goHome)
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
-  const allThemes = useThemeStore((s) => s.allThemes)
+  const customThemes = useThemeStore((s) => s.customThemes)
   const themeId = useThemeStore((s) => s.themeId)
   const setTheme = useThemeStore((s) => s.setTheme)
   const refreshCustomThemes = useThemeStore((s) => s.refreshCustomThemes)
@@ -96,7 +103,7 @@ export function StoreScreen(): JSX.Element {
     window.api.settings.listCommunityThemes().then(setCommunityThemes).catch(() => setCommunityThemes([]))
   }, [])
 
-  const themeCards = allThemes.map((theme) => themeToCardItem(theme, themeId))
+  const themeCards = customThemes.map((theme) => themeToCardItem(theme, themeId))
   const communityThemeCards = communityThemes.map(communityThemeToCardItem)
 
   const rowLength = (row: HubRow): number => {
@@ -204,14 +211,10 @@ export function StoreScreen(): JSX.Element {
       setShowPluginStore(true)
       return
     }
-    if (row === 'themes') {
-      const theme = allThemes[index]
-      if (theme) {
-        setTheme(theme.id)
-        setMessage(`Theme set to ${theme.name}`)
-      }
-      return
-    }
+    // 'themes' (My Themes) intentionally has no activation of its own —
+    // it's a display of what's installed, not a second way to apply/manage
+    // a theme. That's Settings > Appearance's job.
+    if (row === 'themes') return
     if (row === 'community') {
       const summary = communityThemes[index]
       if (summary) void doInstallCommunityTheme(summary)
@@ -339,7 +342,7 @@ export function StoreScreen(): JSX.Element {
         <BackButton label="Home" onClick={goHome} />
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Store</h1>
-          <p className="text-sm text-muted">Buy games, and browse or apply the themes on this machine.</p>
+          <p className="text-sm text-muted">Buy games, and discover community themes to install.</p>
         </div>
       </header>
 
