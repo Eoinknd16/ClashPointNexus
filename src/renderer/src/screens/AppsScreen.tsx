@@ -1,29 +1,49 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Package2, Play, Star, X } from 'lucide-react'
+import { Package2, Play, Puzzle, Star, X } from 'lucide-react'
 import { CardArt, FocusableCard, type CardItem } from '../components/FocusableCard'
 import { BackButton, CloseButton } from '../components/NavButtons'
 import { useNavListener } from '../input/useNavListener'
+import { PluginHost } from '../plugins/PluginHost'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
 import type { AppEntry } from '@shared/appsTypes'
+import { pluginPlacement, type InstalledPlugin } from '@shared/pluginTypes'
 
 const COLUMNS = 5
 type Zone = 'grid' | 'detail'
 
-function toCardItem(entry: AppEntry): CardItem {
+// A plugin declaring placement: 'apps' (see shared/pluginTypes.ts) shows up
+// here as an ordinary extra card, keyed by its own unique id the same way
+// every app already is — that's what keeps two plugins (or a plugin and a
+// real app) from ever conflicting over a slot: nothing owns a position,
+// everything is just a list entry.
+type Entry = { kind: 'app'; app: AppEntry } | { kind: 'plugin'; plugin: InstalledPlugin }
+
+function toCardItem(entry: Entry): CardItem {
+  if (entry.kind === 'plugin') {
+    return {
+      id: `plugin:${entry.plugin.manifest.id}`,
+      title: entry.plugin.manifest.name,
+      subtitle: 'Plugin',
+      icon: Puzzle,
+      gradientDirection: 'bg-gradient-to-br'
+    }
+  }
   return {
-    id: entry.id,
-    title: entry.name,
-    subtitle: entry.args || undefined,
+    id: entry.app.id,
+    title: entry.app.name,
+    subtitle: entry.app.args || undefined,
     icon: Package2,
     gradientDirection: 'bg-gradient-to-br',
-    favorite: entry.favorite
+    favorite: entry.app.favorite
   }
 }
 
 export function AppsScreen(): JSX.Element {
   const [apps, setApps] = useState<AppEntry[]>([])
+  const [appPlugins, setAppPlugins] = useState<InstalledPlugin[]>([])
+  const [runningPlugin, setRunningPlugin] = useState<{ id: string; name: string } | null>(null)
   const [zone, setZone] = useState<Zone>('grid')
   const [gridIndex, setGridIndex] = useState(0)
   const [selectedApp, setSelectedApp] = useState<AppEntry | null>(null)
@@ -37,6 +57,10 @@ export function AppsScreen(): JSX.Element {
       .list()
       .then(setApps)
       .catch(() => setMessage("Couldn't load the app list"))
+    window.api.plugins
+      .listInstalled()
+      .then((installed) => setAppPlugins(installed.filter((p) => pluginPlacement(p.manifest) === 'apps')))
+      .catch(() => {})
   }
 
   useEffect(() => {
@@ -49,7 +73,11 @@ export function AppsScreen(): JSX.Element {
     cardRefs.current[gridIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [zone, gridIndex])
 
-  const cards = apps.map(toCardItem)
+  const entries: Entry[] = [
+    ...apps.map((app): Entry => ({ kind: 'app', app })),
+    ...appPlugins.map((plugin): Entry => ({ kind: 'plugin', plugin }))
+  ]
+  const cards = entries.map(toCardItem)
 
   function launch(entry: AppEntry): void {
     setMessage(`Launching ${entry.name}...`)
@@ -125,13 +153,19 @@ export function AppsScreen(): JSX.Element {
       case 'right':
         setGridIndex((i) => (i % COLUMNS === COLUMNS - 1 || i === cards.length - 1 ? i : i + 1))
         return
-      case 'toggleSubtitles':
-        toggleFavorite(apps[gridIndex])
+      case 'toggleSubtitles': {
+        const focused = entries[gridIndex]
+        if (focused?.kind === 'app') toggleFavorite(focused.app)
         return
+      }
       case 'confirm': {
-        const entry = apps[gridIndex]
-        if (!entry) return
-        setSelectedApp(entry)
+        const focused = entries[gridIndex]
+        if (!focused) return
+        if (focused.kind === 'plugin') {
+          setRunningPlugin({ id: focused.plugin.manifest.id, name: focused.plugin.manifest.name })
+          return
+        }
+        setSelectedApp(focused.app)
         setZone('detail')
         return
       }
@@ -144,7 +178,7 @@ export function AppsScreen(): JSX.Element {
     }
   }, 'apps')
 
-  const selectedCard = selectedApp ? toCardItem(selectedApp) : null
+  const selectedCard = selectedApp ? toCardItem({ kind: 'app', app: selectedApp }) : null
 
   return (
     <div className="relative flex h-screen bg-bg">
@@ -168,8 +202,13 @@ export function AppsScreen(): JSX.Element {
                 focused={zone === 'grid' && gridIndex === i}
                 onClick={() => {
                   setGridIndex(i)
-                  setSelectedApp(apps[i])
-                  setZone('detail')
+                  const entry = entries[i]
+                  if (entry?.kind === 'plugin') {
+                    setRunningPlugin({ id: entry.plugin.manifest.id, name: entry.plugin.manifest.name })
+                  } else if (entry) {
+                    setSelectedApp(entry.app)
+                    setZone('detail')
+                  }
                 }}
               />
             </div>
@@ -230,6 +269,14 @@ export function AppsScreen(): JSX.Element {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {runningPlugin && (
+        <PluginHost
+          pluginId={runningPlugin.id}
+          pluginName={runningPlugin.name}
+          onClose={() => setRunningPlugin(null)}
+        />
+      )}
     </div>
   )
 }

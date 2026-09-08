@@ -31,6 +31,22 @@ export type PluginPermission =
 
 export type PluginPrice = { kind: 'free' } | { kind: 'paid'; amountUsd: number }
 
+/** Where a plugin's own launch entry point actually shows up once
+ * installed — an author decides this for themselves (Nexus Dash, an
+ * arcade-style game, declares "apps" rather than "games" since it isn't
+ * a Steam title), not something the user has to go dig for. Each surface
+ * renders every installed plugin that claims it as an ordinary additional
+ * entry in its own existing list, keyed by the plugin's own unique id —
+ * that's what keeps two plugins from ever conflicting over "where they
+ * live": neither one owns a slot, they're just both list items, the same
+ * way two Steam games or two registered apps never conflict with each
+ * other today. "settings" (the default when omitted, for backward
+ * compatibility with a manifest written before this field existed) means
+ * a plugin has no launch surface of its own outside Settings > Plugins —
+ * appropriate for something like a management/background plugin with no
+ * "open and play" moment. */
+export type PluginPlacement = 'apps' | 'games' | 'settings'
+
 /** What a plugin author's plugin.json must contain, one per folder in the
  * community plugins repo (mirrors theme.json's one-folder-per-pack shape
  * in ClashPointNexus-Themes). `entry` is a filename *within that same
@@ -49,6 +65,10 @@ export interface PluginManifest {
   entry: string
   /** Icon filename within the plugin's own folder, square, shown in the Store grid. */
   icon?: string
+  /** Defaults to 'settings' when omitted — see PluginPlacement's own doc
+   * comment for what each value means and why this can never conflict
+   * between plugins. */
+  placement?: PluginPlacement
   permissions: PluginPermission[]
   price: PluginPrice
   /** Lowest core Nexus version (package.json's own version string) this
@@ -111,6 +131,15 @@ export type PluginLaunchResult = { ok: true; info: PluginLaunchInfo } | { ok: fa
 export const COMMUNITY_PLUGINS_REPO = { owner: 'Eoinknd16', name: 'ClashPointNexus-Plugins', branch: 'main' } as const
 
 const PLUGIN_CATEGORIES: PluginCategory[] = ['game', 'media', 'widget', 'system', 'input', 'social', 'other']
+const PLUGIN_PLACEMENTS: PluginPlacement[] = ['apps', 'games', 'settings']
+
+/** The one place that applies the "omitted means settings" default —
+ * every screen that lists plugins by placement should call this rather
+ * than reading manifest.placement directly, so that default can't drift
+ * between call sites. */
+export function pluginPlacement(manifest: PluginManifest): PluginPlacement {
+  return manifest.placement ?? 'settings'
+}
 const PLUGIN_PERMISSIONS: PluginPermission[] = [
   'network',
   'filesystem',
@@ -146,6 +175,12 @@ export function isPluginManifest(value: unknown): value is PluginManifest {
   }
   if (typeof candidate.entry !== 'string' || !candidate.entry.trim()) return false
   if (candidate.icon !== undefined && typeof candidate.icon !== 'string') return false
+  if (
+    candidate.placement !== undefined &&
+    (typeof candidate.placement !== 'string' || !PLUGIN_PLACEMENTS.includes(candidate.placement as PluginPlacement))
+  ) {
+    return false
+  }
   if (
     !Array.isArray(candidate.permissions) ||
     !candidate.permissions.every((p) => PLUGIN_PERMISSIONS.includes(p as PluginPermission))

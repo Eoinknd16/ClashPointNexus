@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUp, Calendar, Download, Gamepad2, Play, Search, Star, Trophy, type LucideIcon } from 'lucide-react'
+import { ArrowUp, Calendar, Download, Gamepad2, Play, Puzzle, Search, Star, Trophy, type LucideIcon } from 'lucide-react'
 import { CardArt, FocusableCard, type CardItem } from '../components/FocusableCard'
 import { BackButton, CloseButton } from '../components/NavButtons'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { KEY_ROWS, applyKey, clampKeyboardFocus } from '../components/onScreenKeyboardLayout'
 import { useNavListener } from '../input/useNavListener'
+import { PluginHost } from '../plugins/PluginHost'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
 import type { AchievementProgress, GameEntry, GameStoreInfo } from '@shared/steamTypes'
+import { pluginPlacement, type InstalledPlugin } from '@shared/pluginTypes'
 
 const COLUMNS = 5
 const FILTERS = ['installed', 'notInstalled', 'all', 'favorites', 'controllerFriendly'] as const
@@ -90,6 +92,25 @@ function toCardItem(game: GameEntry): CardItem {
   }
 }
 
+// A plugin declaring placement: 'games' (see shared/pluginTypes.ts) is
+// appended to whichever filtered/sorted game cards are already showing —
+// never replacing or reordering them, so this can never conflict with a
+// real Steam entry (or another plugin) over the same slot; it's always
+// just one more item at the end of the same list, keyed by its own unique
+// id. Deliberately narrower than a full GameEntry: no favorite/achievement/
+// controller-support data exists for a plugin here, so it only ever shows
+// under the two filters where "yes, this is available to play" is
+// unambiguous (installed/all) and never while searching (see below).
+function pluginToCardItem(plugin: InstalledPlugin): CardItem {
+  return {
+    id: `plugin:${plugin.manifest.id}`,
+    title: plugin.manifest.name,
+    subtitle: 'Plugin',
+    icon: Puzzle,
+    gradientDirection: 'bg-gradient-to-br'
+  }
+}
+
 function launchOrInstall(game: GameEntry, setMessage: (message: string) => void): void {
   if (game.launch.type === 'steam' && !game.installed) {
     setMessage(`Installing ${game.name}...`)
@@ -102,6 +123,8 @@ function launchOrInstall(game: GameEntry, setMessage: (message: string) => void)
 
 export function GamesScreen(): JSX.Element {
   const [allGames, setAllGames] = useState<GameEntry[]>([])
+  const [gamePlugins, setGamePlugins] = useState<InstalledPlugin[]>([])
+  const [runningPlugin, setRunningPlugin] = useState<{ id: string; name: string } | null>(null)
   const [filter, setFilter] = useState<Filter>('installed')
   const [searchQuery, setSearchQuery] = useState('')
   const [zone, setZone] = useState<Zone>('filters')
@@ -218,6 +241,13 @@ export function GamesScreen(): JSX.Element {
   }, [selectedAppId])
 
   useEffect(() => {
+    window.api.plugins
+      .listInstalled()
+      .then((installed) => setGamePlugins(installed.filter((p) => pluginPlacement(p.manifest) === 'games')))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     window.api.steam
       .getLibrary()
@@ -262,7 +292,10 @@ export function GamesScreen(): JSX.Element {
               })
             : allGames
   const games = [...baseGames].sort((a, b) => b.lastPlayed - a.lastPlayed)
-  const cards = games.map(toCardItem)
+  // Appended after every real game, never mixed into the sort/filter above —
+  // see pluginToCardItem's own doc comment for why only these two filters.
+  const visibleGamePlugins = !trimmedQuery && (filter === 'installed' || filter === 'all') ? gamePlugins : []
+  const cards = [...games.map(toCardItem), ...visibleGamePlugins.map(pluginToCardItem)]
 
   const totalSteamGames = allGames.reduce((n, g) => n + (g.launch.type === 'steam' ? 1 : 0), 0)
   const scannedSteamGames = allGames.reduce(
@@ -450,9 +483,14 @@ export function GamesScreen(): JSX.Element {
         switchFilter(1)
         return
       case 'toggleSubtitles':
-        toggleFavorite(games[gridIndex])
+        if (gridIndex < games.length) toggleFavorite(games[gridIndex])
         return
       case 'confirm': {
+        if (gridIndex >= games.length) {
+          const plugin = visibleGamePlugins[gridIndex - games.length]
+          if (plugin) setRunningPlugin({ id: plugin.manifest.id, name: plugin.manifest.name })
+          return
+        }
         const game = games[gridIndex]
         if (!game) return
         setSelectedGame(game)
@@ -558,6 +596,11 @@ export function GamesScreen(): JSX.Element {
                 onClick={() => {
                   setZone('grid')
                   setGridIndex(i)
+                  if (i >= games.length) {
+                    const plugin = visibleGamePlugins[i - games.length]
+                    if (plugin) setRunningPlugin({ id: plugin.manifest.id, name: plugin.manifest.name })
+                    return
+                  }
                   setSelectedGame(games[i])
                   setZone('detail')
                 }}
@@ -696,6 +739,14 @@ export function GamesScreen(): JSX.Element {
           onSubmit={() => submitKeyboard(kbValue)}
           onCancel={cancelKeyboard}
           onKeyPress={pressVirtualKey}
+        />
+      )}
+
+      {runningPlugin && (
+        <PluginHost
+          pluginId={runningPlugin.id}
+          pluginName={runningPlugin.name}
+          onClose={() => setRunningPlugin(null)}
         />
       )}
     </div>
