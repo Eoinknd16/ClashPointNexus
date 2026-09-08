@@ -15,8 +15,18 @@ import { isTrustedPlugin } from './trustedPlugins'
 
 const { owner: REPO_OWNER, name: REPO_NAME, branch: REPO_BRANCH } = COMMUNITY_PLUGINS_REPO
 
+// raw.githubusercontent.com, not jsDelivr, for the actual download path —
+// confirmed directly against both: jsDelivr kept serving a stale cached
+// bundle.js for this repo through two separate purges that each reported
+// success, while raw.githubusercontent.com served the correct, current
+// content every time. jsDelivr is still what communityPlugins.ts uses for
+// casual Store browsing, specifically to stay under api.github.com's
+// 60/hour anonymous rate limit on a much higher-frequency read path — an
+// occasional plugin install doesn't come close to that limit, and byte-
+// correctness on the thing that's about to actually run matters more here
+// than which CDN it came from.
 function rawUrl(folder: string, filename: string): string {
-  return `https://cdn.jsdelivr.net/gh/${REPO_OWNER}/${REPO_NAME}@${REPO_BRANCH}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`
+  return `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`
 }
 
 /**
