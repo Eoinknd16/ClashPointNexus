@@ -110,7 +110,7 @@ function handleStream(url: URL, res: import('http').ServerResponse): void {
   const ffmpeg = binaryPath('ffmpeg.exe')
   if (!ffmpeg) {
     res.writeHead(500)
-    res.end('ffmpeg not found — is Stremio installed?')
+    res.end('ffmpeg not found. Is Stremio installed?')
     return
   }
 

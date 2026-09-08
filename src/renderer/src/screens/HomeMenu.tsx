@@ -425,7 +425,7 @@ export function HomeMenu(): JSX.Element {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted">CPU</span>
                 <span className="font-semibold">
-                  {systemStats.cpuLoadPercent !== null ? `${systemStats.cpuLoadPercent}%` : '—'}
+                  {systemStats.cpuLoadPercent !== null ? `${systemStats.cpuLoadPercent}%` : '--'}
                 </span>
               </div>
               <div className="h-1.5 w-full rounded-full bg-white/20">

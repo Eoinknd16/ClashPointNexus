@@ -32,7 +32,7 @@ export function registerPluginsIpc(): void {
     if (!verifyInstalledBundle(installed)) {
       return {
         ok: false,
-        error: "This plugin's files changed since it was installed — reinstall it before running it again"
+        error: "This plugin's files changed since it was installed, reinstall it before running it again"
       }
     }
     setupPluginSession(id, installed.manifest.permissions)

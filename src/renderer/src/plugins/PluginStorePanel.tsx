@@ -129,7 +129,7 @@ export function PluginStorePanel({ onClose }: { onClose: () => void }): JSX.Elem
       const result = await window.api.plugins.install(plugin.folder)
       if (result.success && result.plugin) {
         setInstalledIds((prev) => new Set(prev).add(result.plugin!.manifest.id))
-        setMessage(`Installed "${result.plugin.manifest.name}" — open it from Settings > Plugins`)
+        setMessage(`Installed "${result.plugin.manifest.name}". Open it from Settings > Plugins`)
       } else {
         setMessage(`Couldn't install ${plugin.manifest.name}: ${result.error}`)
       }
@@ -285,7 +285,7 @@ export function PluginStorePanel({ onClose }: { onClose: () => void }): JSX.Elem
             </div>
             {installedIds.has(selected.manifest.id) && installingId !== selected.manifest.id && (
               <p className="text-xs text-muted">
-                Already installed — open it from Settings &gt; Plugins, or reinstall to pull the latest version.
+                Already installed. Open it from Settings &gt; Plugins, or reinstall to pull the latest version.
               </p>
             )}
           </div>
@@ -306,7 +306,7 @@ export function PluginStorePanel({ onClose }: { onClose: () => void }): JSX.Elem
           <p className="-mt-4 text-sm text-muted">
             {plugins.length > 0
               ? `${filtered.length} of ${plugins.length} plugin(s) from the community repo`
-              : "Anyone can submit a plugin here — review what it'd be able to do before installing anything."}
+              : "Anyone can submit a plugin here, so review what it'd be able to do before installing anything."}
           </p>
 
           {loading ? (

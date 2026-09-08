@@ -19,7 +19,7 @@ export async function rescanThemesFolder(
       await refreshCustomThemes()
       setMessage(`Installed ${result.installed.length} new theme(s): ${result.installed.join(', ')}`)
     } else if (result.errors.length > 0) {
-      setMessage(`No new themes — ${result.errors.length} folder(s) had errors (missing/invalid theme.json)`)
+      setMessage(`No new themes, ${result.errors.length} folder(s) had errors (missing/invalid theme.json)`)
     } else {
       setMessage('No new theme pack folders found')
     }

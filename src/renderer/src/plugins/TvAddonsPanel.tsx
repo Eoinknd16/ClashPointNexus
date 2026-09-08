@@ -330,7 +330,7 @@ export function TvAddonsPanel({ onClose }: { onClose: () => void }): JSX.Element
           <p className="-mt-4 text-sm text-muted">
             {communityAddons.length > 0
               ? `${filteredCommunityAddons.length} of ${communityAddons.length} addons from Stremio's public collection`
-              : "Stremio's public addon collection — the same one its own Community Addons board uses."}
+              : "Stremio's public addon collection, the same one its own Community Addons board uses."}
           </p>
 
           {communityAddonsLoading ? (
@@ -381,7 +381,7 @@ export function TvAddonsPanel({ onClose }: { onClose: () => void }): JSX.Element
           </header>
           <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-5">
             <p className="px-1 text-sm text-muted">
-              These are queried directly over the open Stremio addon protocol — no Stremio app or account needed.
+              These are queried directly over the open Stremio addon protocol, no Stremio app or account needed.
               Debridio and similar debrid-backed addons generate a personalized URL on their own site; paste that in
               below.
             </p>

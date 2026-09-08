@@ -106,7 +106,7 @@ function updateActionLabel(status: UpdateStatus | null): string {
     case 'downloaded':
       return `Restart to Install v${status.version}`
     case 'error':
-      return 'Update check failed — tap to retry'
+      return 'Update check failed, tap to retry'
     case 'unsupported':
       return 'Updates unavailable in this build'
     default:
@@ -186,7 +186,7 @@ export function SettingsScreen(): JSX.Element {
     const unsubscribeUpdater = window.api.updater.onStatus((status) => {
       setUpdateStatus(status)
       if (status.state === 'not-available') setMessage('Already on the latest version')
-      else if (status.state === 'downloaded') setMessage(`Update v${status.version} ready — tap to restart & install`)
+      else if (status.state === 'downloaded') setMessage(`Update v${status.version} ready, tap to restart & install`)
       else if (status.state === 'error') setMessage(`Update check failed: ${status.error}`)
     })
     const unsubscribeGlobalInput = window.api.globalInput.onStatusChanged(setGlobalInputStatus)
@@ -317,7 +317,7 @@ export function SettingsScreen(): JSX.Element {
               globalInputStatus.controllerConnected === true
                 ? 'Controller detected'
                 : globalInputStatus.controllerConnected === false
-                  ? "No controller detected — check it's connected and Windows recognizes it as a game controller"
+                  ? "No controller detected, check it's connected and Windows recognizes it as a game controller"
                   : 'Waiting for a reading...',
             icon:
               globalInputStatus.controllerConnected === true
@@ -387,13 +387,13 @@ export function SettingsScreen(): JSX.Element {
       id: 'pluginsIntro',
       kind: 'info',
       category: 'plugins',
-      label: 'Optional modules, managed separately from the core app — browse and install new ones from the Store.'
+      label: 'Optional modules, managed separately from the core app. Browse and install new ones from the Store.'
     },
     {
       id: 'openTvAddonsPlugin',
       kind: 'action',
       category: 'plugins',
-      label: 'TV Addons — catalogs, streams & subtitles'
+      label: 'TV Addons: catalogs, streams & subtitles'
     },
     ...(installedPlugins.length === 0
       ? [
@@ -426,8 +426,8 @@ export function SettingsScreen(): JSX.Element {
       kind: 'info',
       category: 'streaming',
       label:
-        'Optional — shows which official services (Netflix, Prime Video, Disney+...) carry a title, and opens ' +
-        'them there when you pick one. Nexus never plays their content itself — DRM makes that legally off the ' +
+        'Optional: shows which official services (Netflix, Prime Video, Disney+...) carry a title, and opens ' +
+        'them there when you pick one. Nexus never plays their content itself. DRM makes that legally off the ' +
         'table no matter who builds it. Get a free key at themoviedb.org/settings/api'
     },
 
@@ -436,7 +436,7 @@ export function SettingsScreen(): JSX.Element {
       id: 'omdbApiKeyHint',
       kind: 'info',
       category: 'ratings',
-      label: 'Optional — adds Rotten Tomatoes/Metacritic scores to movie & series detail pages. Get a free key at omdbapi.com/apikey.aspx'
+      label: 'Optional: adds Rotten Tomatoes/Metacritic scores to movie & series detail pages. Get a free key at omdbapi.com/apikey.aspx'
     }
   ]
 
@@ -587,7 +587,7 @@ export function SettingsScreen(): JSX.Element {
       const created = await window.api.settings.createCustomTheme(name, seedTheme?.vars ?? {})
       await refreshCustomThemes()
       setTheme(created.id)
-      setMessage(`Created ${created.name} — customize it below`)
+      setMessage(`Created ${created.name}, customize it below`)
       openThemeEditor(created)
     } catch (error) {
       setMessage(`Couldn't create theme: ${error instanceof Error ? error.message : String(error)}`)
@@ -614,7 +614,7 @@ export function SettingsScreen(): JSX.Element {
     try {
       await removeTheme(id)
       setMessage(
-        `Removed ${name} — if it came from your Themes folder, remove it from there too or it'll reinstall next scan`
+        `Removed ${name}. If it came from your Themes folder, remove it from there too or it'll reinstall next scan`
       )
     } catch (error) {
       setMessage(`Couldn't remove ${name}: ${error instanceof Error ? error.message : String(error)}`)
@@ -627,7 +627,7 @@ export function SettingsScreen(): JSX.Element {
       const result = await window.api.settings.prepareThemeSubmission(theme.id)
       setMessage(
         result.success
-          ? `Ready — opened the folder. Upload it to github.com/${COMMUNITY_THEMES_REPO.owner}/${COMMUNITY_THEMES_REPO.name}`
+          ? `Ready, opened the folder. Upload it to github.com/${COMMUNITY_THEMES_REPO.owner}/${COMMUNITY_THEMES_REPO.name}`
           : `Couldn't prepare submission: ${result.error}`
       )
     } catch (error) {
@@ -1149,7 +1149,7 @@ export function SettingsScreen(): JSX.Element {
             <h2 className="text-lg font-semibold">Remove theme "{themeToRemove.name}"?</h2>
             <p className="text-sm text-muted">
               {themeToRemove.id === themeId
-                ? "This is your active theme — removing it switches you back to Default. "
+                ? 'This is your active theme, removing it switches you back to Default. '
                 : ''}
               If it came from your Themes folder, remove it from there too, or it'll be reinstalled the
               next time the app scans that folder.

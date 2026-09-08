@@ -404,7 +404,7 @@ export function StoreScreen(): JSX.Element {
           />
           <p className="px-1 text-xs text-muted">
             Submitted by other players via github.com/{COMMUNITY_THEMES_REPO.owner}/
-            {COMMUNITY_THEMES_REPO.name} — share your own from Settings' Appearance tab.
+            {COMMUNITY_THEMES_REPO.name}. Share your own from Settings' Appearance tab.
           </p>
         </div>
 

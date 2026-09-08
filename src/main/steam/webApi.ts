@@ -27,10 +27,10 @@ export async function fetchOwnedGames(apiKey: string, steamId64: string): Promis
 
   const response = await fetch(url)
   if (response.status === 401) {
-    throw new Error('Steam Web API key rejected (401) — check the key and SteamID64 in Settings')
+    throw new Error('Steam Web API key rejected (401). Check the key and SteamID64 in Settings')
   }
   if (response.status === 403) {
-    throw new Error('Steam Web API forbidden (403) — the profile/game details may be set to private')
+    throw new Error('Steam Web API forbidden (403). The profile/game details may be set to private')
   }
   if (!response.ok) {
     throw new Error(`Steam Web API responded with ${response.status}`)

@@ -230,7 +230,7 @@ export function LibraryScreen(): JSX.Element {
       <div className="flex flex-1 flex-col gap-8 overflow-y-auto p-2">
         {sections.length === 0 && (
           <span className="text-muted">
-            Nothing here yet — favorite a game, or add a movie/show to your library from the TV screen.
+            Nothing here yet. Favorite a game, or add a movie/show to your library from the TV screen.
           </span>
         )}
         {sections.map((section, i) => (

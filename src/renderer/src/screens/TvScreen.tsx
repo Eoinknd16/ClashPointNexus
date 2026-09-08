@@ -1029,7 +1029,7 @@ export function TvScreen(): JSX.Element {
     if (!stream?.playableUrl) return
     setStreamIndex(index)
     setZone('player')
-    setMessage(`Playing — ${stream.addonName} (${stream.resolution ?? 'unknown res'})`)
+    setMessage(`Playing: ${stream.addonName} (${stream.resolution ?? 'unknown res'})`)
     setAudioIndex(undefined)
     void startPlaybackAt(stream.playableUrl, resumeOffset, undefined)
   }
@@ -1147,7 +1147,7 @@ export function TvScreen(): JSX.Element {
     if (opts?.auto && first?.playableUrl) {
       setStreamIndex(0)
       setZone('player')
-      setMessage(`Playing — ${first.addonName} (${first.resolution ?? 'unknown res'})`)
+      setMessage(`Playing: ${first.addonName} (${first.resolution ?? 'unknown res'})`)
       setAudioIndex(undefined)
       void startPlaybackAt(first.playableUrl, offset, undefined)
     } else {
@@ -1191,7 +1191,7 @@ export function TvScreen(): JSX.Element {
     // the bumper-reselect shortcut in the player zone.
     setStreamIndex(0)
     setZone('player')
-    setMessage(`Playing — ${first.addonName} (${first.resolution ?? 'unknown res'})`)
+    setMessage(`Playing: ${first.addonName} (${first.resolution ?? 'unknown res'})`)
     setAudioIndex(undefined)
     void startPlaybackAt(first.playableUrl, offset, undefined)
   }

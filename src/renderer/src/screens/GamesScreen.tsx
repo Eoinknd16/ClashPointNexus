@@ -573,10 +573,10 @@ export function GamesScreen(): JSX.Element {
               {trimmedQuery
                 ? `No games matching "${searchQuery}"`
                 : filter === 'favorites'
-                  ? 'No favorites yet — Square on a game adds one.'
+                  ? 'No favorites yet. Square on a game adds one.'
                   : filter === 'controllerFriendly'
                     ? stillScanningControllerSupport
-                      ? 'Still scanning your library — controller-friendly games will appear here as they are found.'
+                      ? 'Still scanning your library. Controller-friendly games will appear here as they are found.'
                       : 'No controller-friendly games found in your library.'
                     : 'No games in this view yet.'}
             </span>

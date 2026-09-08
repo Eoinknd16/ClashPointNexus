@@ -77,7 +77,7 @@ export async function signInWithSteam(): Promise<SignInResult> {
         return
       }
       res.writeHead(200, { 'Content-Type': 'text/html' })
-      res.end('<html><body>Signed in to Steam — you can close this window.</body></html>')
+      res.end('<html><body>Signed in to Steam. You can close this window.</body></html>')
 
       void (async () => {
         try {

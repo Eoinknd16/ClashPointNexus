@@ -218,7 +218,7 @@ export function FileManagerScreen(): JSX.Element {
         const result = await window.api.settings.installTheme(entry.path)
         setMessage(
           result.success
-            ? `Installed "${result.theme?.name}" — pick it in Settings to use it`
+            ? `Installed "${result.theme?.name}". Pick it in Settings to use it`
             : `Couldn't install theme: ${result.error}`
         )
         return

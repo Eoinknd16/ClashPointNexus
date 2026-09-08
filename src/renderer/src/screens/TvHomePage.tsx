@@ -976,7 +976,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
           <Plus className="h-10 w-10 text-accent" />
           <p className="text-lg font-semibold">This page is empty</p>
           <p className="max-w-sm text-sm text-muted">
-            Press Confirm (or click here) to add your first row or card — pick from catalogs, addons, Continue
+            Press Confirm (or click here) to add your first row or card: pick from catalogs, addons, Continue
             Watching, your Library, or pin a specific title.
           </p>
         </div>
@@ -1153,7 +1153,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
             <h2 className="mb-2 pr-8 text-lg font-semibold">Pick an Addon Catalog</h2>
             {addonCatalogOptions.length === 0 && (
               <p className="text-sm text-muted">
-                No catalog addons installed yet — add one from Settings &gt; Plugins &gt; TV Addons first.
+                No catalog addons installed yet. Add one from Settings &gt; Plugins &gt; TV Addons first.
               </p>
             )}
             {addonCatalogOptions.map((option, i) => (
@@ -1209,7 +1209,7 @@ export function TvHomePage({ active, onActivate, onExit, onSelectItem, onGoToTab
           <div onClick={(e) => e.stopPropagation()} className="relative flex max-h-[80vh] w-80 flex-col gap-2 overflow-y-auto rounded-panel bg-surface p-6">
             <CloseButton className="absolute right-4 top-4" onClick={() => setZone('addMenu')} />
             <h2 className="mb-2 pr-8 text-lg font-semibold">Shortcut to Which Page?</h2>
-            {otherPages.length === 0 && <p className="text-sm text-muted">No other pages yet — create one first.</p>}
+            {otherPages.length === 0 && <p className="text-sm text-muted">No other pages yet, create one first.</p>}
             {otherPages.map((page, i) => (
               <div
                 key={page.id}

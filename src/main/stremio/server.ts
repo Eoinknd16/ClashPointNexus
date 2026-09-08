@@ -31,7 +31,7 @@ async function isServerRunning(): Promise<boolean> {
  * consequential failure point in the whole playback path. */
 export async function ensureStremioServer(): Promise<StremioServerStatus> {
   if (await isServerRunning()) return { available: true, reason: null }
-  if (serverProcess) return { available: false, reason: "Torrent server is still starting up — try again in a moment" }
+  if (serverProcess) return { available: false, reason: "Torrent server is still starting up, try again in a moment" }
 
   const installDir = findStremioInstallDir()
   if (!installDir) {
