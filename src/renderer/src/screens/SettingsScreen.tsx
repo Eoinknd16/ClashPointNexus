@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import {
   Check,
+  ChevronDown,
   FolderOpen,
   Gamepad2,
   Link2,
@@ -78,6 +80,20 @@ interface SettingsRow {
   swatch?: string
   active?: boolean
   icon?: LucideIcon
+  /** A real image (a plugin's own icon — see InstalledPlugin.iconUrl)
+   * rather than a generic Lucide glyph, when one exists. Takes over the
+   * icon slot; `icon` is still the fallback when this is absent. */
+  iconUrl?: string
+  /** A custom theme's own row only — shows the expand/collapse chevron.
+   * Built-in themes have nothing to expand into, so they never set this. */
+  expandable?: boolean
+  /** Whether this row's own sub-rows are currently revealed — only
+   * meaningful alongside expandable, drives the chevron's rotation. */
+  expanded?: boolean
+  /** One of an expanded theme's own action rows — indented and given a
+   * quiet entrance animation to read as "belongs to the row above it"
+   * rather than another top-level list item. */
+  nested?: boolean
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -146,6 +162,10 @@ export function SettingsScreen(): JSX.Element {
   const [styleAxisIndex, setStyleAxisIndex] = useState(0)
   const [themeToRemove, setThemeToRemove] = useState<ThemeDefinition | null>(null)
   const [removeConfirmIndex, setRemoveConfirmIndex] = useState(0)
+  // Accordion state for Appearance's per-theme actions — at most one custom
+  // theme expanded at a time. Built-in themes never set this; they have no
+  // actions to expand into.
+  const [expandedThemeId, setExpandedThemeId] = useState<string | null>(null)
 
   const message = useStatusStore((s) => s.message)
   const setMessage = useStatusStore((s) => s.setMessage)
@@ -198,40 +218,63 @@ export function SettingsScreen(): JSX.Element {
 
   const rows: SettingsRow[] = [
     ...allThemes.flatMap((theme): SettingsRow[] => {
+      const isActive = theme.id === themeId
+      // Only custom/installed themes are editable — built-ins are meant to
+      // stay fixed reference points, and aren't tracked in
+      // themes.config.json at all for this to persist against anyway. They
+      // also never expand: there's nothing under them to reveal.
+      const isCustom = customThemeIds.has(theme.id)
+      const isExpanded = isCustom && expandedThemeId === theme.id
       const themeRow: SettingsRow = {
         id: `theme-${theme.id}`,
         kind: 'theme',
         label: theme.name,
         category: 'appearance',
         swatch: theme.vars['--color-accent'],
-        active: theme.id === themeId
+        active: isActive,
+        expandable: isCustom,
+        expanded: isExpanded
       }
-      // Only custom/installed themes are editable — built-ins are meant to
-      // stay fixed reference points, and aren't tracked in
-      // themes.config.json at all for this to persist against anyway.
-      if (!customThemeIds.has(theme.id)) return [themeRow]
+      if (!isCustom || !isExpanded) return [themeRow]
       return [
         themeRow,
+        // Omitted once this is already the active theme — there's nothing
+        // useful about offering to activate what's already active.
+        ...(isActive
+          ? []
+          : [
+              {
+                id: `activateTheme-${theme.id}`,
+                kind: 'action' as const,
+                label: 'Set as Active',
+                category: 'appearance',
+                icon: Check,
+                nested: true
+              }
+            ]),
         {
           id: `customizeTheme-${theme.id}`,
           kind: 'action',
           label: 'Customize Theme',
           category: 'appearance',
-          icon: Palette
+          icon: Palette,
+          nested: true
         },
         {
           id: `submitTheme-${theme.id}`,
           kind: 'action',
           label: 'Prepare Submission',
           category: 'appearance',
-          icon: Share2
+          icon: Share2,
+          nested: true
         },
         {
           id: `removeTheme-${theme.id}`,
           kind: 'action',
           label: 'Remove Theme',
           category: 'appearance',
-          icon: Trash2
+          icon: Trash2,
+          nested: true
         }
       ]
     }),
@@ -423,14 +466,21 @@ export function SettingsScreen(): JSX.Element {
                   id: `openInstalledPlugin-${p.manifest.id}`,
                   kind: 'action' as const,
                   category: 'plugins',
-                  label: `Open ${p.manifest.name}`
+                  label: `Open ${p.manifest.name}`,
+                  // Falls back to the generic Puzzle icon below when a
+                  // plugin has none — same iconUrl InstalledPlugin already
+                  // carries for its Apps/Games/Store card, so it reads as
+                  // the same plugin here instead of a generic glyph.
+                  iconUrl: p.iconUrl ?? undefined,
+                  icon: Puzzle
                 }
               ]),
           {
             id: `uninstallPlugin-${p.manifest.id}`,
             kind: 'action' as const,
             category: 'plugins',
-            label: `Uninstall ${p.manifest.name}`
+            label: `Uninstall ${p.manifest.name}`,
+            icon: Trash2
           }
         ])),
 
@@ -628,6 +678,9 @@ export function SettingsScreen(): JSX.Element {
     setMessage(`Removing ${name}...`)
     try {
       await removeTheme(id)
+      // Otherwise this would keep pointing at a theme row that no longer
+      // exists — harmless (it just wouldn't render) but stale.
+      setExpandedThemeId((prev) => (prev === id ? null : prev))
       setMessage(
         `Removed ${name}. If it came from your Themes folder, remove it from there too or it'll reinstall next scan`
       )
@@ -727,8 +780,20 @@ export function SettingsScreen(): JSX.Element {
       return
     } else if (row.kind === 'theme') {
       const id = row.id.replace('theme-', '')
+      if (customThemeIds.has(id)) {
+        // Expand/collapse instead of activating directly — see
+        // activateTheme- below for the now-explicit "Set as Active" action.
+        setExpandedThemeId((prev) => (prev === id ? null : id))
+      } else {
+        setTheme(id)
+        setMessage(`Theme set to ${row.label}`)
+      }
+    } else if (row.id.startsWith('activateTheme-')) {
+      const id = row.id.replace('activateTheme-', '')
+      const theme = allThemes.find((t) => t.id === id)
       setTheme(id)
-      setMessage(`Theme set to ${row.label}`)
+      setMessage(`Theme set to ${theme?.name ?? id}`)
+      setExpandedThemeId(null)
     } else if (row.id.startsWith('customizeTheme-')) {
       const id = row.id.replace('customizeTheme-', '')
       const theme = allThemes.find((t) => t.id === id)
@@ -915,6 +980,12 @@ export function SettingsScreen(): JSX.Element {
       case 'left':
       case 'back':
       case 'menu':
+        // One step back at a time — collapse an expanded theme's actions
+        // before backing all the way out to the category sidebar.
+        if (expandedThemeId) {
+          setExpandedThemeId(null)
+          return
+        }
         setZone('sidebar')
         return
       default:
@@ -979,17 +1050,25 @@ export function SettingsScreen(): JSX.Element {
               )
             }
             return (
-              <div
+              <motion.div
                 key={row.id}
                 ref={(el) => (rowRefs.current[i] = el)}
+                // Nested (an expanded theme's own action rows) get a quiet
+                // entrance — collapsing is instant/unanimated on purpose,
+                // see the theme accordion's own doc comment on why. Every
+                // other row keeps initial={false}, rendering exactly as it
+                // always has with no animation involved at all.
+                initial={row.nested ? { opacity: 0, y: -6 } : false}
+                animate={row.nested ? { opacity: 1, y: 0 } : undefined}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
                 onClick={() => {
                   setZone('content')
                   setMenuIndex(selectableIndices.indexOf(i))
                   activateRow(row)
                 }}
-                className={`mb-2 flex items-center justify-between rounded-xl px-5 py-4 ring-1 transition-colors ${
-                  row.kind === 'info' ? '' : 'cursor-pointer'
-                } ${
+                className={`mb-2 flex items-center justify-between rounded-xl ring-1 transition-colors ${
+                  row.nested ? 'ml-8 border-l-2 border-accent/20 px-4 py-3' : 'px-5 py-4'
+                } ${row.kind === 'info' ? '' : 'cursor-pointer'} ${
                   row.kind === 'info'
                     ? 'bg-surface text-muted ring-accent/10'
                     : zone === 'content' && activeIndex === i
@@ -1004,7 +1083,11 @@ export function SettingsScreen(): JSX.Element {
                       style={{ backgroundColor: `rgb(${row.swatch})` }}
                     />
                   )}
-                  {row.icon && <row.icon className="h-4 w-4 shrink-0" />}
+                  {row.iconUrl ? (
+                    <img src={row.iconUrl} alt="" className="h-4 w-4 shrink-0 rounded-sm object-cover" />
+                  ) : (
+                    row.icon && <row.icon className="h-4 w-4 shrink-0" />
+                  )}
                   {row.label}
                   {row.kind === 'theme' && row.active && <Check className="h-4 w-4 text-accent" />}
                 </span>
@@ -1017,7 +1100,12 @@ export function SettingsScreen(): JSX.Element {
                       : 'Not set'}
                   </span>
                 )}
-              </div>
+                {row.expandable && (
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-muted transition-transform ${row.expanded ? 'rotate-180' : ''}`}
+                  />
+                )}
+              </motion.div>
             )
           })}
         </div>
