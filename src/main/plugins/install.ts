@@ -1,4 +1,5 @@
 import { createHash } from 'crypto'
+import { session } from 'electron'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import {
@@ -85,6 +86,19 @@ export async function installPlugin(folder: string): Promise<PluginInstallResult
   // pluginShell.ts) — written fresh on every install, never downloaded.
   // trusted comes from the hardcoded allow-list, never from manifest.
   writePluginShell(dir, isTrustedPlugin(manifest.id))
+
+  // This plugin's own <webview> session (see session.ts) is deliberately
+  // persistent, not in-memory — a plugin like Nexus Dash keeps its high
+  // scores in localStorage there across restarts. That same persistence
+  // means Chromium's own HTTP cache for that session can keep serving a
+  // *previous* install's file:// response for bundle.js/index.html/boot.js
+  // at this exact same path, even after the bytes on disk have genuinely
+  // changed — confirmed directly: reinstalling Arcade with a fixed bundle
+  // still ran the old code until this cache was cleared. uninstallPlugin
+  // never touches this either, only this plugin's own files, so it has to
+  // be cleared here on every (re)install. clearCache() only touches the
+  // HTTP/resource cache, not localStorage/cookies, so save data survives.
+  await session.fromPartition(`persist:plugin-${manifest.id}`).clearCache()
 
   const bundleSha256 = createHash('sha256').update(bundleBytes).digest('hex')
   const now = Date.now()
