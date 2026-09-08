@@ -162,6 +162,9 @@ const api: LauncherApi = {
     remove: (id) => ipcRenderer.invoke('apps:remove', id),
     toggleFavorite: (id) => ipcRenderer.invoke('apps:toggleFavorite', id),
     launch: (executablePath, args) => ipcRenderer.invoke('apps:launch', executablePath, args)
+  },
+  plugins: {
+    listCommunity: () => ipcRenderer.invoke('plugins:listCommunity')
   }
 }
 

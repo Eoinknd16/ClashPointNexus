@@ -4,6 +4,7 @@ import type { GlobalInputStatus } from './globalInputTypes'
 import type { ContinueSuggestion } from './homeTypes'
 import type { LibraryEntry } from './libraryTypes'
 import type { MediaInfo } from './playerConstants'
+import type { CommunityPluginSummary } from './pluginTypes'
 import type { WatchProgress } from './progressTypes'
 import type {
   SteamSettings,
@@ -264,5 +265,10 @@ export interface LauncherApi {
     toggleFavorite: (id: string) => Promise<boolean>
     /** Resolves to an error message on failure, null on success. */
     launch: (executablePath: string, args: string) => Promise<string | null>
+  }
+  plugins: {
+    /** Browses the community plugins repo — describes what's available,
+     * doesn't download or run anything. See pluginTypes.ts. */
+    listCommunity: () => Promise<CommunityPluginSummary[]>
   }
 }

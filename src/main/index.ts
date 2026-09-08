@@ -18,6 +18,7 @@ import { registerHomeIpc } from './home/ipc'
 import { registerLibraryIpc } from './library/ipc'
 import { registerPlayerIpc } from './player/ipc'
 import { startTranscodeProxy, stopTranscodeProxy } from './player/transcodeProxy'
+import { registerPluginsIpc } from './plugins/ipc'
 import { registerPowerIpc } from './power/ipc'
 import { registerProgressIpc } from './progress/ipc'
 import { registerSettingsIpc } from './settings/ipc'
@@ -110,6 +111,7 @@ app.whenReady().then(async () => {
   registerWeatherIpc()
   registerHomeIpc()
   registerSystemIpc()
+  registerPluginsIpc()
   registerTvHomeIpc()
   startTranscodeProxy()
 
