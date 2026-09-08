@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'child_process'
 import { dialog, ipcMain, session, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { readdirSync, readFileSync, writeFileSync } from 'fs'
 import { runGameSession, waitForChildExit } from '../gameSession/service'
+import { appendLog } from '../logging/service'
 
 const ARCADE_PARTITION = 'persist:plugin-arcade'
 
@@ -35,11 +36,13 @@ export function registerArcadeTrustedIpc(mainWindow: BrowserWindow): void {
       assertArcadeSender(event)
       return new Promise((resolve) => {
         try {
+          appendLog('info', `[arcade] spawnProcess: ${path} ${JSON.stringify(args)}`)
           const child = spawn(path, args, { detached: true, stdio: 'ignore' })
           let settled = false
           child.once('error', (error) => {
             if (settled) return
             settled = true
+            appendLog('error', `[arcade] spawnProcess error: ${error.message}`)
             resolve({ error: error.message })
           })
           // Same "probably started fine" heuristic as apps/service.ts's
@@ -47,6 +50,7 @@ export function registerArcadeTrustedIpc(mainWindow: BrowserWindow): void {
           setTimeout(() => {
             if (settled) return
             settled = true
+            appendLog('info', `[arcade] spawnProcess settled ok, pid=${child.pid}, starting runGameSession`)
             // Same "hide Nexus, wait for exit, restore" flow every other
             // launch path in this app already uses (apps/ipc.ts, steam/ipc.ts)
             // — not awaited, so this resolves as soon as the launch itself

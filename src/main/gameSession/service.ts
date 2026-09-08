@@ -1,6 +1,7 @@
 import { execFile, type ChildProcess } from 'child_process'
 import { app, type BrowserWindow } from 'electron'
 import { isHiddenForDesktop } from '../globalInput/ipc'
+import { appendLog } from '../logging/service'
 
 const isDev = (): boolean => !app.isPackaged
 const STEAM_POLL_INTERVAL_MS = 3000
@@ -16,20 +17,36 @@ export function isGameSessionActive(): boolean {
 
 function hideNexusWindow(mainWindow: BrowserWindow): void {
   if (mainWindow.isDestroyed()) return
+  appendLog('info', `[gameSession] hiding Nexus (isDev=${isDev()})`)
   if (!isDev()) mainWindow.setFullScreen(false)
   mainWindow.minimize()
 }
 
 function restoreNexusWindow(mainWindow: BrowserWindow): void {
-  if (mainWindow.isDestroyed()) return
+  if (mainWindow.isDestroyed()) {
+    appendLog('info', '[gameSession] restore skipped — window destroyed')
+    return
+  }
   // Respects an explicit "Show Desktop" the user made while the game was
   // running instead of yanking Nexus back over whatever they're doing —
   // they still have every existing way (PS click, Show Desktop again) to
   // bring it back forward whenever they actually want to.
-  if (isHiddenForDesktop()) return
+  const hiddenForDesktop = isHiddenForDesktop()
+  appendLog(
+    'info',
+    `[gameSession] restore requested — isHiddenForDesktop=${hiddenForDesktop} isMinimized=${mainWindow.isMinimized()} isFullScreen=${mainWindow.isFullScreen()} isDev=${isDev()}`
+  )
+  if (hiddenForDesktop) {
+    appendLog('info', '[gameSession] restore skipped — isHiddenForDesktop is true')
+    return
+  }
   mainWindow.restore()
   if (!isDev()) mainWindow.setFullScreen(true)
   mainWindow.focus()
+  appendLog(
+    'info',
+    `[gameSession] restore done — isMinimized=${mainWindow.isMinimized()} isFullScreen=${mainWindow.isFullScreen()} isFocused=${mainWindow.isFocused()}`
+  )
 }
 
 /**
@@ -41,9 +58,11 @@ function restoreNexusWindow(mainWindow: BrowserWindow): void {
  */
 export async function runGameSession(mainWindow: BrowserWindow, waitForExit: Promise<void>): Promise<void> {
   sessionActive = true
+  appendLog('info', '[gameSession] session starting')
   hideNexusWindow(mainWindow)
   try {
     await waitForExit
+    appendLog('info', '[gameSession] waitForExit resolved — child exited')
   } finally {
     sessionActive = false
   }
