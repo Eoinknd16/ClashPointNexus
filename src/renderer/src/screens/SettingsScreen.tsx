@@ -26,7 +26,6 @@ import { useNavigationStore } from '../state/navigationStore'
 import { useThemeStore } from '../state/themeStore'
 import { deriveThemeVars, hslToRgbTriplet, rgbTripletToHsl } from '../themes/colorUtils'
 import { openThemesFolder, rescanThemesFolder } from '../themes/themeFolderActions'
-import { PluginStorePanel } from '../plugins/PluginStorePanel'
 import { TvAddonsPanel } from '../plugins/TvAddonsPanel'
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
@@ -135,7 +134,7 @@ export function SettingsScreen(): JSX.Element {
   const [kbCol, setKbCol] = useState(0)
   const [kbValue, setKbValue] = useState('')
   const [kbShift, setKbShift] = useState(false)
-  const [activePlugin, setActivePlugin] = useState<'tvAddons' | 'store' | null>(null)
+  const [activePlugin, setActivePlugin] = useState<'tvAddons' | null>(null)
   const [themeEditorTheme, setThemeEditorTheme] = useState<ThemeDefinition | null>(null)
   const [editorTab, setEditorTab] = useState<'colors' | 'style'>('colors')
   const [colorEditorKeyIndex, setColorEditorKeyIndex] = useState(0)
@@ -383,19 +382,13 @@ export function SettingsScreen(): JSX.Element {
       id: 'pluginsIntro',
       kind: 'info',
       category: 'plugins',
-      label: 'Optional modules, managed separately from the core app — each opens its own dedicated panel.'
+      label: 'Optional modules, managed separately from the core app — browse and install new ones from the Store.'
     },
     {
       id: 'openTvAddonsPlugin',
       kind: 'action',
       category: 'plugins',
       label: 'TV Addons — catalogs, streams & subtitles'
-    },
-    {
-      id: 'openPluginStore',
-      kind: 'action',
-      category: 'plugins',
-      label: 'Browse Plugin Store'
     },
 
     header('whereToWatch', 'Where to Watch', 'streaming'),
@@ -704,8 +697,6 @@ export function SettingsScreen(): JSX.Element {
       void doSteamSignIn()
     } else if (row.id === 'openTvAddonsPlugin') {
       setActivePlugin('tvAddons')
-    } else if (row.id === 'openPluginStore') {
-      setActivePlugin('store')
     } else if (row.id === 'checkForUpdates') {
       doCheckForUpdates()
     } else if (row.id === 'toggleStartup') {
@@ -1160,7 +1151,6 @@ export function SettingsScreen(): JSX.Element {
       )}
 
       {activePlugin === 'tvAddons' && <TvAddonsPanel onClose={() => setActivePlugin(null)} />}
-      {activePlugin === 'store' && <PluginStorePanel onClose={() => setActivePlugin(null)} />}
     </div>
   )
 }

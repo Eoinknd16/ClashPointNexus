@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { WebviewTag } from 'electron'
-import { ChevronLeft, ChevronRight, FolderOpen, Palette, RefreshCw, RotateCw, ShoppingCart } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FolderOpen, Palette, Puzzle, RefreshCw, RotateCw, ShoppingCart } from 'lucide-react'
 import { CategoryRow } from '../components/CategoryRow'
 import { FocusableCard, type CardItem } from '../components/FocusableCard'
 import { BackButton } from '../components/NavButtons'
 import { useNavListener } from '../input/useNavListener'
+import { PluginStorePanel } from '../plugins/PluginStorePanel'
 import { useNavigationStore } from '../state/navigationStore'
 import { useStatusStore } from '../state/statusStore'
 import { useThemeStore } from '../state/themeStore'
@@ -54,8 +55,8 @@ const ACTIONS: Array<{ id: ActionId; label: string; icon: typeof FolderOpen }> =
 ]
 
 type View = 'hub' | 'steamStore'
-type HubRow = 'steam' | 'themes' | 'community' | 'actions'
-const HUB_ROWS: HubRow[] = ['steam', 'themes', 'community', 'actions']
+type HubRow = 'steam' | 'plugins' | 'themes' | 'community' | 'actions'
+const HUB_ROWS: HubRow[] = ['steam', 'plugins', 'themes', 'community', 'actions']
 
 /**
  * The mockup's "Store" nav item, rebuilt as its own real page instead of
@@ -79,6 +80,7 @@ export function StoreScreen(): JSX.Element {
   const refreshCustomThemes = useThemeStore((s) => s.refreshCustomThemes)
 
   const [view, setView] = useState<View>('hub')
+  const [showPluginStore, setShowPluginStore] = useState(false)
   const [rowIndex, setRowIndex] = useState(0)
   const [colIndex, setColIndex] = useState(0)
   const [communityThemes, setCommunityThemes] = useState<CommunityThemeSummary[]>([])
@@ -99,6 +101,7 @@ export function StoreScreen(): JSX.Element {
 
   const rowLength = (row: HubRow): number => {
     if (row === 'steam') return 1
+    if (row === 'plugins') return 1
     if (row === 'themes') return themeCards.length
     if (row === 'community') return communityThemeCards.length
     return ACTIONS.length
@@ -195,6 +198,10 @@ export function StoreScreen(): JSX.Element {
   function activateHubItem(row: HubRow, index: number): void {
     if (row === 'steam') {
       setView('steamStore')
+      return
+    }
+    if (row === 'plugins') {
+      setShowPluginStore(true)
       return
     }
     if (row === 'themes') {
@@ -352,30 +359,45 @@ export function StoreScreen(): JSX.Element {
           />
         </div>
 
-        <div ref={(el) => (rowRefs.current[1] = el)}>
+        <div ref={(el) => (rowRefs.current[1] = el)} className="w-96">
+          <FocusableCard
+            item={{
+              id: 'plugin-store',
+              title: 'Plugin Store',
+              subtitle: 'Browse community plugins',
+              icon: Puzzle,
+              iconColors: ['rgb(160 107 255)', 'rgb(91 140 255)']
+            }}
+            size="large"
+            focused={view === 'hub' && clampedRowIndex === 1}
+            onClick={() => activateHubItem('plugins', 0)}
+          />
+        </div>
+
+        <div ref={(el) => (rowRefs.current[2] = el)}>
           <CategoryRow
             label="My Themes"
             items={themeCards}
-            focused={clampedRowIndex === 1}
-            focusedIndex={clampedRowIndex === 1 ? clampedColIndex : 0}
+            focused={clampedRowIndex === 2}
+            focusedIndex={clampedRowIndex === 2 ? clampedColIndex : 0}
             aspect="landscape"
             onSelect={(index) => {
-              setRowIndex(1)
+              setRowIndex(2)
               setColIndex(index)
               activateHubItem('themes', index)
             }}
           />
         </div>
 
-        <div ref={(el) => (rowRefs.current[2] = el)} className="flex flex-col gap-3">
+        <div ref={(el) => (rowRefs.current[3] = el)} className="flex flex-col gap-3">
           <CategoryRow
             label="Community Themes"
             items={communityThemeCards}
-            focused={clampedRowIndex === 2}
-            focusedIndex={clampedRowIndex === 2 ? clampedColIndex : 0}
+            focused={clampedRowIndex === 3}
+            focusedIndex={clampedRowIndex === 3 ? clampedColIndex : 0}
             aspect="landscape"
             onSelect={(index) => {
-              setRowIndex(2)
+              setRowIndex(3)
               setColIndex(index)
               activateHubItem('community', index)
             }}
@@ -386,17 +408,17 @@ export function StoreScreen(): JSX.Element {
           </p>
         </div>
 
-        <div ref={(el) => (rowRefs.current[3] = el)} className="flex gap-3">
+        <div ref={(el) => (rowRefs.current[4] = el)} className="flex gap-3">
           {ACTIONS.map((a, i) => (
             <div
               key={a.id}
               onClick={() => {
-                setRowIndex(3)
+                setRowIndex(4)
                 setColIndex(i)
                 activateHubItem('actions', i)
               }}
               className={`flex cursor-pointer items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium ring-1 transition-colors ${
-                clampedRowIndex === 3 && clampedColIndex === i
+                clampedRowIndex === 4 && clampedColIndex === i
                   ? 'bg-surface-hi shadow-focus ring-2 ring-accent'
                   : 'bg-surface text-muted ring-accent/15'
               }`}
@@ -409,6 +431,8 @@ export function StoreScreen(): JSX.Element {
       </div>
 
       <footer className="text-sm text-muted">{message}</footer>
+
+      {showPluginStore && <PluginStorePanel onClose={() => setShowPluginStore(false)} />}
     </div>
   )
 }
