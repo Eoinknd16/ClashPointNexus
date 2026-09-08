@@ -222,6 +222,14 @@ export interface LauncherApi {
     volumeDown: () => Promise<void>
     toggleMute: () => Promise<void>
   }
+  logging: {
+    /** Persists a renderer-caught error to the same log file main-process
+     * crashes go to (see main/logging/service.ts) — the only diagnostic
+     * trail a beta user has, since nothing else in this app survives past
+     * the moment it happened. */
+    reportError: (message: string) => Promise<void>
+    openLogsFolder: () => Promise<void>
+  }
   globalInput: {
     /** Whether the background XInput watcher currently has system-wide mouse
      * control active — unsupported (always resolves false) in a dev build,

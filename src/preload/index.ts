@@ -123,6 +123,10 @@ const api: LauncherApi = {
     volumeDown: () => ipcRenderer.invoke('system:volumeDown'),
     toggleMute: () => ipcRenderer.invoke('system:toggleMute')
   },
+  logging: {
+    reportError: (message) => ipcRenderer.invoke('logging:reportError', message),
+    openLogsFolder: () => ipcRenderer.invoke('logging:openLogsFolder')
+  },
   globalInput: {
     getMouseModeStatus: () => ipcRenderer.invoke('globalInput:getMouseModeStatus'),
     toggleMouseMode: () => ipcRenderer.invoke('globalInput:toggleMouseMode'),

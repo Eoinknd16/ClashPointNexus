@@ -290,6 +290,13 @@ export function SettingsScreen(): JSX.Element {
       label: `UI Scale: ${Math.round(uiScale * 100)}% (press to cycle)`,
       category: 'app'
     },
+    {
+      id: 'openLogsFolder',
+      kind: 'action',
+      label: 'Open Logs Folder (for bug reports)',
+      category: 'app',
+      icon: FolderOpen
+    },
 
     {
       id: 'globalInputCombos',
@@ -753,6 +760,8 @@ export function SettingsScreen(): JSX.Element {
       void doToggleStartup()
     } else if (row.id === 'uiScale') {
       void doCycleUiScale()
+    } else if (row.id === 'openLogsFolder') {
+      void window.api.logging.openLogsFolder()
     } else if (row.id === 'openThemesFolder') {
       openThemesFolder()
     } else if (row.id === 'rescanThemesFolder') {

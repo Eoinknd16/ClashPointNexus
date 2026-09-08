@@ -56,6 +56,13 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo): void {
     // eslint-disable-next-line no-console
     console.error('[ErrorBoundary] caught:', error, info.componentStack)
+    // No CrashToast report here — the fallback UI below already tells the
+    // user something broke full-screen; a banner on top of it would be
+    // redundant. The log file is still worth writing to either way (see
+    // main.tsx's own global handlers for why).
+    void window.api.logging
+      .reportError(`React render error: ${error.stack ?? error.message}${info.componentStack ?? ''}`)
+      .catch(() => {})
   }
 
   render(): ReactNode {

@@ -16,6 +16,8 @@ import {
 } from './globalInput/service'
 import { registerHomeIpc } from './home/ipc'
 import { registerLibraryIpc } from './library/ipc'
+import { registerLoggingIpc } from './logging/ipc'
+import { appendLog, logSessionStart } from './logging/service'
 import { registerPlayerIpc } from './player/ipc'
 import { startTranscodeProxy, stopTranscodeProxy } from './player/transcodeProxy'
 import { registerArcadeTrustedIpc } from './plugins/arcadeIpc'
@@ -36,6 +38,24 @@ import { initAutoUpdater, registerUpdaterIpc } from './updater'
 import { registerWeatherIpc } from './weather/ipc'
 
 const isDev = !app.isPackaged
+
+// Registered at module load, before app.whenReady() — the earliest point
+// anything here could possibly throw. A true uncaught exception is already
+// an unrecoverable/undefined state (Node's own default is to crash), so
+// this logs it and exits the same way it always would have, just with a
+// record left behind; an unhandled rejection is logged only, not fatal —
+// Electron's own default for one of these in the main process doesn't
+// crash the app either, and this codebase already wraps most async work in
+// its own .catch(), so something reaching this far is worth knowing about
+// without turning a single unanticipated rejection into a full app crash.
+process.on('uncaughtException', (error) => {
+  appendLog('error', `[main] Uncaught exception: ${error.stack ?? error.message}`)
+  process.exit(1)
+})
+process.on('unhandledRejection', (reason) => {
+  const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+  appendLog('error', `[main] Unhandled rejection: ${detail}`)
+})
 
 function createWindow(): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
@@ -100,6 +120,8 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
+  logSessionStart()
+  registerLoggingIpc()
   registerStremioIpc()
   registerStreamingIpc()
   registerPlayerIpc()

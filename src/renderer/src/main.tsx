@@ -18,19 +18,22 @@ const isControlCenter = new URLSearchParams(window.location.search).get('view') 
 // rAF-driven animation loop) — the ErrorBoundary below is what actually
 // prevents the blank-page failure mode. But console.error is invisible in a
 // packaged build with no DevTools open, so these also surface on the
-// CrashToast banner — the only way to see what actually crashed without a
-// dev console.
+// CrashToast banner (in the moment) and get written to the log file (see
+// main/logging/service.ts — the only place any of this survives past the
+// moment it happened, which matters once this isn't just you testing it).
 window.addEventListener('error', (event) => {
   const message = event.error instanceof Error ? event.error.message : String(event.error ?? event.message)
   // eslint-disable-next-line no-console
   console.error('[global] uncaught error:', event.error ?? event.message)
   useCrashLogStore.getState().reportError(`Uncaught error: ${message}`)
+  void window.api.logging.reportError(`Uncaught error: ${message}`).catch(() => {})
 })
 window.addEventListener('unhandledrejection', (event) => {
   const message = event.reason instanceof Error ? event.reason.message : String(event.reason)
   // eslint-disable-next-line no-console
   console.error('[global] unhandled rejection:', event.reason)
   useCrashLogStore.getState().reportError(`Unhandled promise rejection: ${message}`)
+  void window.api.logging.reportError(`Unhandled promise rejection: ${message}`).catch(() => {})
 })
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
