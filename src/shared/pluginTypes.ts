@@ -44,8 +44,13 @@ export type PluginPrice = { kind: 'free' } | { kind: 'paid'; amountUsd: number }
  * compatibility with a manifest written before this field existed) means
  * a plugin has no launch surface of its own outside Settings > Plugins —
  * appropriate for something like a management/background plugin with no
- * "open and play" moment. */
-export type PluginPlacement = 'apps' | 'games' | 'settings'
+ * "open and play" moment. "own-screen" is the one exception to "always an
+ * additive list entry": it means the plugin gets a real top-level nav
+ * destination of its own (see main/plugins/trustedPlugins.ts) rather than
+ * living inside Apps/Games/Settings at all — reserved for a plugin whose
+ * library is too large to be a handful of grid cards, currently only
+ * Arcade. */
+export type PluginPlacement = 'apps' | 'games' | 'settings' | 'own-screen'
 
 /** What a plugin author's plugin.json must contain, one per folder in the
  * community plugins repo (mirrors theme.json's one-folder-per-pack shape
@@ -125,6 +130,15 @@ export interface PluginLaunchInfo {
   indexUrl: string
   preloadPath: string
   partition: string
+  /** True only for a plugin id on the hardcoded trusted allow-list (see
+   * main/plugins/trustedPlugins.ts) — never something a manifest can grant
+   * itself. A trusted launch gets a materially larger preload bridge
+   * (process spawn, registry query, filesystem read/write via
+   * preload/arcadePlugin.ts) instead of the narrow nav-only relay every
+   * other plugin gets (preload/plugin.ts). The renderer is told this
+   * explicitly rather than inferring it, so it's never ambiguous which
+   * message protocol a given <webview> is actually speaking. */
+  trusted: boolean
 }
 
 export type PluginLaunchResult = { ok: true; info: PluginLaunchInfo } | { ok: false; error: string }
@@ -136,7 +150,7 @@ export type PluginLaunchResult = { ok: true; info: PluginLaunchInfo } | { ok: fa
 export const COMMUNITY_PLUGINS_REPO = { owner: 'Eoinknd16', name: 'ClashPointNexus-Plugins', branch: 'main' } as const
 
 const PLUGIN_CATEGORIES: PluginCategory[] = ['game', 'media', 'widget', 'system', 'input', 'social', 'other']
-const PLUGIN_PLACEMENTS: PluginPlacement[] = ['apps', 'games', 'settings']
+const PLUGIN_PLACEMENTS: PluginPlacement[] = ['apps', 'games', 'settings', 'own-screen']
 
 /** The one place that applies the "omitted means settings" default —
  * every screen that lists plugins by placement should call this rather

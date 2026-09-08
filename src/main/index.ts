@@ -18,6 +18,7 @@ import { registerHomeIpc } from './home/ipc'
 import { registerLibraryIpc } from './library/ipc'
 import { registerPlayerIpc } from './player/ipc'
 import { startTranscodeProxy, stopTranscodeProxy } from './player/transcodeProxy'
+import { registerArcadeTrustedIpc } from './plugins/arcadeIpc'
 import { registerPluginsIpc } from './plugins/ipc'
 import { registerPowerIpc } from './power/ipc'
 import { registerProgressIpc } from './progress/ipc'
@@ -129,6 +130,7 @@ app.whenReady().then(async () => {
   // restores it on exit (see gameSession/service.ts).
   registerSteamIpc(mainWindow)
   registerAppsIpc(mainWindow)
+  registerArcadeTrustedIpc(mainWindow)
 
   if (!isDev) initAutoUpdater()
 

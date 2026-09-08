@@ -10,6 +10,7 @@ import {
 } from '@shared/pluginTypes'
 import { loadInstalledPlugins, pluginDir, pluginIconUrl, saveInstalledPlugins } from './config'
 import { writePluginShell } from './pluginShell'
+import { isTrustedPlugin } from './trustedPlugins'
 
 const { owner: REPO_OWNER, name: REPO_NAME, branch: REPO_BRANCH } = COMMUNITY_PLUGINS_REPO
 
@@ -82,7 +83,8 @@ export async function installPlugin(folder: string): Promise<PluginInstallResult
 
   // Shell files are 100% fixed, main-process-authored content (see
   // pluginShell.ts) — written fresh on every install, never downloaded.
-  writePluginShell(dir)
+  // trusted comes from the hardcoded allow-list, never from manifest.
+  writePluginShell(dir, isTrustedPlugin(manifest.id))
 
   const bundleSha256 = createHash('sha256').update(bundleBytes).digest('hex')
   const now = Date.now()

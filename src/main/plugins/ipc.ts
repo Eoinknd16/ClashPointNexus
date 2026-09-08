@@ -11,6 +11,7 @@ import { listCommunityPlugins } from './communityPlugins'
 import { loadInstalledPlugins, pluginDir } from './config'
 import { installPlugin, uninstallPlugin, verifyInstalledBundle } from './install'
 import { setupPluginSession } from './session'
+import { isTrustedPlugin } from './trustedPlugins'
 
 export function registerPluginsIpc(): void {
   ipcMain.handle('plugins:listCommunity', (): Promise<CommunityPluginSummary[]> => listCommunityPlugins())
@@ -36,12 +37,17 @@ export function registerPluginsIpc(): void {
       }
     }
     setupPluginSession(id, installed.manifest.permissions)
+    const trusted = isTrustedPlugin(id)
     return {
       ok: true,
       info: {
         indexUrl: pathToFileURL(join(pluginDir(id), 'index.html')).toString(),
-        preloadPath: join(__dirname, '../preload/plugin.js'),
-        partition: `persist:plugin-${id}`
+        // Never anything the manifest can influence — see
+        // trustedPlugins.ts's own doc comment for why this hardcoded check
+        // is the entire security boundary of the trusted tier.
+        preloadPath: join(__dirname, trusted ? '../preload/arcadePlugin.js' : '../preload/plugin.js'),
+        partition: `persist:plugin-${id}`,
+        trusted
       }
     }
   })

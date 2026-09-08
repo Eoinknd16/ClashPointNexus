@@ -30,7 +30,7 @@ import { PluginHost } from '../plugins/PluginHost'
 import { TvAddonsPanel } from '../plugins/TvAddonsPanel'
 import type { UpdateStatus } from '@shared/updateTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
-import type { InstalledPlugin } from '@shared/pluginTypes'
+import { pluginPlacement, type InstalledPlugin } from '@shared/pluginTypes'
 import type { StartupSettings } from '@shared/settingsTypes'
 import { activeStyleOptionIndex, STYLE_AXES } from '@shared/themeStyle'
 import { COMMUNITY_THEMES_REPO, type ThemeDefinition } from '@shared/themeTypes'
@@ -405,12 +405,20 @@ export function SettingsScreen(): JSX.Element {
           }
         ]
       : installedPlugins.flatMap((p) => [
-          {
-            id: `openInstalledPlugin-${p.manifest.id}`,
-            kind: 'action' as const,
-            category: 'plugins',
-            label: `Open ${p.manifest.name}`
-          },
+          // A plugin with its own top-level nav destination (currently only
+          // Arcade — see PluginPlacement's own doc comment) already has a
+          // Home tile to open it from; an "Open" row here would just be a
+          // second, redundant entry point into the same place.
+          ...(pluginPlacement(p.manifest) === 'own-screen'
+            ? []
+            : [
+                {
+                  id: `openInstalledPlugin-${p.manifest.id}`,
+                  kind: 'action' as const,
+                  category: 'plugins',
+                  label: `Open ${p.manifest.name}`
+                }
+              ]),
           {
             id: `uninstallPlugin-${p.manifest.id}`,
             kind: 'action' as const,

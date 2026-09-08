@@ -12,6 +12,7 @@ import { SettingsScreen } from './screens/SettingsScreen'
 import { BrowseScreen } from './screens/BrowseScreen'
 import { FileManagerScreen } from './screens/FileManagerScreen'
 import { AppsScreen } from './screens/AppsScreen'
+import { ArcadeScreen } from './screens/ArcadeScreen'
 import { LibraryScreen } from './screens/LibraryScreen'
 import { StoreScreen } from './screens/StoreScreen'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -32,6 +33,8 @@ function renderScreen(screen: ScreenId): JSX.Element {
       return <FileManagerScreen />
     case 'apps':
       return <AppsScreen />
+    case 'arcade':
+      return <ArcadeScreen />
     case 'library':
       return <LibraryScreen />
     case 'store':

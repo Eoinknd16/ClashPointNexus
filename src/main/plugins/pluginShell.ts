@@ -40,14 +40,32 @@ function shellHtml(): string {
 }
 
 /** The ONLY thing that ever calls window.ClashPointPlugin.mount — bridges
- * the narrow __cpx relay (see preload/plugin.ts) into the plain
- * api.onNav/api.exit shape a plugin's own bundle.js actually expects (see
- * NexusDash's own bundle.js doc comment for that contract). A plugin never
- * talks to __cpx directly; it only ever sees `api`, same object shape
- * regardless of whether the real transport underneath is this webview/IPC
- * relay or (as with preview.html during development) a plain keyboard
- * shim — the contract is the same either way. */
-const BOOT_JS = `(function () {
+ * the host relay (__cpx for every ordinary plugin, see preload/plugin.ts;
+ * __cpxTrusted for the one trusted plugin, see preload/arcadePlugin.ts and
+ * main/plugins/trustedPlugins.ts) into the plain `api` shape a plugin's own
+ * bundle.js actually expects (see NexusDash's own bundle.js doc comment for
+ * the ordinary contract). A plugin never talks to the host global directly;
+ * it only ever sees `api`, same object shape regardless of whether the real
+ * transport underneath is this webview/IPC relay or (as with preview.html
+ * during development) a plain keyboard shim — the contract is the same
+ * either way. `trusted` only ever comes from install.ts passing
+ * isTrustedPlugin(manifest.id) — never anything the manifest itself says —
+ * and is the one difference between the two: a trusted plugin's `api` also
+ * gets spawnProcess/queryRegistry/pickFolder/listDir/readFile/writeFile,
+ * thin wrappers over window.__cpxTrusted's own same-named calls. */
+function bootJs(trusted: boolean): string {
+  const bridgeGlobal = trusted ? '__cpxTrusted' : '__cpx'
+  const trustedApiLines = trusted
+    ? `
+    api.spawnProcess = function (path, args) { return window.__cpxTrusted.spawnProcess(path, args); };
+    api.queryRegistry = function (hive, keyPath) { return window.__cpxTrusted.queryRegistry(hive, keyPath); };
+    api.pickFolder = function () { return window.__cpxTrusted.pickFolder(); };
+    api.listDir = function (path) { return window.__cpxTrusted.listDir(path); };
+    api.readFile = function (path) { return window.__cpxTrusted.readFile(path); };
+    api.writeFile = function (path, content) { return window.__cpxTrusted.writeFile(path, content); };
+`
+    : ''
+  return `(function () {
   var navHandlers = new Set();
   var api = {
     onNav: function (handler) {
@@ -55,10 +73,11 @@ const BOOT_JS = `(function () {
       return function () { navHandlers.delete(handler); };
     },
     exit: function () {
-      window.__cpx.sendToHost({ type: 'exit' });
+      window.${bridgeGlobal}.sendToHost({ type: 'exit' });
     }
   };
-  window.__cpx.onHostMessage(function (data) {
+${trustedApiLines}
+  window.${bridgeGlobal}.onHostMessage(function (data) {
     if (data && data.type === 'nav') {
       navHandlers.forEach(function (h) { h(data.action); });
     }
@@ -70,22 +89,25 @@ const BOOT_JS = `(function () {
       if (window.ClashPointPlugin && typeof window.ClashPointPlugin.mount === 'function') {
         window.ClashPointPlugin.mount(document.getElementById('root'), api);
       } else {
-        window.__cpx.sendToHost({ type: 'error', message: 'bundle.js did not define window.ClashPointPlugin.mount' });
+        window.${bridgeGlobal}.sendToHost({ type: 'error', message: 'bundle.js did not define window.ClashPointPlugin.mount' });
       }
     };
     script.onerror = function () {
-      window.__cpx.sendToHost({ type: 'error', message: 'bundle.js failed to load' });
+      window.${bridgeGlobal}.sendToHost({ type: 'error', message: 'bundle.js failed to load' });
     };
     document.body.appendChild(script);
   });
 })();
 `
+}
 
 /** Writes index.html + boot.js into an already-created plugin directory —
  * called once at install time, alongside the plugin's own downloaded
- * manifest/bundle (see install.ts). Both files are 100% fixed content;
- * nothing here is templated from plugin-supplied data. */
-export function writePluginShell(dir: string): void {
+ * manifest/bundle (see install.ts). Both files are otherwise 100% fixed
+ * content; `trusted` is the only thing that varies them, and it's always
+ * supplied by install.ts from the hardcoded allow-list, never from
+ * anything plugin-supplied. */
+export function writePluginShell(dir: string, trusted: boolean): void {
   writeFileSync(join(dir, 'index.html'), shellHtml())
-  writeFileSync(join(dir, 'boot.js'), BOOT_JS)
+  writeFileSync(join(dir, 'boot.js'), bootJs(trusted))
 }

@@ -14,6 +14,7 @@ import {
   Gamepad2,
   Globe,
   Home,
+  Joystick,
   Menu,
   Monitor,
   Package2,
@@ -91,6 +92,14 @@ const TILES: Array<{
     icon: Package2,
     iconColors: ['#6d28d9', '#db2777'],
     screen: 'apps'
+  },
+  {
+    id: 'arcade',
+    title: 'Arcade',
+    subtitle: 'Emulated games',
+    icon: Joystick,
+    iconColors: ['#0f766e', '#4338ca'],
+    screen: 'arcade'
   },
   {
     id: 'desktop',

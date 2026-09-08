@@ -13,6 +13,7 @@ export type ScreenId =
   | 'settings'
   | 'library'
   | 'store'
+  | 'arcade'
 
 /** Set by the Home screen's "Continue" card so the target screen can jump
  * straight to the right content on mount instead of just opening blank. */
