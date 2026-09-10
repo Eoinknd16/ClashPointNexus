@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen } from 'electron'
+import { app, BrowserWindow, powerSaveBlocker, screen } from 'electron'
 import { join } from 'path'
 import { registerAppsIpc } from './apps/ipc'
 import { registerControlCenterIpc, returnToNexus } from './controlCenter/ipc'
@@ -137,6 +137,17 @@ app.whenReady().then(async () => {
   registerPluginsIpc()
   registerTvHomeIpc()
   startTranscodeProxy()
+
+  // Windows' own idle/power-throttling detection runs off real mouse/
+  // keyboard HID activity — a controller's input via the Gamepad API
+  // doesn't reset that timer the same way, so a controller-only session
+  // can look idle to Windows (and get throttled: reduced GPU/compositor
+  // priority) while the user is actively navigating with a gamepad the
+  // whole time. Nexus is meant to behave like a console's own shell, not
+  // a background desktop app, so it holds this for its entire run rather
+  // than toggling it — there's no legitimate "let the system throttle us"
+  // moment while Nexus itself is what's on screen.
+  powerSaveBlocker.start('prevent-display-sleep')
 
   // Picks up any theme pack folders dropped into the Themes folder since
   // last launch, before the window (and the renderer's first
