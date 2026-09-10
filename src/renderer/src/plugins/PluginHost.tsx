@@ -1,3 +1,4 @@
+import { CloseButton } from '../components/NavButtons'
 import { usePluginLaunch } from './usePluginLaunch'
 
 interface Props {
@@ -56,6 +57,15 @@ export function PluginHost({ pluginId, pluginName, onClose }: Props): JSX.Elemen
         preload={state.preloadPath}
         partition={state.partition}
         className="h-full w-full"
+      />
+      {/* A plugin fully owns nav input once it's running — mouse-only
+          input (no controller attached) had no way to trigger a 'back'
+          at all otherwise. Relayed as a real nav action, not a hard
+          exit, so a plugin's own nested-navigation back behavior still
+          works the same from a click as it does from a controller. */}
+      <CloseButton
+        className="absolute left-4 top-4 z-10"
+        onClick={() => webviewRef.current?.send('cpx-to-guest', { type: 'nav', action: 'back' })}
       />
     </div>
   )

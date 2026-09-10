@@ -33,7 +33,11 @@ const bridge = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('arcade:pickFolder'),
   listDir: (path: string): Promise<string[]> => ipcRenderer.invoke('arcade:listDir', path),
   readFile: (path: string): Promise<string> => ipcRenderer.invoke('arcade:readFile', path),
-  writeFile: (path: string, content: string): Promise<void> => ipcRenderer.invoke('arcade:writeFile', path, content)
+  writeFile: (path: string, content: string): Promise<void> => ipcRenderer.invoke('arcade:writeFile', path, content),
+  /** Read-only, one named variable at a time — e.g. LOCALAPPDATA, to build
+   * install-location guesses a fixed candidate-path list can't cover
+   * (an installer's actual default varies by version/install method). */
+  getEnvVar: (name: string): Promise<string | null> => ipcRenderer.invoke('arcade:getEnvVar', name)
 }
 
 contextBridge.exposeInMainWorld('__cpxTrusted', bridge)

@@ -51,8 +51,8 @@ function shellHtml(): string {
  * either way. `trusted` only ever comes from install.ts passing
  * isTrustedPlugin(manifest.id) — never anything the manifest itself says —
  * and is the one difference between the two: a trusted plugin's `api` also
- * gets spawnProcess/queryRegistry/pickFolder/listDir/readFile/writeFile,
- * thin wrappers over window.__cpxTrusted's own same-named calls. */
+ * gets spawnProcess/queryRegistry/pickFolder/listDir/readFile/writeFile/
+ * getEnvVar, thin wrappers over window.__cpxTrusted's own same-named calls. */
 function bootJs(trusted: boolean): string {
   const bridgeGlobal = trusted ? '__cpxTrusted' : '__cpx'
   const trustedApiLines = trusted
@@ -63,6 +63,7 @@ function bootJs(trusted: boolean): string {
     api.listDir = function (path) { return window.__cpxTrusted.listDir(path); };
     api.readFile = function (path) { return window.__cpxTrusted.readFile(path); };
     api.writeFile = function (path, content) { return window.__cpxTrusted.writeFile(path, content); };
+    api.getEnvVar = function (name) { return window.__cpxTrusted.getEnvVar(name); };
 `
     : ''
   return `(function () {

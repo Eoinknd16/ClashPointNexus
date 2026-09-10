@@ -1,3 +1,4 @@
+import { CloseButton } from '../components/NavButtons'
 import { usePluginLaunch } from '../plugins/usePluginLaunch'
 import { useNavigationStore } from '../state/navigationStore'
 
@@ -42,7 +43,7 @@ export function ArcadeScreen(): JSX.Element {
   }
 
   return (
-    <div className="h-screen w-screen bg-black">
+    <div className="relative h-screen w-screen bg-black">
       {/* eslint-disable-next-line react/no-unknown-property */}
       <webview
         ref={webviewRef}
@@ -50,6 +51,15 @@ export function ArcadeScreen(): JSX.Element {
         preload={state.preloadPath}
         partition={state.partition}
         className="h-full w-full"
+      />
+      {/* A plugin fully owns nav input once it's running — mouse-only
+          input (no controller attached) had no way to trigger a 'back'
+          at all otherwise. Relayed as a real nav action, not a hard
+          exit, so Arcade's own back-out-of-the-game-list-first behavior
+          still works the same from a click as it does from a controller. */}
+      <CloseButton
+        className="absolute left-4 top-4 z-10"
+        onClick={() => webviewRef.current?.send('cpx-to-guest', { type: 'nav', action: 'back' })}
       />
     </div>
   )

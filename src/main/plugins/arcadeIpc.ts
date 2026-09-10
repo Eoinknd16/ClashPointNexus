@@ -95,4 +95,12 @@ export function registerArcadeTrustedIpc(mainWindow: BrowserWindow): void {
     assertArcadeSender(event)
     writeFileSync(path, content, 'utf-8')
   })
+
+  // Read-only, one named variable at a time — not a way to enumerate or
+  // dump the whole environment, just the same kind of specific, narrow
+  // lookup every other primitive here is.
+  ipcMain.handle('arcade:getEnvVar', (event, name: string): string | null => {
+    assertArcadeSender(event)
+    return process.env[name] ?? null
+  })
 }
