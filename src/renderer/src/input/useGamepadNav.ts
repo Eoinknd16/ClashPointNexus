@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { isMouseModeActive } from './mouseModeState'
 import { emitNav, type NavAction } from './navBus'
+import { useCrashLogStore } from '../state/crashLogStore'
 
 // Two-threshold (hysteresis) deadzone: a direction only "presses" once the
 // stick exceeds PRESS, and only "releases" once it drops back under RELEASE.
@@ -148,7 +149,31 @@ export function useGamepadNav(): void {
       return stickX < 0 ? 'left' : 'right'
     }
 
+    // navBus.ts's emitNav already guards every listener call so a listener
+    // throwing can't kill this loop — but that only covers emitNav's own
+    // dispatch, not the rest of this function. Anything else in here that
+    // throws (unexpected gamepad data, a future change to this file) would
+    // still skip the requestAnimationFrame reschedule below and
+    // permanently kill all gamepad input for the rest of the session, same
+    // root cause, just not the one already guarded against. try/finally
+    // makes the reschedule unconditional no matter what happens inside —
+    // there is no code path through this function that's allowed to not
+    // call requestAnimationFrame(tick) again.
     const tick = (time: number): void => {
+      try {
+        tickBody(time)
+      } catch (error) {
+        const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error)
+        // eslint-disable-next-line no-console
+        console.error('[gamepad] tick() threw, recovering:', error)
+        useCrashLogStore.getState().reportError(`Gamepad poll crashed: ${message}`)
+        void window.api.logging.reportError(`Gamepad poll crashed: ${message}`).catch(() => {})
+      } finally {
+        rafId = requestAnimationFrame(tick)
+      }
+    }
+
+    const tickBody = (time: number): void => {
       const pads = navigator.getGamepads()
 
       // Some setups (Steam running in the background, DS4Windows-style tools)
@@ -211,12 +236,11 @@ export function useGamepadNav(): void {
         }
       }
 
-      // Always reschedule regardless of whether a pad was found this frame —
-      // this is what actually broke last time: an early return here (when no
-      // pad exists yet, e.g. right at startup before Chromium registers it)
-      // silently kills the polling loop forever, since nothing else calls
-      // requestAnimationFrame again.
-      rafId = requestAnimationFrame(tick)
+      // No reschedule call here on purpose — see tick's own try/finally
+      // above, which now owns that unconditionally. This function returning
+      // normally (pad or no pad) is exactly the same as it throwing, from
+      // the reschedule's point of view: either way, tick's finally block is
+      // what actually calls requestAnimationFrame again.
     }
 
     rafId = requestAnimationFrame(tick)

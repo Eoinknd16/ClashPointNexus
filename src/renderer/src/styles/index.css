@@ -50,7 +50,14 @@
      runs at, rather than needing a fresh hand-tuned number every time this
      silently stops being enough — which is exactly how it kept coming back
      as "cards getting cut off" on one screen after another. */
-  --tile-grow-pad: calc(400px * (var(--motion-scale-focus) - 1) / 2 + var(--motion-lift) * 1px + 14px);
+  /* Missing var(--card-scale) here was the actual bug behind "glow cut off
+     by an invisible container" showing up on Home/Apps/Games specifically
+     for anyone with Card Size set above default: CategoryRow.tsx's own
+     per-track formula always multiplied by --card-scale, this flat-400px
+     one never did, so a focused card's real (scaled) growth outgrew
+     whatever space this reserved for it the moment Card Size wasn't the
+     default. */
+  --tile-grow-pad: calc(400px * var(--card-scale) * (var(--motion-scale-focus) - 1) / 2 + var(--motion-lift) * 1px + 14px);
 }
 
 html,

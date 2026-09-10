@@ -47,9 +47,11 @@ export function emitNav(action: NavAction): void {
     try {
       overrideListener(action)
     } catch (error) {
+      const message = `Quick Menu action "${action}" crashed: ${describeError(error)}`
       // eslint-disable-next-line no-console
       console.error('[navBus] override listener threw for action:', action, error)
-      useCrashLogStore.getState().reportError(`Quick Menu action "${action}" crashed: ${describeError(error)}`)
+      useCrashLogStore.getState().reportError(message)
+      void window.api.logging.reportError(message).catch(() => {})
     }
     return
   }
@@ -57,9 +59,11 @@ export function emitNav(action: NavAction): void {
     try {
       listener(action)
     } catch (error) {
+      const message = `Nav action "${action}" crashed: ${describeError(error)}`
       // eslint-disable-next-line no-console
       console.error('[navBus] listener threw for action:', action, error)
-      useCrashLogStore.getState().reportError(`Nav action "${action}" crashed: ${describeError(error)}`)
+      useCrashLogStore.getState().reportError(message)
+      void window.api.logging.reportError(message).catch(() => {})
     }
   }
 }
