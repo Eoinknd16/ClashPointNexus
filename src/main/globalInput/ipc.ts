@@ -44,6 +44,16 @@ export function isHiddenForDesktop(): boolean {
   return hiddenForDesktop
 }
 
+/** For any OTHER path that brings Nexus back to the foreground while this
+ * was true (currently just the PS-button's returnToNexus) — without this,
+ * hiddenForDesktop stayed stuck true even though the window was genuinely
+ * visible/focused again, a real desync between what this flag claims and
+ * what's actually true. Nothing here re-enters fullscreen on its own —
+ * that's still each caller's own job, same as goToDesktop already does. */
+export function clearHiddenForDesktop(): void {
+  hiddenForDesktop = false
+}
+
 export function registerGlobalInputIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle('globalInput:getMouseModeStatus', () => getGlobalInputStatus().mouseModeActive)
   ipcMain.handle('globalInput:getStatus', () => getGlobalInputStatus())
