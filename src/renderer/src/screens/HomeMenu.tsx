@@ -177,50 +177,35 @@ export function HomeMenu(): JSX.Element {
   const [libraryStats, setLibraryStats] = useState<LibraryStats | null>(null)
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [arcadeInstalled, setArcadeInstalled] = useState(false)
+  // TEMPORARY diagnostic (remove once the fix below is confirmed on real
+  // hardware) — see homeMountCount's own comment above. Captured once, on
+  // this component's very first render, via a lazy initializer rather than
+  // inside an effect, so it's available for the JSX below too: real log data
+  // (two separate app launches, ~450ms + ~120ms of main-thread blocking
+  // within the first 731ms of Home's first mount, both times, consistent to
+  // within 20ms) pinned this on the tile grid's staggered entrance
+  // animation — Framer Motion does real one-time setup work the first time
+  // any `motion` component ever mounts in a session, and Home is always
+  // that first time. skipTileEntranceAnimation below is the actual fix;
+  // the longtask observer stays for one more round to confirm it from data
+  // instead of just a subjective "feels better".
+  const [isFirstMount] = useState(() => {
+    const first = homeMountCount === 0
+    homeMountCount += 1
+    return first
+  })
   const goTo = useNavigationStore((s) => s.goTo)
   const allThemes = useThemeStore((s) => s.allThemes)
   const themeId = useThemeStore((s) => s.themeId)
   const activeTheme = allThemes.find((t) => t.id === themeId)
 
   useEffect(() => {
-    // TEMPORARY diagnostic — see homeMountCount's own comment above. Times
-    // each of Home's mount-time fetches and reports one consolidated line
-    // to the persistent log (reusing logging.reportError purely as a "write
-    // to nexus.log" pipe — this does not raise the on-screen CrashToast,
-    // which is driven separately by crashLogStore, not by this IPC call) so
-    // a real "which of these is actually slow on a cold boot" answer can be
-    // read back after a real repro, instead of guessing again.
-    homeMountCount += 1
-    const isFirstMount = homeMountCount === 1
-    const t0 = performance.now()
-    const timings: Record<string, number> = {}
-    const mark = (label: string): void => {
-      timings[label] = Math.round(performance.now() - t0)
-    }
-    const reportTimings = (): void => {
-      const line = Object.entries(timings)
-        .map(([label, ms]) => `${label}=${ms}ms`)
-        .join(' ')
-      void window.api.logging
-        .reportError(`[perf] Home ${isFirstMount ? 'FIRST mount' : 'remount'} fetch timings: ${line}`)
-        .catch(() => {})
-    }
-
     window.api.home
       .getContinueSuggestion()
       .then(setContinueSuggestion)
       .catch(() => setContinueSuggestion(null))
-      .finally(() => mark('continueSuggestion'))
-    window.api.weather
-      .get()
-      .then(setWeather)
-      .catch(() => setWeather(null))
-      .finally(() => mark('weather'))
-    window.api.system
-      .getStats()
-      .then(setSystemStats)
-      .catch(() => setSystemStats(null))
-      .finally(() => mark('systemStats'))
+    window.api.weather.get().then(setWeather).catch(() => setWeather(null))
+    window.api.system.getStats().then(setSystemStats).catch(() => setSystemStats(null))
     Promise.all([window.api.library.list(), window.api.steam.getLibrary()])
       .then(([library, steam]) => {
         setLibraryStats({
@@ -230,36 +215,22 @@ export function HomeMenu(): JSX.Element {
         })
       })
       .catch(() => setLibraryStats(null))
-      .finally(() => mark('libraryAndSteam'))
     // Arcade doesn't ship with Nexus — see ARCADE_TILE's own doc comment —
     // so whether its tile shows up at all comes from the same installed-
     // plugins check every other plugin surface already makes.
-    const arcadeCheck = window.api.plugins
+    window.api.plugins
       .listInstalled()
       .then((installed) => setArcadeInstalled(installed.some((p) => p.manifest.id === 'arcade')))
       .catch(() => setArcadeInstalled(false))
-      .finally(() => mark('arcadeInstalled'))
-
-    void arcadeCheck.finally(() => {
-      // All five fire in parallel above — whichever actually resolves last
-      // is arcadeCheck's own .finally, since every other one's mark() call
-      // already ran by the time any single promise can be the slowest. Not
-      // rigorous (a fetch could theoretically still be in flight if it's
-      // slower than arcadeInstalled specifically) but good enough for a
-      // one-shot diagnostic reading real numbers off one real machine.
-      setTimeout(reportTimings, 50)
-    })
   }, [])
 
   useEffect(() => {
-    // TEMPORARY diagnostic — see homeMountCount's own comment above.
+    // TEMPORARY diagnostic — see isFirstMount's own comment above.
     // longtask entries are Chromium's own signal for "something blocked the
     // main thread for 50ms+", which is exactly what dropped/janky D-pad
-    // navigation frames would show up as — this catches it directly instead
-    // of guessing which CSS/paint/re-render cost is responsible. Windowed to
-    // the 8s right after Home mounts, which comfortably covers "laggy right
-    // when the app opens" without leaving this running for the whole session.
-    const isFirstMount = homeMountCount === 1
+    // navigation frames would show up as. Windowed to the 8s right after
+    // Home mounts, which comfortably covers "laggy right when the app
+    // opens" without leaving this running for the whole session.
     const mountedAt = performance.now()
     const longTasks: string[] = []
     let observer: PerformanceObserver | null = null
@@ -604,6 +575,34 @@ export function HomeMenu(): JSX.Element {
               >
                 {tiles.slice(page * TILES_PER_PAGE, page * TILES_PER_PAGE + TILES_PER_PAGE).map((tile, iInPage) => {
                   const i = page * TILES_PER_PAGE + iInPage
+                  const card = (
+                    <FocusableCard
+                      size="large"
+                      showChevron
+                      item={{
+                        id: tile.id,
+                        title: tile.title,
+                        subtitle: tile.subtitle,
+                        icon: tile.icon,
+                        imageUrl: activeTheme?.tileImages?.[tile.id],
+                        iconColors: tile.iconColors
+                      }}
+                      focused={zone === 'tiles' && tileIndex === i}
+                      onClick={() => {
+                        setZone('tiles')
+                        setTileIndex(i)
+                        activateTile(tile)
+                      }}
+                    />
+                  )
+                  // Plain div, no Framer Motion, on the app's very first Home
+                  // mount specifically — see isFirstMount's own comment above.
+                  // Framer Motion's one-time first-mount setup cost landed
+                  // squarely inside this stagger animation's own active
+                  // window in real measurements, so skipping it here (only
+                  // this one time per session) is the actual fix, not just a
+                  // guess — every later Home visit still gets the animation.
+                  if (isFirstMount) return <div key={tile.id}>{card}</div>
                   return (
                     <motion.div
                       key={tile.id}
@@ -611,24 +610,7 @@ export function HomeMenu(): JSX.Element {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.4, delay: iInPage * 0.06, ease: 'easeOut' }}
                     >
-                      <FocusableCard
-                        size="large"
-                        showChevron
-                        item={{
-                          id: tile.id,
-                          title: tile.title,
-                          subtitle: tile.subtitle,
-                          icon: tile.icon,
-                          imageUrl: activeTheme?.tileImages?.[tile.id],
-                          iconColors: tile.iconColors
-                        }}
-                        focused={zone === 'tiles' && tileIndex === i}
-                        onClick={() => {
-                          setZone('tiles')
-                          setTileIndex(i)
-                          activateTile(tile)
-                        }}
-                      />
+                      {card}
                     </motion.div>
                   )
                 })}
