@@ -355,7 +355,16 @@ export function HomeMenu(): JSX.Element {
         <h1 className="justify-self-start text-xl font-bold tracking-tight">
           ClashPoint <span className="text-accent">Nexus</span>
         </h1>
-        <nav className="flex justify-self-center gap-1 rounded-full bg-surface/70 p-1.5 ring-1 ring-white/10 backdrop-blur-md">
+        {/* No backdrop-blur on any panel in this header/hero area — see
+            FocusableCard's own chevron badge comment for why: it's one of
+            the most expensive things a browser can composite, and Home
+            stacks this many panels over an animated gradient background at
+            once. A flat, more opaque fill reads almost identically without
+            forcing a real-time blur sample behind every one of them on
+            every repaint, which is what made D-pad tile navigation laggy
+            on this screen specifically (and only this screen — no other
+            screen stacks panels like this). */}
+        <nav className="flex justify-self-center gap-1 rounded-full bg-surface/90 p-1.5 ring-1 ring-white/10">
           {TOP_NAV.map((item, i) => (
             <div
               key={item.id}
@@ -380,7 +389,7 @@ export function HomeMenu(): JSX.Element {
 
         <div className="flex items-center justify-self-end gap-4">
           {weather && WeatherIcon && (
-            <div className="flex items-center gap-2 rounded-full bg-surface/70 px-4 py-2 backdrop-blur-md">
+            <div className="flex items-center gap-2 rounded-full bg-surface/90 px-4 py-2">
               <WeatherIcon className="h-5 w-5" />
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
@@ -391,7 +400,7 @@ export function HomeMenu(): JSX.Element {
           <Clock />
           <div
             onClick={() => goTo('settings')}
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-surface/70 backdrop-blur-md"
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-surface/90"
           >
             <User className="h-5 w-5" />
           </div>
@@ -405,7 +414,7 @@ export function HomeMenu(): JSX.Element {
               setZone('hero')
               activateContinue(continueSuggestion)
             }}
-            className={`absolute bottom-6 left-6 flex w-[26rem] max-w-[80%] cursor-pointer items-center gap-4 rounded-panel bg-black/40 p-4 shadow-lg ring-1 ring-white/15 backdrop-blur-md transition-shadow ${
+            className={`absolute bottom-6 left-6 flex w-[26rem] max-w-[80%] cursor-pointer items-center gap-4 rounded-panel bg-black/65 p-4 shadow-lg ring-1 ring-white/15 transition-shadow ${
               zone === 'hero' ? 'shadow-focus ring-2 ring-accent' : ''
             }`}
           >
@@ -436,7 +445,7 @@ export function HomeMenu(): JSX.Element {
 
         <div className="absolute right-6 top-6 flex flex-col gap-3">
           {weather && WeatherIcon && (
-            <div className="flex w-52 items-center gap-3 rounded-panel bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
+            <div className="flex w-52 items-center gap-3 rounded-panel bg-black/65 px-4 py-3 shadow-lg ring-1 ring-white/15">
               <WeatherIcon className="h-7 w-7" />
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{Math.round(weather.tempCelsius)}°C</span>
@@ -445,7 +454,7 @@ export function HomeMenu(): JSX.Element {
             </div>
           )}
           {libraryStats && (
-            <div className="flex w-52 items-center gap-3 rounded-panel bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
+            <div className="flex w-52 items-center gap-3 rounded-panel bg-black/65 px-4 py-3 shadow-lg ring-1 ring-white/15">
               <Gamepad2 className="h-7 w-7" />
               <div className="flex flex-col leading-tight">
                 <span className="text-sm font-semibold">{libraryStats.games}</span>
@@ -454,7 +463,7 @@ export function HomeMenu(): JSX.Element {
             </div>
           )}
           {systemStats && (
-            <div className="flex w-52 flex-col gap-2 rounded-panel bg-black/40 px-4 py-3 shadow-lg ring-1 ring-white/15 backdrop-blur-md">
+            <div className="flex w-52 flex-col gap-2 rounded-panel bg-black/65 px-4 py-3 shadow-lg ring-1 ring-white/15">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted">CPU</span>
                 <span className="font-semibold">
