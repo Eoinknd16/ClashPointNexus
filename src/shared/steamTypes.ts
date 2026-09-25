@@ -30,6 +30,26 @@ export interface AchievementProgress {
   total: number
 }
 
+/** One achievement's full display data, merged from two separate Steam Web
+ * API calls (see webApi.ts): GetSchemaForGame for the name/description/icons
+ * (public, keyed only by the app's own key — same regardless of whose
+ * achievements these are), and GetPlayerAchievements for achieved/unlockTime
+ * (the actual per-player state). Sorted unlocked-first (most recent unlock
+ * first), then locked in the schema's own declared order — the same
+ * convention Steam's own achievement page uses. */
+export interface AchievementDetail {
+  apiName: string
+  displayName: string
+  description: string
+  /** Full-color icon (unlocked state) — always present in the schema. */
+  iconUrl: string
+  /** Grayed-out icon (locked state) — always present in the schema. */
+  iconGrayUrl: string
+  achieved: boolean
+  /** Seconds since epoch, or null if locked (or achieved but Steam didn't report a time). */
+  unlockTimeSeconds: number | null
+}
+
 /** From Steam's public storefront API — descriptive only, no bearing on
  * anything the user's own library/playtime data depends on. */
 export interface GameStoreInfo {

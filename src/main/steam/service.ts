@@ -1,11 +1,18 @@
-import type { AchievementProgress, GameEntry, GameStoreInfo, SteamLibraryResult } from '@shared/steamTypes'
+import type { AchievementDetail, AchievementProgress, GameEntry, GameStoreInfo, SteamLibraryResult } from '@shared/steamTypes'
+import { getCachedAchievementSchema, setCachedAchievementSchema } from './achievementSchemaCache'
 import { loadSteamConfig } from './config'
 import { listFavoriteGameIds } from './favorites'
 import { findSteamPath, getInstalledGames, type InstalledApp } from './library'
 import { getNonSteamShortcuts } from './shortcuts'
 import { fetchAppDetails } from './storeApi'
 import { getCachedStoreInfo, setCachedStoreInfo } from './storeCache'
-import { fetchOwnedGames, fetchPlayerAchievements } from './webApi'
+import {
+  fetchAchievementSchema,
+  fetchOwnedGames,
+  fetchPlayerAchievements,
+  fetchPlayerAchievementStates,
+  mergeAchievementDetails
+} from './webApi'
 
 function shortcutEntries(steamPath: string | null, steamId64: string): GameEntry[] {
   if (!steamPath) return []
@@ -103,6 +110,33 @@ export async function getAchievements(appId: number): Promise<AchievementProgres
   const config = loadSteamConfig()
   if (!config.apiKey || !config.steamId64) return null
   return fetchPlayerAchievements(config.apiKey, config.steamId64, appId)
+}
+
+/** The full per-achievement list (name/description/icons/unlocked state) for
+ * the detail panel's "view all achievements" drill-in — separate from
+ * getAchievements above (which stays a lightweight count for the summary bar
+ * every selection already fetches) since this needs a second Web API call
+ * the common case of never opening the list shouldn't pay for. Schema
+ * (name/description/icons) is cached indefinitely on disk; player state
+ * (achieved/unlockTime) is always fetched fresh, since that's the part that
+ * actually changes as the user plays. Null only when no achievements schema
+ * exists for this game at all or no API key is configured — not for "stats
+ * are private", which still returns the schema with everything locked. */
+export async function getAchievementDetails(appId: number): Promise<AchievementDetail[] | null> {
+  const config = loadSteamConfig()
+  if (!config.apiKey) return null
+
+  let schema = getCachedAchievementSchema(appId)
+  if (!schema) {
+    schema = await fetchAchievementSchema(config.apiKey, appId)
+    if (schema.length > 0) setCachedAchievementSchema(appId, schema)
+  }
+  if (schema.length === 0) return null
+
+  const states = config.steamId64
+    ? await fetchPlayerAchievementStates(config.apiKey, config.steamId64, appId)
+    : null
+  return mergeAchievementDetails(schema, states)
 }
 
 // Chained through one shared promise rather than a real queue data structure

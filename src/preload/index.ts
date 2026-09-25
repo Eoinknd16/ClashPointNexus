@@ -8,6 +8,7 @@ const api: LauncherApi = {
     install: (appId) => ipcRenderer.invoke('steam:install', appId),
     toggleFavorite: (id) => ipcRenderer.invoke('steam:toggleFavorite', id),
     getAchievements: (appId) => ipcRenderer.invoke('steam:getAchievements', appId),
+    getAchievementDetails: (appId) => ipcRenderer.invoke('steam:getAchievementDetails', appId),
     getStoreInfo: (appId) => ipcRenderer.invoke('steam:getStoreInfo', appId)
   },
   stremio: {

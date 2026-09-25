@@ -2,7 +2,7 @@ import { ipcMain, shell, type BrowserWindow } from 'electron'
 import type { GameLaunchTarget } from '@shared/steamTypes'
 import { runGameSession, waitForSteamAppExit } from '../gameSession/service'
 import { toggleFavoriteGame } from './favorites'
-import { getAchievements, getSteamLibrary, getStoreInfo } from './service'
+import { getAchievementDetails, getAchievements, getSteamLibrary, getStoreInfo } from './service'
 
 export function registerSteamIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle('steam:getLibrary', () => getSteamLibrary())
@@ -10,6 +10,8 @@ export function registerSteamIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle('steam:toggleFavorite', (_event, id: string) => toggleFavoriteGame(id))
 
   ipcMain.handle('steam:getAchievements', (_event, appId: number) => getAchievements(appId))
+
+  ipcMain.handle('steam:getAchievementDetails', (_event, appId: number) => getAchievementDetails(appId))
 
   ipcMain.handle('steam:getStoreInfo', (_event, appId: number) => getStoreInfo(appId))
 

@@ -17,7 +17,13 @@ import type {
   StartupSettings,
   StremioSettings
 } from './settingsTypes'
-import type { AchievementProgress, GameLaunchTarget, GameStoreInfo, SteamLibraryResult } from './steamTypes'
+import type {
+  AchievementDetail,
+  AchievementProgress,
+  GameLaunchTarget,
+  GameStoreInfo,
+  SteamLibraryResult
+} from './steamTypes'
 import type { WatchAvailability } from './streamingProviders'
 import type { SystemStats } from './systemTypes'
 import type { NewTvHomeBlock, ResolvedTvHomeBlock, TvHomeConfig } from './tvHomeTypes'
@@ -56,6 +62,11 @@ export interface LauncherApi {
     toggleFavorite: (id: string) => Promise<boolean>
     /** Null covers every "not applicable" case (no achievements schema, private stats, no API key configured) alike. */
     getAchievements: (appId: number) => Promise<AchievementProgress | null>
+    /** Full per-achievement list for the detail panel's drill-in — null only
+     * when the game has no achievements schema at all or no API key is
+     * configured (see service.ts's own doc comment for the distinction from
+     * getAchievements above). */
+    getAchievementDetails: (appId: number) => Promise<AchievementDetail[] | null>
     /** Steam's public storefront API — no key/account needed. */
     getStoreInfo: (appId: number) => Promise<GameStoreInfo | null>
   }

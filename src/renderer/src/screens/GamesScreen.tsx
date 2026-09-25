@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUp, Calendar, Download, Gamepad2, Play, Puzzle, Search, Star, Trophy, type LucideIcon } from 'lucide-react'
+import {
+  ArrowUp,
+  Calendar,
+  ChevronRight,
+  Download,
+  Gamepad2,
+  Lock,
+  Play,
+  Puzzle,
+  Search,
+  Star,
+  Trophy,
+  type LucideIcon
+} from 'lucide-react'
 import { CardArt, FocusableCard, type CardItem } from '../components/FocusableCard'
 import { BackButton, CloseButton } from '../components/NavButtons'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
@@ -9,7 +22,7 @@ import { useNavListener } from '../input/useNavListener'
 import { PluginHost } from '../plugins/PluginHost'
 import { useStatusStore } from '../state/statusStore'
 import { useNavigationStore } from '../state/navigationStore'
-import type { AchievementProgress, GameEntry, GameStoreInfo } from '@shared/steamTypes'
+import type { AchievementDetail, AchievementProgress, GameEntry, GameStoreInfo } from '@shared/steamTypes'
 import { pluginPlacement, type InstalledPlugin } from '@shared/pluginTypes'
 
 const COLUMNS = 5
@@ -44,7 +57,7 @@ function filterIcon(f: Filter): LucideIcon | null {
 // filterIndex ranges 0..FILTERS.length inclusive — FILTERS.length itself is a
 // search bubble, reachable by d-pad but not by the bumpers (switchFilter stays
 // clamped to the real filters, so a quick bumper tap can't pop the keyboard).
-type Zone = 'filters' | 'grid' | 'detail' | 'keyboard'
+type Zone = 'filters' | 'grid' | 'detail' | 'achievements' | 'keyboard'
 
 // Steam's CDN has several differently-named assets per app, and not every
 // one exists for every appId (older/delisted/unusual titles especially) —
@@ -63,6 +76,15 @@ function formatPlaytime(minutes: number): string {
 function formatLastPlayed(lastPlayed: number): string {
   if (lastPlayed <= 0) return 'Never played'
   return `Last played ${new Date(lastPlayed * 1000).toLocaleDateString()}`
+}
+
+function formatUnlockDate(unlockTimeSeconds: number | null): string {
+  if (!unlockTimeSeconds) return ''
+  return new Date(unlockTimeSeconds * 1000).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
 }
 
 function gameStatusLabel(game: GameEntry): string | null {
@@ -137,6 +159,9 @@ export function GamesScreen(): JSX.Element {
   const [kbValue, setKbValue] = useState('')
   const [kbShift, setKbShift] = useState(false)
   const [achievements, setAchievements] = useState<AchievementProgress | null>(null)
+  const [achievementDetails, setAchievementDetails] = useState<AchievementDetail[] | null>(null)
+  const [achievementDetailsLoading, setAchievementDetailsLoading] = useState(false)
+  const [achievementIndex, setAchievementIndex] = useState(0)
   const [storeInfo, setStoreInfo] = useState<GameStoreInfo | null>(null)
   const [storeInfoByApp, setStoreInfoByApp] = useState<Record<number, GameStoreInfo | null>>({})
   const message = useStatusStore((s) => s.message)
@@ -144,6 +169,13 @@ export function GamesScreen(): JSX.Element {
   const goHome = useNavigationStore((s) => s.goHome)
   const consumePendingContinue = useNavigationStore((s) => s.consumePendingContinue)
   const cardRefs = useRef<Array<HTMLDivElement | null>>([])
+  const achievementRefs = useRef<Array<HTMLDivElement | null>>([])
+  // Read from inside openAchievementsList's .then() below, not the plain
+  // selectedAppId closed over at call time — by the time that promise
+  // resolves the user may have already picked a different game, and a
+  // stale-closure comparison against the same captured value it's supposed
+  // to be checked against can never actually detect that.
+  const selectedAppIdRef = useRef<number | null>(null)
   const isMountedRef = useRef(true)
   const requestedStoreInfoRef = useRef<Set<number>>(new Set())
 
@@ -197,6 +229,11 @@ export function GamesScreen(): JSX.Element {
     cardRefs.current[gridIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [zone, gridIndex])
 
+  useEffect(() => {
+    if (zone !== 'achievements') return
+    achievementRefs.current[achievementIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [zone, achievementIndex])
+
   // Only Steam-launched games have a Steam achievements schema at all — non-
   // Steam shortcuts never do. Fetched on demand per selection rather than for
   // the whole library up front, since it's one extra Web API round-trip per
@@ -206,7 +243,18 @@ export function GamesScreen(): JSX.Element {
   // otherwise re-trigger this fetch for no reason.
   const selectedAppId = selectedGame?.launch.type === 'steam' ? selectedGame.launch.appId : null
   useEffect(() => {
+    selectedAppIdRef.current = selectedAppId
+  }, [selectedAppId])
+
+  useEffect(() => {
     setAchievements(null)
+    // Full details are fetched lazily (see openAchievementsList below), but
+    // any list left over from a previously selected game still needs to be
+    // cleared here — otherwise picking a new game while a stale list from
+    // the last one is sitting in state could flash the wrong game's
+    // achievements for a frame before the new fetch (if any) resolves.
+    setAchievementDetails(null)
+    setAchievementIndex(0)
     if (selectedAppId === null) return
     let cancelled = false
     window.api.steam
@@ -321,6 +369,30 @@ export function GamesScreen(): JSX.Element {
     })
   }
 
+  // Fetched on demand, not alongside the summary progress bar — most
+  // selections never open the full list, and this is a second Web API call
+  // (schema, cached after the first time per game) plus a fresh per-player
+  // one on top of what getAchievements already does for the summary.
+  function openAchievementsList(): void {
+    if (!selectedAppId || !achievements || achievements.total === 0) return
+    const requestedAppId = selectedAppId
+    setAchievementIndex(0)
+    setZone('achievements')
+    if (achievementDetails) return
+    setAchievementDetailsLoading(true)
+    window.api.steam
+      .getAchievementDetails(requestedAppId)
+      .then((result) => {
+        if (selectedAppIdRef.current === requestedAppId) setAchievementDetails(result)
+      })
+      .catch(() => {
+        if (selectedAppIdRef.current === requestedAppId) setAchievementDetails(null)
+      })
+      .finally(() => {
+        if (selectedAppIdRef.current === requestedAppId) setAchievementDetailsLoading(false)
+      })
+  }
+
   function switchFilter(direction: 1 | -1): void {
     const next = Math.max(0, Math.min(FILTERS.length - 1, filterIndex + direction))
     setFilterIndex(next)
@@ -404,10 +476,30 @@ export function GamesScreen(): JSX.Element {
         case 'toggleSubtitles':
           toggleFavorite(selectedGame)
           return
+        case 'contextMenu':
+          openAchievementsList()
+          return
         case 'back':
         case 'menu':
           setSelectedGame(null)
           setZone('grid')
+          return
+        default:
+          return
+      }
+    }
+
+    if (zone === 'achievements') {
+      switch (action) {
+        case 'up':
+          setAchievementIndex((i) => Math.max(0, i - 1))
+          return
+        case 'down':
+          setAchievementIndex((i) => Math.min((achievementDetails?.length ?? 1) - 1, i + 1))
+          return
+        case 'back':
+        case 'menu':
+          setZone('detail')
           return
         default:
           return
@@ -664,10 +756,15 @@ export function GamesScreen(): JSX.Element {
                     </p>
                   )
                 })()}
-              {achievements && (
-                <div className="mt-2 flex flex-col gap-1">
-                  <p className="flex items-center gap-1.5 text-sm text-muted">
+              {achievements && achievements.total > 0 && (
+                <button
+                  onClick={openAchievementsList}
+                  title="View achievements (L3)"
+                  className="mt-2 flex flex-col gap-1 text-left"
+                >
+                  <p className="flex items-center gap-1.5 text-sm text-muted hover:text-white">
                     <Trophy className="h-4 w-4" /> {achievements.unlocked}/{achievements.total} achievements
+                    <ChevronRight className="h-3.5 w-3.5 opacity-60" />
                   </p>
                   <div className="h-1.5 w-full rounded-full bg-white/10">
                     <div
@@ -675,7 +772,7 @@ export function GamesScreen(): JSX.Element {
                       style={{ width: `${Math.round((achievements.unlocked / achievements.total) * 100)}%` }}
                     />
                   </div>
-                </div>
+                </button>
               )}
             </div>
 
@@ -725,6 +822,86 @@ export function GamesScreen(): JSX.Element {
                 </>
               )}
             </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="popLayout">
+        {zone === 'achievements' && selectedGame && (
+          <motion.div
+            key="achievements"
+            layout
+            initial={{ x: 60, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 60, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+            className="shadow-panel relative flex w-[460px] shrink-0 flex-col gap-4 overflow-y-auto bg-surface p-8"
+          >
+            <CloseButton
+              className="absolute right-6 top-6 z-10"
+              onClick={() => {
+                setSelectedGame(null)
+                setZone('grid')
+              }}
+            />
+            <BackButton className="self-start" onClick={() => setZone('detail')} />
+            <div>
+              <h2 className="text-xl font-bold leading-tight">{selectedGame.name}</h2>
+              {achievements && (
+                <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
+                  <Trophy className="h-4 w-4" /> {achievements.unlocked}/{achievements.total} unlocked
+                </p>
+              )}
+            </div>
+
+            {achievementDetailsLoading && !achievementDetails && (
+              <p className="text-sm text-muted">Loading achievements...</p>
+            )}
+            {!achievementDetailsLoading && achievementDetails?.length === 0 && (
+              <p className="text-sm text-muted">No achievements found for this game.</p>
+            )}
+
+            <div className="flex flex-col gap-2">
+              {achievementDetails?.map((entry, i) => (
+                <div
+                  key={entry.apiName}
+                  ref={(el) => (achievementRefs.current[i] = el)}
+                  className={`flex items-center gap-3 rounded-xl p-3 scroll-m-4 ring-1 transition-colors ${
+                    zone === 'achievements' && achievementIndex === i
+                      ? 'bg-surface-hover ring-accent'
+                      : 'ring-transparent'
+                  } ${entry.achieved ? '' : 'opacity-60'}`}
+                >
+                  {entry.iconUrl || entry.iconGrayUrl ? (
+                    <img
+                      src={entry.achieved ? entry.iconUrl : entry.iconGrayUrl || entry.iconUrl}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-lg"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface-hi">
+                      {entry.achieved ? (
+                        <Trophy className="h-6 w-6 text-yellow-400" />
+                      ) : (
+                        <Lock className="h-5 w-5 text-muted" />
+                      )}
+                    </div>
+                  )}
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm font-semibold">{entry.displayName}</span>
+                    {entry.description && (
+                      <span className="line-clamp-2 text-xs text-muted">{entry.description}</span>
+                    )}
+                    {entry.achieved && entry.unlockTimeSeconds && (
+                      <span className="mt-0.5 text-xs text-accent">
+                        Unlocked {formatUnlockDate(entry.unlockTimeSeconds)}
+                      </span>
+                    )}
+                  </div>
+                  {!entry.achieved && <Lock className="h-4 w-4 shrink-0 text-muted" />}
+                </div>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
