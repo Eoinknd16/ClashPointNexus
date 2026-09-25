@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { startTransition, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   BookOpen,
@@ -181,14 +181,24 @@ export function HomeMenu(): JSX.Element {
   // hardware) — see homeMountCount's own comment above. Captured once, on
   // this component's very first render, via a lazy initializer rather than
   // inside an effect, so it's available for the JSX below too: real log data
-  // (two separate app launches, ~450ms + ~120ms of main-thread blocking
-  // within the first 731ms of Home's first mount, both times, consistent to
-  // within 20ms) pinned this on the tile grid's staggered entrance
-  // animation — Framer Motion does real one-time setup work the first time
-  // any `motion` component ever mounts in a session, and Home is always
-  // that first time. skipTileEntranceAnimation below is the actual fix;
-  // the longtask observer stays for one more round to confirm it from data
-  // instead of just a subjective "feels better".
+  // (real log data across three separate app launches) ruled out Framer
+  // Motion's first-mount setup cost as the cause — 0.2.98 removed the tile
+  // grid's entrance animation from the very first Home mount specifically,
+  // and the long tasks not only persisted but got worse (4 separate blocks
+  // spread across ~2s instead of 2 within ~730ms). What's actually
+  // consistent with that shape: Home fires 5 independent IPC fetches on
+  // mount (continueSuggestion/weather/systemStats/libraryAndSteam/
+  // arcadeInstalled), each resolving at its own scattered time, each
+  // calling setState on this one un-memoized component — every single one
+  // re-renders Home's *entire* tree (gradient background, SVGs, header, all
+  // 6 tiles), not just whatever small piece of UI actually depends on it.
+  // Five separate full-tree re-renders landing at scattered times matches
+  // "several separate blocking tasks spread across ~2s" exactly, and
+  // explains why it specifically hurts navigation: each one is a normal-
+  // priority commit competing for the same render slot as the D-pad input's
+  // own state updates. startTransition below marks these specifically as
+  // low-priority, so React can interrupt/defer them in favor of input-driven
+  // updates instead of blocking behind them.
   const [isFirstMount] = useState(() => {
     const first = homeMountCount === 0
     homeMountCount += 1
@@ -202,26 +212,36 @@ export function HomeMenu(): JSX.Element {
   useEffect(() => {
     window.api.home
       .getContinueSuggestion()
-      .then(setContinueSuggestion)
-      .catch(() => setContinueSuggestion(null))
-    window.api.weather.get().then(setWeather).catch(() => setWeather(null))
-    window.api.system.getStats().then(setSystemStats).catch(() => setSystemStats(null))
+      .then((result) => startTransition(() => setContinueSuggestion(result)))
+      .catch(() => startTransition(() => setContinueSuggestion(null)))
+    window.api.weather
+      .get()
+      .then((result) => startTransition(() => setWeather(result)))
+      .catch(() => startTransition(() => setWeather(null)))
+    window.api.system
+      .getStats()
+      .then((result) => startTransition(() => setSystemStats(result)))
+      .catch(() => startTransition(() => setSystemStats(null)))
     Promise.all([window.api.library.list(), window.api.steam.getLibrary()])
       .then(([library, steam]) => {
-        setLibraryStats({
-          movies: library.filter((e) => e.type === 'movie').length,
-          series: library.filter((e) => e.type === 'series').length,
-          games: steam.games.length
-        })
+        startTransition(() =>
+          setLibraryStats({
+            movies: library.filter((e) => e.type === 'movie').length,
+            series: library.filter((e) => e.type === 'series').length,
+            games: steam.games.length
+          })
+        )
       })
-      .catch(() => setLibraryStats(null))
+      .catch(() => startTransition(() => setLibraryStats(null)))
     // Arcade doesn't ship with Nexus — see ARCADE_TILE's own doc comment —
     // so whether its tile shows up at all comes from the same installed-
     // plugins check every other plugin surface already makes.
     window.api.plugins
       .listInstalled()
-      .then((installed) => setArcadeInstalled(installed.some((p) => p.manifest.id === 'arcade')))
-      .catch(() => setArcadeInstalled(false))
+      .then((installed) =>
+        startTransition(() => setArcadeInstalled(installed.some((p) => p.manifest.id === 'arcade')))
+      )
+      .catch(() => startTransition(() => setArcadeInstalled(false)))
   }, [])
 
   useEffect(() => {
@@ -575,34 +595,6 @@ export function HomeMenu(): JSX.Element {
               >
                 {tiles.slice(page * TILES_PER_PAGE, page * TILES_PER_PAGE + TILES_PER_PAGE).map((tile, iInPage) => {
                   const i = page * TILES_PER_PAGE + iInPage
-                  const card = (
-                    <FocusableCard
-                      size="large"
-                      showChevron
-                      item={{
-                        id: tile.id,
-                        title: tile.title,
-                        subtitle: tile.subtitle,
-                        icon: tile.icon,
-                        imageUrl: activeTheme?.tileImages?.[tile.id],
-                        iconColors: tile.iconColors
-                      }}
-                      focused={zone === 'tiles' && tileIndex === i}
-                      onClick={() => {
-                        setZone('tiles')
-                        setTileIndex(i)
-                        activateTile(tile)
-                      }}
-                    />
-                  )
-                  // Plain div, no Framer Motion, on the app's very first Home
-                  // mount specifically — see isFirstMount's own comment above.
-                  // Framer Motion's one-time first-mount setup cost landed
-                  // squarely inside this stagger animation's own active
-                  // window in real measurements, so skipping it here (only
-                  // this one time per session) is the actual fix, not just a
-                  // guess — every later Home visit still gets the animation.
-                  if (isFirstMount) return <div key={tile.id}>{card}</div>
                   return (
                     <motion.div
                       key={tile.id}
@@ -610,7 +602,24 @@ export function HomeMenu(): JSX.Element {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.4, delay: iInPage * 0.06, ease: 'easeOut' }}
                     >
-                      {card}
+                      <FocusableCard
+                        size="large"
+                        showChevron
+                        item={{
+                          id: tile.id,
+                          title: tile.title,
+                          subtitle: tile.subtitle,
+                          icon: tile.icon,
+                          imageUrl: activeTheme?.tileImages?.[tile.id],
+                          iconColors: tile.iconColors
+                        }}
+                        focused={zone === 'tiles' && tileIndex === i}
+                        onClick={() => {
+                          setZone('tiles')
+                          setTileIndex(i)
+                          activateTile(tile)
+                        }}
+                      />
                     </motion.div>
                   )
                 })}
