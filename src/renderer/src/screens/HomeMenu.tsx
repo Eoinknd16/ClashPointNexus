@@ -147,6 +147,15 @@ interface LibraryStats {
 // an actual Continue card to land on.
 type Zone = 'topnav' | 'hero' | 'tiles'
 
+// TEMPORARY diagnostic (remove once the cold-boot Home lag report is
+// actually root-caused): module scope survives Home's own unmount/remount
+// since HomeMenu the module is only ever imported once, so this tells the
+// perf log below whether a given mount is the app's very first Home paint
+// this session or a later one — the reported symptom is specifically "laggy
+// right when the app opens, fine after visiting a page and coming back",
+// which only a first-vs-later comparison can actually confirm or rule out.
+let homeMountCount = 0
+
 function weatherIcon(code: number): LucideIcon {
   if (code === 0) return Sun
   if (code <= 3) return CloudSun
@@ -174,12 +183,44 @@ export function HomeMenu(): JSX.Element {
   const activeTheme = allThemes.find((t) => t.id === themeId)
 
   useEffect(() => {
+    // TEMPORARY diagnostic — see homeMountCount's own comment above. Times
+    // each of Home's mount-time fetches and reports one consolidated line
+    // to the persistent log (reusing logging.reportError purely as a "write
+    // to nexus.log" pipe — this does not raise the on-screen CrashToast,
+    // which is driven separately by crashLogStore, not by this IPC call) so
+    // a real "which of these is actually slow on a cold boot" answer can be
+    // read back after a real repro, instead of guessing again.
+    homeMountCount += 1
+    const isFirstMount = homeMountCount === 1
+    const t0 = performance.now()
+    const timings: Record<string, number> = {}
+    const mark = (label: string): void => {
+      timings[label] = Math.round(performance.now() - t0)
+    }
+    const reportTimings = (): void => {
+      const line = Object.entries(timings)
+        .map(([label, ms]) => `${label}=${ms}ms`)
+        .join(' ')
+      void window.api.logging
+        .reportError(`[perf] Home ${isFirstMount ? 'FIRST mount' : 'remount'} fetch timings: ${line}`)
+        .catch(() => {})
+    }
+
     window.api.home
       .getContinueSuggestion()
       .then(setContinueSuggestion)
       .catch(() => setContinueSuggestion(null))
-    window.api.weather.get().then(setWeather).catch(() => setWeather(null))
-    window.api.system.getStats().then(setSystemStats).catch(() => setSystemStats(null))
+      .finally(() => mark('continueSuggestion'))
+    window.api.weather
+      .get()
+      .then(setWeather)
+      .catch(() => setWeather(null))
+      .finally(() => mark('weather'))
+    window.api.system
+      .getStats()
+      .then(setSystemStats)
+      .catch(() => setSystemStats(null))
+      .finally(() => mark('systemStats'))
     Promise.all([window.api.library.list(), window.api.steam.getLibrary()])
       .then(([library, steam]) => {
         setLibraryStats({
@@ -189,13 +230,60 @@ export function HomeMenu(): JSX.Element {
         })
       })
       .catch(() => setLibraryStats(null))
+      .finally(() => mark('libraryAndSteam'))
     // Arcade doesn't ship with Nexus — see ARCADE_TILE's own doc comment —
     // so whether its tile shows up at all comes from the same installed-
     // plugins check every other plugin surface already makes.
-    window.api.plugins
+    const arcadeCheck = window.api.plugins
       .listInstalled()
       .then((installed) => setArcadeInstalled(installed.some((p) => p.manifest.id === 'arcade')))
       .catch(() => setArcadeInstalled(false))
+      .finally(() => mark('arcadeInstalled'))
+
+    void arcadeCheck.finally(() => {
+      // All five fire in parallel above — whichever actually resolves last
+      // is arcadeCheck's own .finally, since every other one's mark() call
+      // already ran by the time any single promise can be the slowest. Not
+      // rigorous (a fetch could theoretically still be in flight if it's
+      // slower than arcadeInstalled specifically) but good enough for a
+      // one-shot diagnostic reading real numbers off one real machine.
+      setTimeout(reportTimings, 50)
+    })
+  }, [])
+
+  useEffect(() => {
+    // TEMPORARY diagnostic — see homeMountCount's own comment above.
+    // longtask entries are Chromium's own signal for "something blocked the
+    // main thread for 50ms+", which is exactly what dropped/janky D-pad
+    // navigation frames would show up as — this catches it directly instead
+    // of guessing which CSS/paint/re-render cost is responsible. Windowed to
+    // the 8s right after Home mounts, which comfortably covers "laggy right
+    // when the app opens" without leaving this running for the whole session.
+    const isFirstMount = homeMountCount === 1
+    const mountedAt = performance.now()
+    const longTasks: string[] = []
+    let observer: PerformanceObserver | null = null
+    try {
+      observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          longTasks.push(`${Math.round(entry.startTime - mountedAt)}ms+${Math.round(entry.duration)}ms`)
+        }
+      })
+      observer.observe({ entryTypes: ['longtask'] })
+    } catch {
+      // longtask not supported in this Chromium build — nothing to observe
+    }
+    const timer = setTimeout(() => {
+      observer?.disconnect()
+      const summary = longTasks.length > 0 ? longTasks.join(', ') : '(none)'
+      void window.api.logging
+        .reportError(`[perf] Home ${isFirstMount ? 'FIRST mount' : 'remount'} long tasks in first 8s: ${summary}`)
+        .catch(() => {})
+    }, 8000)
+    return () => {
+      clearTimeout(timer)
+      observer?.disconnect()
+    }
   }, [])
 
   const tiles = arcadeInstalled ? [...TILES, ARCADE_TILE] : TILES
