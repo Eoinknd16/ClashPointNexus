@@ -105,7 +105,8 @@ const api: LauncherApi = {
     get: () => ipcRenderer.invoke('weather:get')
   },
   home: {
-    getContinueSuggestion: () => ipcRenderer.invoke('home:getContinueSuggestion')
+    getContinueSuggestion: () => ipcRenderer.invoke('home:getContinueSuggestion'),
+    getLibraryStats: () => ipcRenderer.invoke('home:getLibraryStats')
   },
   tvHome: {
     getConfig: () => ipcRenderer.invoke('tvHome:getConfig'),

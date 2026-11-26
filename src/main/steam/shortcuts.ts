@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs'
+import { readFile } from 'fs/promises'
 import { extname, join } from 'path'
 
 export interface NonSteamShortcut {
@@ -82,16 +82,16 @@ function mimeTypeForExt(ext: string): string {
   return ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png'
 }
 
-function findGridImage(steamPath: string, accountId: string, gameId: string): string | undefined {
+// Async on purpose -- see getNonSteamShortcuts below.
+async function findGridImage(steamPath: string, accountId: string, gameId: string): Promise<string | undefined> {
   const gridDir = join(steamPath, 'userdata', accountId, 'config', 'grid')
   for (const suffix of GRID_IMAGE_SUFFIXES) {
     const path = join(gridDir, `${gameId}${suffix}`)
-    if (!existsSync(path)) continue
     try {
-      const data = readFileSync(path).toString('base64')
+      const data = (await readFile(path)).toString('base64')
       return `data:${mimeTypeForExt(extname(path))};base64,${data}`
     } catch {
-      continue
+      continue // missing or unreadable -- try the next suffix
     }
   }
   return undefined
@@ -106,20 +106,23 @@ function accountIdFromSteamId64(steamId64: string): string | null {
   }
 }
 
-/** Reads the active account's Steam "Add a Non-Steam Game" shortcuts. */
-export function getNonSteamShortcuts(steamPath: string, steamId64: string): NonSteamShortcut[] {
+/** Reads the active account's Steam "Add a Non-Steam Game" shortcuts.
+ * Async (fs/promises) rather than readFileSync: this reads and base64-
+ * encodes a grid image per shortcut, and doing that synchronously blocked
+ * Electron's main process -- which also delivers input and frames to the
+ * window -- every time the Steam library was loaded. */
+export async function getNonSteamShortcuts(steamPath: string, steamId64: string): Promise<NonSteamShortcut[]> {
   const accountId = accountIdFromSteamId64(steamId64)
   if (!accountId) return []
 
   const shortcutsPath = join(steamPath, 'userdata', accountId, 'config', 'shortcuts.vdf')
-  if (!existsSync(shortcutsPath)) return []
 
   try {
-    const root = parseBinaryVdf(readFileSync(shortcutsPath))
+    const root = parseBinaryVdf(await readFile(shortcutsPath))
     const entries = root['shortcuts']
     if (typeof entries !== 'object') return []
 
-    const shortcuts: NonSteamShortcut[] = []
+    const pending: Array<Promise<NonSteamShortcut>> = []
     for (const entry of Object.values(entries)) {
       if (typeof entry !== 'object') continue
       const appid = entry['appid']
@@ -127,15 +130,18 @@ export function getNonSteamShortcuts(steamPath: string, steamId64: string): NonS
       if (typeof appid !== 'number' || typeof appName !== 'string') continue
 
       const launchGameId = shortcutLaunchGameId(appid)
-      shortcuts.push({
-        name: appName,
-        launchGameId,
-        lastPlayed: typeof entry['LastPlayTime'] === 'number' ? entry['LastPlayTime'] : 0,
-        imageDataUrl: findGridImage(steamPath, accountId, launchGameId)
-      })
+      const lastPlayed = typeof entry['LastPlayTime'] === 'number' ? entry['LastPlayTime'] : 0
+      pending.push(
+        findGridImage(steamPath, accountId, launchGameId).then((imageDataUrl) => ({
+          name: appName,
+          launchGameId,
+          lastPlayed,
+          imageDataUrl
+        }))
+      )
     }
-    return shortcuts
+    return await Promise.all(pending)
   } catch {
-    return []
+    return [] // no shortcuts.vdf, or unreadable
   }
 }

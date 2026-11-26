@@ -14,9 +14,9 @@ import {
   mergeAchievementDetails
 } from './webApi'
 
-function shortcutEntries(steamPath: string | null, steamId64: string): GameEntry[] {
+async function shortcutEntries(steamPath: string | null, steamId64: string): Promise<GameEntry[]> {
   if (!steamPath) return []
-  return getNonSteamShortcuts(steamPath, steamId64).map(
+  return (await getNonSteamShortcuts(steamPath, steamId64)).map(
     (s): GameEntry => ({
       id: `shortcut:${s.launchGameId}`,
       name: s.name,
@@ -60,16 +60,55 @@ function byRecency(a: GameEntry, b: GameEntry): number {
   return b.lastPlayed - a.lastPlayed
 }
 
+// Short-lived cache + in-flight dedupe for the library build below. Home
+// alone asks for it twice on mount (its own stats + getContinueSuggestion),
+// and the Games screen asks again the moment you open it -- each one used to
+// redo every disk read and the Steam Web API call from scratch. Favorites
+// are deliberately NOT part of what's cached (applied fresh per call), so a
+// toggle shows up immediately; anything else (an install finishing) shows
+// up within LIBRARY_CACHE_MS.
+const LIBRARY_CACHE_MS = 15_000
+let libraryInFlight: Promise<SteamLibraryResult> | null = null
+let libraryCache: { at: number; result: SteamLibraryResult } | null = null
+
 /** Merges local install state, the Steam Web API's owned-games list, and non-Steam shortcuts into one list. */
 export async function getSteamLibrary(): Promise<SteamLibraryResult> {
+  if (libraryCache && Date.now() - libraryCache.at < LIBRARY_CACHE_MS) {
+    return withFavorites(libraryCache.result)
+  }
+  if (!libraryInFlight) {
+    libraryInFlight = buildSteamLibrary()
+      .then((result) => {
+        // Don't hold on to a transient failure for the whole cache window.
+        if (!result.error) libraryCache = { at: Date.now(), result }
+        return result
+      })
+      .finally(() => {
+        libraryInFlight = null
+      })
+  }
+  return withFavorites(await libraryInFlight)
+}
+
+function withFavorites(result: SteamLibraryResult): SteamLibraryResult {
+  return { ...result, games: applyFavorites(result.games) }
+}
+
+/** Just the count, for Home's stats card -- saves shipping the entire
+ * library (including every non-Steam shortcut's base64 artwork) across IPC
+ * into the renderer only for it to call `.length` on it. */
+export async function getSteamGameCount(): Promise<number> {
+  return (await getSteamLibrary()).games.length
+}
+
+async function buildSteamLibrary(): Promise<SteamLibraryResult> {
   const config = loadSteamConfig()
-  const installed = getInstalledGames()
-  const steamPath = findSteamPath()
-  const shortcuts = shortcutEntries(steamPath, config.steamId64)
+  const [installed, steamPath] = await Promise.all([getInstalledGames(), findSteamPath()])
+  const shortcuts = await shortcutEntries(steamPath, config.steamId64)
 
   if (!config.apiKey || !config.steamId64) {
     const games = [...installedOnlyEntries(installed), ...shortcuts].sort(byRecency)
-    return { games: applyFavorites(games), needsApiKey: true, error: null }
+    return { games, needsApiKey: true, error: null }
   }
 
   const installedByAppId = new Map(installed.map((g) => [Number(g.appId), g]))
@@ -95,11 +134,11 @@ export async function getSteamLibrary(): Promise<SteamLibraryResult> {
     const games = [...steamGames, ...shortcuts].sort(
       (a, b) => b.playtimeForeverMinutes - a.playtimeForeverMinutes || byRecency(a, b)
     )
-    return { games: applyFavorites(games), needsApiKey: false, error: null }
+    return { games, needsApiKey: false, error: null }
   } catch (error) {
     const games = [...installedOnlyEntries(installed), ...shortcuts].sort(byRecency)
     return {
-      games: applyFavorites(games),
+      games,
       needsApiKey: false,
       error: error instanceof Error ? error.message : String(error)
     }

@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from 'react'
+import { memo, startTransition, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   BookOpen,
@@ -31,7 +31,7 @@ import { Clock } from '../components/Clock'
 import { useNavListener } from '../input/useNavListener'
 import { useNavigationStore, type ScreenId } from '../state/navigationStore'
 import { useThemeStore } from '../state/themeStore'
-import type { ContinueSuggestion } from '@shared/homeTypes'
+import type { ContinueSuggestion, HomeLibraryStats } from '@shared/homeTypes'
 import type { WeatherData } from '@shared/weatherTypes'
 import type { SystemStats } from '@shared/systemTypes'
 
@@ -136,12 +136,6 @@ const TOP_NAV: Array<{ id: ScreenId; label: string; icon: LucideIcon }> = [
   { id: 'settings', label: 'Settings', icon: SettingsIcon }
 ]
 
-interface LibraryStats {
-  movies: number
-  series: number
-  games: number
-}
-
 // Three stacked zones, top to bottom — Up/Down move between them, Left/Right
 // move within whichever is active. Hero only exists as a stop when there's
 // an actual Continue card to land on.
@@ -174,31 +168,11 @@ export function HomeMenu(): JSX.Element {
   const [tileIndex, setTileIndex] = useState(0)
   const [continueSuggestion, setContinueSuggestion] = useState<ContinueSuggestion | null>(null)
   const [weather, setWeather] = useState<WeatherData | null>(null)
-  const [libraryStats, setLibraryStats] = useState<LibraryStats | null>(null)
+  const [libraryStats, setLibraryStats] = useState<HomeLibraryStats | null>(null)
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [arcadeInstalled, setArcadeInstalled] = useState(false)
-  // TEMPORARY diagnostic (remove once the fix below is confirmed on real
-  // hardware) — see homeMountCount's own comment above. Captured once, on
-  // this component's very first render, via a lazy initializer rather than
-  // inside an effect, so it's available for the JSX below too: real log data
-  // (real log data across three separate app launches) ruled out Framer
-  // Motion's first-mount setup cost as the cause — 0.2.98 removed the tile
-  // grid's entrance animation from the very first Home mount specifically,
-  // and the long tasks not only persisted but got worse (4 separate blocks
-  // spread across ~2s instead of 2 within ~730ms). What's actually
-  // consistent with that shape: Home fires 5 independent IPC fetches on
-  // mount (continueSuggestion/weather/systemStats/libraryAndSteam/
-  // arcadeInstalled), each resolving at its own scattered time, each
-  // calling setState on this one un-memoized component — every single one
-  // re-renders Home's *entire* tree (gradient background, SVGs, header, all
-  // 6 tiles), not just whatever small piece of UI actually depends on it.
-  // Five separate full-tree re-renders landing at scattered times matches
-  // "several separate blocking tasks spread across ~2s" exactly, and
-  // explains why it specifically hurts navigation: each one is a normal-
-  // priority commit competing for the same render slot as the D-pad input's
-  // own state updates. startTransition below marks these specifically as
-  // low-priority, so React can interrupt/defer them in favor of input-driven
-  // updates instead of blocking behind them.
+  // TEMPORARY diagnostic, paired with the main-process event-loop monitor
+  // (main/perf/bootMonitor.ts) -- see homeMountCount above.
   const [isFirstMount] = useState(() => {
     const first = homeMountCount === 0
     homeMountCount += 1
@@ -222,16 +196,13 @@ export function HomeMenu(): JSX.Element {
       .getStats()
       .then((result) => startTransition(() => setSystemStats(result)))
       .catch(() => startTransition(() => setSystemStats(null)))
-    Promise.all([window.api.library.list(), window.api.steam.getLibrary()])
-      .then(([library, steam]) => {
-        startTransition(() =>
-          setLibraryStats({
-            movies: library.filter((e) => e.type === 'movie').length,
-            series: library.filter((e) => e.type === 'series').length,
-            games: steam.games.length
-          })
-        )
-      })
+    // Counts only -- main computes them. This used to pull the entire Steam
+    // library (every shortcut's base64 artwork included) plus the watch
+    // library across IPC just to read .length, and library.list() also
+    // backfills missing posters over the network on every call.
+    window.api.home
+      .getLibraryStats()
+      .then((result) => startTransition(() => setLibraryStats(result)))
       .catch(() => startTransition(() => setLibraryStats(null)))
     // Arcade doesn't ship with Nexus — see ARCADE_TILE's own doc comment —
     // so whether its tile shows up at all comes from the same installed-
@@ -368,67 +339,7 @@ export function HomeMenu(): JSX.Element {
           by the time it reaches the Apps row, and darkens slightly at the
           very top for the nav/clock text to stay legible over whatever's
           behind it. */}
-      <div className="absolute inset-0 -z-10">
-        {activeTheme?.heroImage ? (
-          // A real image from an installed theme pack (Settings > pick a
-          // theme, installed via File Manager's "Install as Theme") —
-          // always preferred over the CSS/SVG fallback below when present.
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url("${activeTheme.heroImage}")` }}
-          />
-        ) : (
-          <>
-            {/* No installed theme pack image, and no other legitimate source
-                of real photography (extracting one from a flattened mockup
-                screenshot produces garbage; hotlinking a stock photo from an
-                unknown source isn't happening) — a CSS/SVG dusk-over-
-                mountains scene instead of a flat gradient: a sky gradient, a
-                soft sun/moon glow near the horizon, and two layered mountain
-                silhouettes for actual depth. */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  'linear-gradient(180deg, #14142e 0%, #322a52 22%, #6b3a5c 42%, #b6524f 60%, #dd8656 76%, #eeb374 100%)'
-              }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background: 'radial-gradient(circle 380px at 72% 66%, rgba(255,224,170,0.85), transparent 70%)'
-              }}
-            />
-            <svg
-              className="absolute inset-x-0 bottom-0 h-[55%] w-full"
-              viewBox="0 0 100 40"
-              preserveAspectRatio="none"
-            >
-              <polygon
-                points="0,40 0,20 12,8 22,16 34,4 48,14 60,6 74,15 88,5 100,13 100,40"
-                fill="rgba(18,14,32,0.55)"
-              />
-            </svg>
-            <svg
-              className="absolute inset-x-0 bottom-0 h-[38%] w-full"
-              viewBox="0 0 100 30"
-              preserveAspectRatio="none"
-            >
-              <polygon
-                points="0,30 0,18 15,10 28,17 40,7 55,16 68,9 82,17 100,11 100,30"
-                fill="rgba(9,7,18,0.9)"
-              />
-            </svg>
-          </>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-transparent to-transparent" />
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'linear-gradient(to bottom, transparent 0%, transparent 48%, rgb(var(--color-bg)) 86%)'
-          }}
-        />
-      </div>
+      <HomeBackground heroImage={activeTheme?.heroImage} />
 
       <header className="grid shrink-0 grid-cols-3 items-center">
         <h1 className="justify-self-start text-xl font-bold tracking-tight">
@@ -665,3 +576,78 @@ export function HomeMenu(): JSX.Element {
     </div>
   )
 }
+
+/** The full-bleed backdrop (theme image, or the CSS/SVG dusk scene). Split
+ * out and memoized because HomeMenu re-renders on every D-pad press (focus
+ * state lives there) and on each mount-time fetch landing -- none of which
+ * change this, so there's no reason to re-diff a stack of full-screen
+ * gradients and SVGs each time. */
+const HomeBackground = memo(function HomeBackground({
+  heroImage
+}: {
+  heroImage: string | undefined
+}): JSX.Element {
+  return (
+    <div className="absolute inset-0 -z-10">
+      {heroImage ? (
+        // A real image from an installed theme pack (Settings > pick a
+        // theme, installed via File Manager's "Install as Theme") —
+        // always preferred over the CSS/SVG fallback below when present.
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url("${heroImage}")` }}
+        />
+      ) : (
+        <>
+          {/* No installed theme pack image, and no other legitimate source
+              of real photography (extracting one from a flattened mockup
+              screenshot produces garbage; hotlinking a stock photo from an
+              unknown source isn't happening) — a CSS/SVG dusk-over-
+              mountains scene instead of a flat gradient: a sky gradient, a
+              soft sun/moon glow near the horizon, and two layered mountain
+              silhouettes for actual depth. */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(180deg, #14142e 0%, #322a52 22%, #6b3a5c 42%, #b6524f 60%, #dd8656 76%, #eeb374 100%)'
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'radial-gradient(circle 380px at 72% 66%, rgba(255,224,170,0.85), transparent 70%)'
+            }}
+          />
+          <svg
+            className="absolute inset-x-0 bottom-0 h-[55%] w-full"
+            viewBox="0 0 100 40"
+            preserveAspectRatio="none"
+          >
+            <polygon
+              points="0,40 0,20 12,8 22,16 34,4 48,14 60,6 74,15 88,5 100,13 100,40"
+              fill="rgba(18,14,32,0.55)"
+            />
+          </svg>
+          <svg
+            className="absolute inset-x-0 bottom-0 h-[38%] w-full"
+            viewBox="0 0 100 30"
+            preserveAspectRatio="none"
+          >
+            <polygon
+              points="0,30 0,18 15,10 28,17 40,7 55,16 68,9 82,17 100,11 100,30"
+              fill="rgba(9,7,18,0.9)"
+            />
+          </svg>
+        </>
+      )}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-transparent to-transparent" />
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(to bottom, transparent 0%, transparent 48%, rgb(var(--color-bg)) 86%)'
+        }}
+      />
+    </div>
+  )
+})

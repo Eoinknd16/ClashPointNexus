@@ -1,7 +1,7 @@
 import type { AppEntry } from './appsTypes'
 import type { DirectoryListing, FileEntry } from './filesystemTypes'
 import type { GlobalInputStatus } from './globalInputTypes'
-import type { ContinueSuggestion } from './homeTypes'
+import type { ContinueSuggestion, HomeLibraryStats } from './homeTypes'
 import type { LibraryEntry } from './libraryTypes'
 import type { MediaInfo } from './playerConstants'
 import type {
@@ -211,6 +211,7 @@ export interface LauncherApi {
   }
   home: {
     getContinueSuggestion: () => Promise<ContinueSuggestion | null>
+    getLibraryStats: () => Promise<HomeLibraryStats>
   }
   /** The user-built custom TV homepage (see shared/tvHomeTypes.ts) — pages
    * of rows/cards the user assembles themselves, resolved server-side into

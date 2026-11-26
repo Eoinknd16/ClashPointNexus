@@ -35,9 +35,14 @@ import { registerSubtitlesIpc } from './subtitles/ipc'
 import { registerSystemIpc } from './system/ipc'
 import { registerTvHomeIpc } from './tvHome/ipc'
 import { initAutoUpdater, registerUpdaterIpc } from './updater'
+import { markBoot, startBootMonitor } from './perf/bootMonitor'
 import { registerWeatherIpc } from './weather/ipc'
 
 const isDev = !app.isPackaged
+
+// See startDeferredBackgroundWork below.
+const DEFERRED_STARTUP_DELAY_MS = 4000
+const DEFERRED_STARTUP_FALLBACK_MS = 15000
 
 // Registered at module load, before app.whenReady() — the earliest point
 // anything here could possibly throw. A true uncaught exception is already
@@ -79,6 +84,7 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.once('ready-to-show', () => {
+    markBoot('window shown')
     mainWindow.show()
     if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' })
   })
@@ -121,6 +127,8 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(async () => {
   logSessionStart()
+  startBootMonitor()
+  markBoot('app ready')
   registerLoggingIpc()
   registerStremioIpc()
   registerStreamingIpc()
@@ -165,33 +173,58 @@ app.whenReady().then(async () => {
   registerAppsIpc(mainWindow)
   registerArcadeTrustedIpc(mainWindow)
 
-  if (!isDev) initAutoUpdater()
+  // Heavy background start-up work, held until the first screen has had a
+  // few seconds to paint and settle. Both used to start in the same tick as
+  // the window itself: the global-input helper is a PowerShell process whose
+  // Add-Type compiles a C# block (csc.exe) and loads WinRT types on every
+  // launch -- seconds of full-core CPU, all landing exactly while Home is
+  // doing its first render and first round of fetches -- and the updater
+  // does a network check + manifest parse on the main process. Nothing on
+  // the first screen needs either. The one visible cost: the PS button and
+  // the L1+R1 combos start working a few seconds after launch, not instantly.
+  const startDeferredBackgroundWork = (): void => {
+    if (!isDev) initAutoUpdater()
 
-  // Gated to packaged builds only — the whole point is reaching Nexus from
-  // outside the app (another game, the desktop), which isn't a meaningful
-  // scenario to exercise from a dev-mode window, and losing mouse control to
-  // a hair-trigger bug while iterating on this exact code would be a bad time.
-  if (!isDev) {
-    setQuickMenuComboHandler(() => {
-      if (mainWindow.isDestroyed()) return
-      // restore() first — plain show() doesn't reliably un-minimize on
-      // Windows, which matters now that a game session (gameSession/
-      // service.ts) can leave Nexus minimized while it's running.
-      mainWindow.restore()
-      mainWindow.show()
-      mainWindow.focus()
-      mainWindow.webContents.send('globalInput:openQuickMenu')
-    })
-    setShowDesktopComboHandler(() => goToDesktop(mainWindow))
-    // PS/Home button: a quick click just brings Nexus back to the foreground
-    // (same as before, minus the Quick Menu popup — that combo still opens
-    // it via L1+R1+Options above); holding it opens the separate always-on-
-    // top Control Center window instead, which doesn't require switching
-    // away from whatever's running underneath.
-    setPsClickHandler(() => returnToNexus(mainWindow))
-    setControlCenterComboHandler(() => toggleControlCenter())
-    startGlobalInputWatcher()
+    // Gated to packaged builds only — the whole point is reaching Nexus from
+    // outside the app (another game, the desktop), which isn't a meaningful
+    // scenario to exercise from a dev-mode window, and losing mouse control to
+    // a hair-trigger bug while iterating on this exact code would be a bad time.
+    if (!isDev) {
+      setQuickMenuComboHandler(() => {
+        if (mainWindow.isDestroyed()) return
+        // restore() first — plain show() doesn't reliably un-minimize on
+        // Windows, which matters now that a game session (gameSession/
+        // service.ts) can leave Nexus minimized while it's running.
+        mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+        mainWindow.webContents.send('globalInput:openQuickMenu')
+      })
+      setShowDesktopComboHandler(() => goToDesktop(mainWindow))
+      // PS/Home button: a quick click just brings Nexus back to the foreground
+      // (same as before, minus the Quick Menu popup — that combo still opens
+      // it via L1+R1+Options above); holding it opens the separate always-on-
+      // top Control Center window instead, which doesn't require switching
+      // away from whatever's running underneath.
+      setPsClickHandler(() => returnToNexus(mainWindow))
+      setControlCenterComboHandler(() => toggleControlCenter())
+      startGlobalInputWatcher()
+    }
+    markBoot('deferred background work started')
   }
+  let deferredStarted = false
+  const startDeferredOnce = (): void => {
+    if (deferredStarted) return
+    deferredStarted = true
+    startDeferredBackgroundWork()
+  }
+  mainWindow.webContents.once('did-finish-load', () => {
+    markBoot('renderer loaded')
+    setTimeout(startDeferredOnce, DEFERRED_STARTUP_DELAY_MS)
+  })
+  // Safety net: never leave global input off just because did-finish-load
+  // didn't fire (a renderer crash on first load, say).
+  setTimeout(startDeferredOnce, DEFERRED_STARTUP_FALLBACK_MS)
 
   // Also packaged-only (see focusGuardian.ts's own guard) — reclaims
   // foreground focus if something else takes it (a startup app's own

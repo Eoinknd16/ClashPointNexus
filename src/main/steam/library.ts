@@ -1,5 +1,6 @@
-import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { execFile } from 'child_process'
+import { existsSync } from 'fs'
+import { readFile, readdir } from 'fs/promises'
 import { join } from 'path'
 import { parseVdf, type VdfObject } from './vdf'
 
@@ -25,17 +26,37 @@ const STATE_FLAG_DOWNLOADING = 0x80000
 
 const DEFAULT_STEAM_PATH = 'C:\\Program Files (x86)\\Steam'
 
-export function findSteamPath(): string | null {
-  try {
-    const output = execFileSync('reg', ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'SteamPath'], {
-      encoding: 'utf-8'
+// Cached for the whole session: Steam's install path doesn't move while
+// Nexus is running, and this used to be a *synchronous* `reg.exe` spawn
+// (execFileSync) run several times per Home load -- getSteamLibrary called
+// it twice and Home calls getSteamLibrary twice. A sync spawn blocks
+// Electron's main process, which is the same thread that forwards input
+// and presents frames for the window, so every one of those was a visible
+// UI freeze -- worst on a cold boot, when reg.exe itself isn't in the OS
+// file cache yet and Defender scans it on first launch. Async + cached
+// means at most one reg query per session, off the UI thread.
+let steamPathPromise: Promise<string | null> | null = null
+
+export function findSteamPath(): Promise<string | null> {
+  if (!steamPathPromise) {
+    steamPathPromise = new Promise((resolve) => {
+      execFile(
+        'reg',
+        ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'SteamPath'],
+        { encoding: 'utf-8', windowsHide: true },
+        (error, stdout) => {
+          const match = !error ? stdout.match(/SteamPath\s+REG_SZ\s+(.+)/) : null
+          if (match) resolve(match[1].trim())
+          else resolve(existsSync(DEFAULT_STEAM_PATH) ? DEFAULT_STEAM_PATH : null)
+        }
+      )
     })
-    const match = output.match(/SteamPath\s+REG_SZ\s+(.+)/)
-    if (match) return match[1].trim()
-  } catch {
-    // fall through to default path
+    // Don't cache a miss forever -- Steam may get installed mid-session.
+    void steamPathPromise.then((path) => {
+      if (!path) steamPathPromise = null
+    })
   }
-  return existsSync(DEFAULT_STEAM_PATH) ? DEFAULT_STEAM_PATH : null
+  return steamPathPromise
 }
 
 function parseLibraryFolderPaths(vdfText: string): string[] {
@@ -75,38 +96,46 @@ function parseAppManifest(vdfText: string, libraryPath: string): InstalledApp | 
   }
 }
 
-/** Scans every registered Steam library folder for installed games via their appmanifest files. */
-export function getInstalledGames(): InstalledApp[] {
-  const steamPath = findSteamPath()
+/** Scans every registered Steam library folder for installed games via
+ * their appmanifest files. Fully async: on a big library spread across
+ * several drives this is hundreds of file reads, and doing them with
+ * readFileSync (as it used to) stalled the main process -- and therefore
+ * the whole window -- for as long as the slowest drive took to spin up. */
+export async function getInstalledGames(): Promise<InstalledApp[]> {
+  const steamPath = await findSteamPath()
   if (!steamPath) return []
 
   const libraryFoldersVdf = join(steamPath, 'steamapps', 'libraryfolders.vdf')
-  if (!existsSync(libraryFoldersVdf)) return []
-
-  const libraryPaths = parseLibraryFolderPaths(readFileSync(libraryFoldersVdf, 'utf-8'))
-  const games: InstalledApp[] = []
-
-  for (const libraryPath of libraryPaths) {
-    const steamappsDir = join(libraryPath, 'steamapps')
-    if (!existsSync(steamappsDir)) continue
-
-    let files: string[]
-    try {
-      files = readdirSync(steamappsDir)
-    } catch {
-      continue
-    }
-
-    for (const file of files) {
-      if (!file.startsWith('appmanifest_') || !file.endsWith('.acf')) continue
-      try {
-        const manifest = parseAppManifest(readFileSync(join(steamappsDir, file), 'utf-8'), libraryPath)
-        if (manifest) games.push(manifest)
-      } catch {
-        // skip unreadable/corrupt manifest
-      }
-    }
+  let libraryPaths: string[]
+  try {
+    libraryPaths = parseLibraryFolderPaths(await readFile(libraryFoldersVdf, 'utf-8'))
+  } catch {
+    return []
   }
 
-  return games
+  const perLibrary = await Promise.all(
+    libraryPaths.map(async (libraryPath): Promise<InstalledApp[]> => {
+      const steamappsDir = join(libraryPath, 'steamapps')
+      let files: string[]
+      try {
+        files = await readdir(steamappsDir)
+      } catch {
+        return []
+      }
+      const manifests = await Promise.all(
+        files
+          .filter((file) => file.startsWith('appmanifest_') && file.endsWith('.acf'))
+          .map(async (file) => {
+            try {
+              return parseAppManifest(await readFile(join(steamappsDir, file), 'utf-8'), libraryPath)
+            } catch {
+              return null // skip unreadable/corrupt manifest
+            }
+          })
+      )
+      return manifests.filter((m): m is InstalledApp => m !== null)
+    })
+  )
+
+  return perLibrary.flat()
 }

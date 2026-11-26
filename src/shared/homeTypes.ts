@@ -13,3 +13,11 @@ export type ContinueSuggestion =
       tab: CatalogType
       item: CatalogItem
     }
+
+/** Counts for Home's stats card -- computed main-side so Home doesn't pull
+ * the full Steam library and watch library across IPC just to count them. */
+export interface HomeLibraryStats {
+  movies: number
+  series: number
+  games: number
+}
