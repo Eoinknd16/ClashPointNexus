@@ -17,6 +17,9 @@ import {
   Trash2,
   TriangleAlert,
   X,
+  Smartphone,
+  Unlink,
+  KeyRound,
   type LucideIcon
 } from 'lucide-react'
 import { BackButton, CloseButton } from '../components/NavButtons'
@@ -31,6 +34,7 @@ import { openThemesFolder, rescanThemesFolder } from '../themes/themeFolderActio
 import { PluginHost } from '../plugins/PluginHost'
 import { TvAddonsPanel } from '../plugins/TvAddonsPanel'
 import type { UpdateStatus } from '@shared/updateTypes'
+import type { RemotePairingInfo } from '@shared/remoteTypes'
 import type { GlobalInputStatus } from '@shared/globalInputTypes'
 import { pluginPlacement, type InstalledPlugin } from '@shared/pluginTypes'
 import type { StartupSettings } from '@shared/settingsTypes'
@@ -63,6 +67,7 @@ const CATEGORIES: Array<{ id: string; label: string; icon: LucideIcon }> = [
   { id: 'steam', label: 'Steam', icon: Link2 },
   { id: 'plugins', label: 'Plugins', icon: Puzzle },
   { id: 'streaming', label: 'Streaming', icon: MonitorPlay },
+  { id: 'phone', label: 'Phone Link', icon: Smartphone },
   { id: 'ratings', label: 'Ratings', icon: Star }
 ]
 
@@ -138,6 +143,7 @@ export function SettingsScreen(): JSX.Element {
   const [appVersion, setAppVersion] = useState('')
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [globalInputStatus, setGlobalInputStatus] = useState<GlobalInputStatus | null>(null)
+  const [pairingInfo, setPairingInfo] = useState<RemotePairingInfo | null>(null)
   const [startupSettings, setStartupSettings] = useState<StartupSettings | null>(null)
   const [themesFolderPath, setThemesFolderPath] = useState('')
   const [uiScale, setUiScaleState] = useState(1)
@@ -210,9 +216,17 @@ export function SettingsScreen(): JSX.Element {
       else if (status.state === 'error') setMessage(`Update check failed: ${status.error}`)
     })
     const unsubscribeGlobalInput = window.api.globalInput.onStatusChanged(setGlobalInputStatus)
+    window.api.remote.getPairingInfo().then(setPairingInfo).catch(() => {})
+    // A phone pairing successfully uses up the code -- refresh so the code
+    // row disappears and the new device shows up without leaving Settings.
+    const unsubscribeRemote = window.api.remote.onDevicesChanged(() => {
+      window.api.remote.getPairingInfo().then(setPairingInfo).catch(() => {})
+      setMessage('Phone linked')
+    })
     return () => {
       unsubscribeUpdater()
       unsubscribeGlobalInput()
+      unsubscribeRemote()
     }
   }, [])
 
@@ -495,6 +509,54 @@ export function SettingsScreen(): JSX.Element {
         'them there when you pick one. Nexus never plays their content itself. DRM makes that legally off the ' +
         'table no matter who builds it. Get a free key at themoviedb.org/settings/api'
     },
+
+    {
+      id: 'phoneLinkIntro',
+      kind: 'info',
+      category: 'phone',
+      label:
+        'Control Nexus and send shows to the TV from the Nexus Android app. On the phone: Settings > Living room PC, ' +
+        'enter this address and a pairing code. Over Tailscale, use this PC\'s Tailscale IP instead.'
+    },
+    {
+      id: 'phoneLinkAddress',
+      kind: 'info',
+      category: 'phone',
+      icon: Smartphone,
+      label: !pairingInfo
+        ? 'Starting phone link...'
+        : !pairingInfo.listening
+          ? `Phone link not running: ${pairingInfo.error ?? 'unknown error'}`
+          : `Address: ${pairingInfo.addresses.join('  or  ') || 'no network'}   Port: ${pairingInfo.port}`
+    },
+    ...(pairingInfo?.code
+      ? [
+          {
+            id: 'phoneLinkCode',
+            kind: 'info' as const,
+            category: 'phone',
+            icon: KeyRound,
+            label: `Pairing code: ${pairingInfo.code.slice(0, 3)} ${pairingInfo.code.slice(3)}  (expires in 10 minutes, one use)`
+          }
+        ]
+      : []),
+    {
+      id: 'phoneLinkNewCode',
+      kind: 'action',
+      category: 'phone',
+      icon: KeyRound,
+      label: pairingInfo?.code ? 'Generate a New Code' : 'Show Pairing Code'
+    },
+    header('phoneLinkDevicesHeader', 'Linked Phones', 'phone'),
+    ...((pairingInfo?.devices ?? []).length === 0
+      ? [{ id: 'phoneLinkNoDevices', kind: 'info' as const, category: 'phone', label: 'No phones linked yet.' }]
+      : (pairingInfo?.devices ?? []).map((d) => ({
+          id: `revokePhone-${d.id}`,
+          kind: 'action' as const,
+          category: 'phone',
+          icon: Unlink,
+          label: `Unlink ${d.name}`
+        }))),
 
     { id: 'omdbApiKey', kind: 'field', label: 'OMDb API Key', category: 'ratings', value: omdbApiKey, masked: true },
     {
@@ -825,6 +887,17 @@ export function SettingsScreen(): JSX.Element {
       void doToggleStartup()
     } else if (row.id === 'uiScale') {
       void doCycleUiScale()
+    } else if (row.id === 'phoneLinkNewCode') {
+      window.api.remote.newPairingCode().then(setPairingInfo).catch(() => setMessage('Couldn\'t create a pairing code'))
+    } else if (row.id.startsWith('revokePhone-')) {
+      const id = row.id.replace('revokePhone-', '')
+      window.api.remote
+        .revokeDevice(id)
+        .then((info) => {
+          setPairingInfo(info)
+          setMessage('Phone unlinked')
+        })
+        .catch(() => {})
     } else if (row.id === 'openLogsFolder') {
       void window.api.logging.openLogsFolder()
     } else if (row.id === 'openThemesFolder') {

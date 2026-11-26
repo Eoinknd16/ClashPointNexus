@@ -20,6 +20,7 @@ import { startMsePlayback } from '../player/msePlayer'
 import type { SubtitleTrack } from '@shared/api'
 import type { LibraryEntry } from '@shared/libraryTypes'
 import type { WatchProgress } from '@shared/progressTypes'
+import type { RemoteCastPayload } from '@shared/remoteTypes'
 import { seasonSortKey } from '@shared/stremioTypes'
 import type {
   AddonCatalogRow,
@@ -526,6 +527,15 @@ export function TvScreen(): JSX.Element {
       setDetailReturnZone('rows')
       setSelectedItem(pending.item)
       setZone('detail')
+    } else if (pending?.kind === 'remoteCast') {
+      // From the phone app: lands on the same detail panel as above (so Back
+      // behaves normally) but starts playback straight away.
+      const { cast } = pending
+      setTab(cast.tab)
+      setDetailReturnZone('rows')
+      setSelectedItem(cast.item)
+      setZone('detail')
+      void playFromRemote(cast)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -1118,6 +1128,59 @@ export function TvScreen(): JSX.Element {
       setRawSubtitleUrl(preferred.url)
     }
     setSubtitlesOn(true)
+  }
+
+  /** Phone Link cast (see main/remote/server.ts). Uses the exact stream the
+   * phone was playing when it sent one (already resolved to a playable URL
+   * main-side), otherwise this PC's own top stream -- same as pressing Play.
+   * Resumes from the phone's position, not this PC's saved progress. */
+  async function playFromRemote(cast: RemoteCastPayload): Promise<void> {
+    const isSeries = cast.tab === 'series' && cast.episodeId !== null
+    const videoId = isSeries && cast.episodeId ? cast.episodeId : cast.item.id
+    const label = isSeries ? `${cast.item.name} S${cast.season ?? '?'}E${cast.episode ?? '?'}` : cast.item.name
+
+    let playable: StreamOption[]
+    if (cast.playableUrl) {
+      playable = [{ title: 'Sent from phone', playableUrl: cast.playableUrl, addonName: 'Phone', resolution: null, languages: [] }]
+    } else {
+      setMessage(`Finding streams for ${label}...`)
+      const result = await window.api.stremio.getStreams(cast.tab, videoId)
+      if (!result.hasAddonsConfigured) {
+        setMessage('Add a stream addon in Settings to enable playback')
+        return
+      }
+      playable = result.streams.filter((s) => s.playableUrl)
+      if (playable.length === 0) {
+        setMessage(describeStreamFailure(result, isSeries ? 'this episode' : 'this title'))
+        return
+      }
+    }
+    if (!isMountedRef.current) return
+    const first = playable[0]
+    if (!first?.playableUrl) return
+
+    setStreams(playable)
+    setSourceIndex(0)
+    setSourcesReturnZone('detail')
+    setActivePlayback(
+      isSeries && cast.episodeId
+        ? {
+            kind: 'series',
+            seriesId: cast.item.id,
+            seriesTitle: cast.item.name,
+            season: cast.season ?? 0,
+            episode: cast.episode ?? 0,
+            episodeId: cast.episodeId
+          }
+        : { kind: 'movie', id: cast.item.id }
+    )
+    setResumeOffset(cast.positionSeconds)
+    window.api.subtitles.getTracks(cast.tab, videoId).then(setSubtitleTracks).catch(() => setSubtitleTracks([]))
+    setStreamIndex(0)
+    setZone('player')
+    setMessage(`Playing from phone: ${label}`)
+    setAudioIndex(undefined)
+    void startPlaybackAt(first.playableUrl, cast.positionSeconds, undefined)
   }
 
   async function playMovie(item: CatalogItem, opts?: { auto?: boolean }): Promise<void> {

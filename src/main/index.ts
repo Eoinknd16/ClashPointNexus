@@ -24,6 +24,8 @@ import { registerArcadeTrustedIpc } from './plugins/arcadeIpc'
 import { registerPluginsIpc } from './plugins/ipc'
 import { registerPowerIpc } from './power/ipc'
 import { registerProgressIpc } from './progress/ipc'
+import { registerRemoteIpc } from './remote/ipc'
+import { stopRemoteServer } from './remote/server'
 import { registerSettingsIpc } from './settings/ipc'
 import { scanThemesDropFolder } from './settings/themeInstall'
 import { getUiScale } from './settings/uiScale'
@@ -172,6 +174,7 @@ app.whenReady().then(async () => {
   registerSteamIpc(mainWindow)
   registerAppsIpc(mainWindow)
   registerArcadeTrustedIpc(mainWindow)
+  registerRemoteIpc(mainWindow)
 
   // Heavy background start-up work, held until the first screen has had a
   // few seconds to paint and settle. Both used to start in the same tick as
@@ -238,6 +241,7 @@ app.whenReady().then(async () => {
 
   app.on('will-quit', () => {
     stopStremioServer()
+    stopRemoteServer()
     stopTranscodeProxy()
     stopGlobalInputWatcher()
     stopFocusGuardian()
