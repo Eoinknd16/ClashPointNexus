@@ -1,12 +1,19 @@
 name: Release
 
-# Push a tag like v0.2.0 to build a Windows installer and publish it as a
-# GitHub Release — electron-updater (running in every installed copy of the
-# app) checks that release feed on startup and self-updates automatically.
+# Builds a Windows installer and publishes it as a GitHub Release --
+# electron-updater (running in every installed copy of the app) checks that
+# release feed on startup and self-updates automatically.
+#
+# Runs when a tag like v0.3.2 is pushed, when main changes (only if
+# package.json's version hasn't been released yet), or by hand from the
+# Actions tab. electron-builder creates the v<version> tag itself.
 on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -17,14 +24,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Skip if this version is already released
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          if gh release view "$v" -R "${{ github.repository }}" >/dev/null 2>&1 && [ "${{ github.ref_type }}" != "tag" ]; then
+            echo "$v is already released; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip != 'true'
         with:
           node-version: 20
 
       - run: npm ci
+        if: steps.check.outputs.skip != 'true'
 
       - run: npm run typecheck
+        if: steps.check.outputs.skip != 'true'
 
       - run: npm run release
+        if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
