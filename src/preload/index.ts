@@ -169,6 +169,40 @@ const api: LauncherApi = {
     toggleFavorite: (id) => ipcRenderer.invoke('apps:toggleFavorite', id),
     launch: (executablePath, args) => ipcRenderer.invoke('apps:launch', executablePath, args)
   },
+  remote: {
+    getPairingInfo: () => ipcRenderer.invoke('remote:getPairingInfo'),
+    newPairingCode: () => ipcRenderer.invoke('remote:newPairingCode'),
+    revokeDevice: (id) => ipcRenderer.invoke('remote:revokeDevice', id),
+    reportScreen: (screen) => ipcRenderer.send('remote:reportScreen', screen),
+    respondPair: (id, approve) => ipcRenderer.invoke('remote:respondPair', id, approve),
+    getWolStatus: () => ipcRenderer.invoke('wol:getStatus'),
+    runWolSetup: () => ipcRenderer.invoke('wol:runSetup'),
+    onPairRequest: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]): void => callback(request)
+      ipcRenderer.on('remote:pairRequest', listener)
+      return () => ipcRenderer.removeListener('remote:pairRequest', listener)
+    },
+    onNav: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, action: Parameters<typeof callback>[0]): void => callback(action)
+      ipcRenderer.on('remote:nav', listener)
+      return () => ipcRenderer.removeListener('remote:nav', listener)
+    },
+    onScreen: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, screen: Parameters<typeof callback>[0]): void => callback(screen)
+      ipcRenderer.on('remote:screen', listener)
+      return () => ipcRenderer.removeListener('remote:screen', listener)
+    },
+    onCast: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]): void => callback(payload)
+      ipcRenderer.on('remote:cast', listener)
+      return () => ipcRenderer.removeListener('remote:cast', listener)
+    },
+    onDevicesChanged: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('remote:devicesChanged', listener)
+      return () => ipcRenderer.removeListener('remote:devicesChanged', listener)
+    }
+  },
   plugins: {
     listCommunity: () => ipcRenderer.invoke('plugins:listCommunity'),
     listInstalled: () => ipcRenderer.invoke('plugins:listInstalled'),

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useGamepadNav } from './input/useGamepadNav'
 import { useKeyboardNav } from './input/useKeyboardNav'
-import { emitNav, subscribeNav } from './input/navBus'
+import { emitNav, subscribeNav, type NavAction } from './input/navBus'
 import { setMouseModeActive } from './input/mouseModeState'
 import { useNavigationStore, type ScreenId } from './state/navigationStore'
 import { useThemeStore } from './state/themeStore'
@@ -18,6 +18,7 @@ import { StoreScreen } from './screens/StoreScreen'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { QuickMenu } from './components/QuickMenu'
 import { CrashToast } from './components/CrashToast'
+import { PairRequestOverlay } from './components/PairRequestOverlay'
 
 function renderScreen(screen: ScreenId): JSX.Element {
   switch (screen) {
@@ -48,6 +49,7 @@ function App(): JSX.Element {
   useGamepadNav()
   useKeyboardNav()
   const screen = useNavigationStore((s) => s.screen)
+  const remountKey = useNavigationStore((s) => s.remountKey)
   const initTheme = useThemeStore((s) => s.init)
 
   useEffect(() => {
@@ -90,6 +92,30 @@ function App(): JSX.Element {
     return () => clearInterval(interval)
   }, [])
 
+  // Phone Link (main/remote/server.ts): the Android app's remote presses go
+  // through the same nav bus as a controller, so every screen already knows
+  // what to do with them; screen jumps and casts go through navigation.
+  useEffect(() => window.api.remote.onNav((action) => emitNav(action as NavAction)), [])
+  useEffect(
+    () =>
+      window.api.remote.onScreen((target) => {
+        const nav = useNavigationStore.getState()
+        if (target === 'home') nav.goHome()
+        else nav.goTo(target as ScreenId)
+      }),
+    []
+  )
+  useEffect(
+    () =>
+      window.api.remote.onCast((cast) =>
+        useNavigationStore.getState().goToFresh('tv', { kind: 'remoteCast', cast })
+      ),
+    []
+  )
+  useEffect(() => {
+    window.api.remote.reportScreen(screen)
+  }, [screen])
+
   // Cursor visibility (index.css) — shown on any real mouse movement, hidden
   // again on the next controller nav action. Deliberately not gated on Mouse
   // Mode specifically: Mouse Mode's cursor movement is a genuine OS-level
@@ -123,12 +149,13 @@ function App(): JSX.Element {
         keyed div ties unmount/mount directly to React's own reconciliation,
         which can't get stuck like that — at the cost of the fade itself.
       */}
-      <div key={screen} className="h-screen w-screen">
-        <ErrorBoundary key={screen}>{renderScreen(screen)}</ErrorBoundary>
+      <div key={`${screen}:${remountKey}`} className="h-screen w-screen">
+        <ErrorBoundary key={`${screen}:${remountKey}`}>{renderScreen(screen)}</ErrorBoundary>
       </div>
       {/* Mounted outside the per-screen boundary so it's reachable (and
           survives) regardless of which screen is showing or crashes. */}
       <QuickMenu />
+      <PairRequestOverlay />
       <CrashToast />
     </>
   )
