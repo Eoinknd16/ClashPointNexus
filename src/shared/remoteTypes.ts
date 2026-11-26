@@ -3,6 +3,42 @@ import type { CatalogItem, CatalogType } from './stremioTypes'
 /** The phone app (ClashPointNexus-Android) talks to this port over the LAN
  * or Tailscale. Must match PcLinkConfig.DEFAULT_PORT on the Android side. */
 export const REMOTE_API_PORT = 11480
+/** UDP port phones broadcast "NEXUS_DISCOVER" on to find PCs. */
+export const REMOTE_DISCOVERY_PORT = 11481
+
+/** A phone asking to link, shown as an Allow / Deny prompt on the TV. */
+export interface RemotePairRequest {
+  id: string
+  deviceName: string
+  /** Also shown on the phone, so you can tell it's really your phone asking. */
+  code: string
+}
+
+/** Settings > Phone Link > Wake-on-LAN status (see main/wol/setup.ts). */
+export interface WolAdapter {
+  name: string
+  description: string
+  status: string
+  mac: string
+  wired: boolean
+  wakeOnMagicPacket: string | null
+}
+
+export interface WolStatus {
+  supported: boolean
+  adapters: WolAdapter[]
+  fastStartupEnabled: boolean | null
+  /** Everything Windows-side looks ready (BIOS can't be checked from here). */
+  ready: boolean
+  error: string | null
+}
+
+export interface WolSetupResult {
+  ok: boolean
+  /** One line per change made (or attempted). */
+  log: string[]
+  error: string | null
+}
 
 /** Everything Settings > Phone Link shows. */
 export interface RemotePairingInfo {

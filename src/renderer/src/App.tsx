@@ -18,6 +18,7 @@ import { StoreScreen } from './screens/StoreScreen'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { QuickMenu } from './components/QuickMenu'
 import { CrashToast } from './components/CrashToast'
+import { PairRequestOverlay } from './components/PairRequestOverlay'
 
 function renderScreen(screen: ScreenId): JSX.Element {
   switch (screen) {
@@ -154,6 +155,7 @@ function App(): JSX.Element {
       {/* Mounted outside the per-screen boundary so it's reachable (and
           survives) regardless of which screen is showing or crashes. */}
       <QuickMenu />
+      <PairRequestOverlay />
       <CrashToast />
     </>
   )

@@ -1,12 +1,20 @@
 import { app, type BrowserWindow } from 'electron'
-import { randomBytes, randomInt, timingSafeEqual } from 'crypto'
+import { randomBytes, randomInt, randomUUID, timingSafeEqual } from 'crypto'
+import { createSocket, type Socket } from 'dgram'
 import { existsSync } from 'fs'
 import { readFile, writeFile } from 'fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'http'
 import { hostname, networkInterfaces } from 'os'
 import { join } from 'path'
 import type { CatalogItem, CatalogType } from '@shared/stremioTypes'
-import { REMOTE_API_PORT, type RemoteCastPayload, type RemoteDevice, type RemotePairingInfo } from '@shared/remoteTypes'
+import {
+  REMOTE_API_PORT,
+  REMOTE_DISCOVERY_PORT,
+  type RemoteCastPayload,
+  type RemoteDevice,
+  type RemotePairRequest,
+  type RemotePairingInfo
+} from '@shared/remoteTypes'
 import { appendLog } from '../logging/service'
 import { loadStremioConfig } from '../stremio/config'
 import { ensureStremioServer, localStreamUrl } from '../stremio/server'
@@ -27,6 +35,8 @@ import { ensureStremioServer, localStreamUrl } from '../stremio/server'
  */
 
 const PAIRING_CODE_TTL_MS = 10 * 60 * 1000
+const PAIR_REQUEST_TTL_MS = 2 * 60 * 1000
+const MAX_PENDING_REQUESTS = 3
 const MAX_PAIR_ATTEMPTS = 5
 const MAX_BODY_BYTES = 64 * 1024
 const STREMIO_SERVER = { host: '127.0.0.1', port: 11470 }
@@ -48,6 +58,19 @@ let mainWindow: BrowserWindow | null = null
 let devices: StoredDevice[] | null = null
 let pairing: { code: string; expiresAt: number; attempts: number } | null = null
 let lastScreen: string | null = null
+/** Stable id for this PC, so a phone can find it again after its IP changes. */
+let pcId: string | null = null
+let discovery: Socket | null = null
+
+interface PairRequestState {
+  id: string
+  deviceName: string
+  code: string
+  createdAt: number
+  state: 'pending' | 'approved' | 'denied'
+  token: string | null
+}
+const pairRequests = new Map<string, PairRequestState>()
 
 function configPath(): string {
   return app.isPackaged ? join(app.getPath('userData'), 'remote.config.json') : join(process.cwd(), 'remote.config.json')
@@ -60,6 +83,7 @@ async function loadDevices(): Promise<StoredDevice[]> {
   if (existsSync(path)) {
     try {
       const raw = JSON.parse(await readFile(path, 'utf-8'))
+      if (typeof raw?.pcId === 'string') pcId ??= raw.pcId
       if (Array.isArray(raw?.devices)) {
         loaded = raw.devices.filter(
           (d: unknown): d is StoredDevice =>
@@ -72,11 +96,15 @@ async function loadDevices(): Promise<StoredDevice[]> {
   }
   // Another caller may have finished loading while this one awaited.
   devices ??= loaded
+  if (!pcId) {
+    pcId = randomUUID()
+    void saveDevices()
+  }
   return devices
 }
 
 async function saveDevices(): Promise<void> {
-  await writeFile(configPath(), JSON.stringify({ devices: devices ?? [] }, null, 2)).catch((error) => {
+  await writeFile(configPath(), JSON.stringify({ pcId, devices: devices ?? [] }, null, 2)).catch((error) => {
     appendLog('error', `[remote] couldn't save remote.config.json: ${String(error)}`)
   })
 }
@@ -190,6 +218,41 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const url = new URL(req.url ?? '/', 'http://localhost')
   const path = url.pathname
 
+  // Automatic pairing (no code typing): the phone asks, this PC shows an
+  // Allow / Deny prompt on the TV with a 4-digit code that matches the one on
+  // the phone, and the phone polls until someone answers.
+  if (req.method === 'POST' && path === '/api/pair-request') {
+    prunePairRequests()
+    const pending = [...pairRequests.values()].filter((r) => r.state === 'pending')
+    if (pending.length >= MAX_PENDING_REQUESTS) return sendJson(res, 429, { error: 'Too many pairing requests, try again shortly' })
+    const body = await readJsonBody(req)
+    const request: PairRequestState = {
+      id: randomBytes(9).toString('base64url'),
+      deviceName: (str(body.deviceName) ?? 'Phone').slice(0, 60),
+      code: String(randomInt(0, 10_000)).padStart(4, '0'),
+      createdAt: Date.now(),
+      state: 'pending',
+      token: null
+    }
+    pairRequests.set(request.id, request)
+    bringToFront()
+    const prompt: RemotePairRequest = { id: request.id, deviceName: request.deviceName, code: request.code }
+    send('remote:pairRequest', prompt)
+    appendLog('info', `[remote] pairing requested by "${request.deviceName}"`)
+    return sendJson(res, 200, { requestId: request.id, code: request.code, name: hostname(), pcId })
+  }
+
+  if (req.method === 'GET' && path === '/api/pair-status') {
+    prunePairRequests()
+    const request = pairRequests.get(url.searchParams.get('id') ?? '')
+    if (!request) return sendJson(res, 200, { state: 'expired' })
+    if (request.state !== 'approved') return sendJson(res, 200, { state: request.state })
+    // Hand the token over exactly once.
+    const token = request.token
+    pairRequests.delete(request.id)
+    return sendJson(res, 200, { state: 'approved', token, name: hostname(), macs: localInterfaces().macs, pcId })
+  }
+
   if (req.method === 'POST' && path === '/api/pair') {
     const body = await readJsonBody(req)
     const code = str(body.code)
@@ -202,18 +265,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return sendJson(res, 403, { error: 'Wrong code' })
     }
     pairing = null // one-time
-    const device: StoredDevice = {
-      id: randomBytes(6).toString('hex'),
-      name: (str(body.deviceName) ?? 'Phone').slice(0, 60),
-      token: randomBytes(24).toString('base64url'),
-      createdAt: Date.now(),
-      lastSeenAt: Date.now()
-    }
-    ;(await loadDevices()).push(device)
-    await saveDevices()
-    send('remote:devicesChanged')
-    appendLog('info', `[remote] paired new device "${device.name}"`)
-    return sendJson(res, 200, { token: device.token, name: hostname(), macs: localInterfaces().macs })
+    const device = await createDevice((str(body.deviceName) ?? 'Phone').slice(0, 60))
+    return sendJson(res, 200, { token: device.token, name: hostname(), macs: localInterfaces().macs, pcId })
   }
 
   const device = await authenticate(req, url)
@@ -222,7 +275,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   // Torrent stream proxy: the phone's player fetches this directly, so it
   // supports GET/HEAD with Range passthrough. Path params are validated
   // strictly -- this must only ever reach the local Stremio server.
-  const streamMatch = path.match(/^\/stremio\/([a-fA-F0-9]{40})\/(\d{1,5})$/)
+  // fileIdx -1 = "the addon didn't say": the Stremio server picks the main video file.
+  const streamMatch = path.match(/^\/stremio\/([a-fA-F0-9]{40})\/(-1|\d{1,5})$/)
   if (streamMatch && (req.method === 'GET' || req.method === 'HEAD')) {
     return proxyStremio(req, res, streamMatch[1].toLowerCase(), Number(streamMatch[2]))
   }
@@ -233,6 +287,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       version: app.getVersion(),
       screen: lastScreen,
       macs: localInterfaces().macs,
+      pcId,
       nowPlaying: null
     })
   }
@@ -273,7 +328,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     } else if (infoHash && /^[a-fA-F0-9]{40}$/.test(infoHash)) {
       const status = await ensureStremioServer()
       if (!status.available) return sendJson(res, 200, { ok: false, error: status.reason ?? 'Torrent server unavailable' })
-      playableUrl = localStreamUrl(infoHash.toLowerCase(), num(body.fileIdx) ?? 0)
+      playableUrl = localStreamUrl(infoHash.toLowerCase(), num(body.fileIdx) ?? -1)
     }
 
     const payload: RemoteCastPayload = {
@@ -315,6 +370,62 @@ function proxyStremio(req: IncomingMessage, res: ServerResponse, infoHash: strin
   upstream.end()
 }
 
+function prunePairRequests(): void {
+  const now = Date.now()
+  for (const [id, r] of pairRequests) if (now - r.createdAt > PAIR_REQUEST_TTL_MS) pairRequests.delete(id)
+}
+
+async function createDevice(name: string): Promise<StoredDevice> {
+  const device: StoredDevice = {
+    id: randomBytes(6).toString('hex'),
+    name,
+    token: randomBytes(24).toString('base64url'),
+    createdAt: Date.now(),
+    lastSeenAt: Date.now()
+  }
+  ;(await loadDevices()).push(device)
+  await saveDevices()
+  send('remote:devicesChanged')
+  appendLog('info', `[remote] paired new device "${device.name}"`)
+  return device
+}
+
+/** The TV prompt's answer (Settings' PairRequestOverlay -> IPC). */
+export async function respondToPairRequest(id: string, approve: boolean): Promise<void> {
+  const request = pairRequests.get(id)
+  if (!request || request.state !== 'pending') return
+  if (!approve) {
+    request.state = 'denied'
+    return
+  }
+  const device = await createDevice(request.deviceName)
+  request.state = 'approved'
+  request.token = device.token
+}
+
+/**
+ * LAN discovery: phones broadcast "NEXUS_DISCOVER" on UDP 11481 and every
+ * Nexus PC that hears it answers with who it is, so the phone app can list
+ * PCs without anyone typing an IP address. Answers carry nothing secret --
+ * pairing still needs the on-screen approval.
+ */
+function startDiscovery(): void {
+  if (discovery) return
+  const socket = createSocket({ type: 'udp4', reuseAddr: true })
+  socket.on('message', (msg, rinfo) => {
+    if (msg.toString('utf-8').trim() !== 'NEXUS_DISCOVER') return
+    void loadDevices().then(() => {
+      const reply = Buffer.from(
+        JSON.stringify({ nexus: 1, pcId, name: hostname(), port: REMOTE_API_PORT, version: app.getVersion() })
+      )
+      socket.send(reply, rinfo.port, rinfo.address)
+    })
+  })
+  socket.on('error', (error) => appendLog('error', `[remote] discovery socket: ${error.message}`))
+  socket.bind(REMOTE_DISCOVERY_PORT, '0.0.0.0')
+  discovery = socket
+}
+
 // ---- Lifecycle + IPC-facing API ---------------------------------------------
 
 export function startRemoteServer(window: BrowserWindow): void {
@@ -339,11 +450,14 @@ export function startRemoteServer(window: BrowserWindow): void {
   // All interfaces, so the phone can reach it on the LAN and over Tailscale.
   // Windows Firewall asks once to allow Nexus on private networks.
   server.listen(REMOTE_API_PORT, '0.0.0.0')
+  startDiscovery()
 }
 
 export function stopRemoteServer(): void {
   server?.close()
   server = null
+  discovery?.close()
+  discovery = null
   listening = false
   void saveDevices()
 }

@@ -2,7 +2,7 @@ import type { AppEntry } from './appsTypes'
 import type { DirectoryListing, FileEntry } from './filesystemTypes'
 import type { GlobalInputStatus } from './globalInputTypes'
 import type { ContinueSuggestion, HomeLibraryStats } from './homeTypes'
-import type { RemoteCastPayload, RemotePairingInfo } from './remoteTypes'
+import type { RemoteCastPayload, RemotePairRequest, RemotePairingInfo, WolSetupResult, WolStatus } from './remoteTypes'
 import type { LibraryEntry } from './libraryTypes'
 import type { MediaInfo } from './playerConstants'
 import type {
@@ -300,6 +300,12 @@ export interface LauncherApi {
     newPairingCode: () => Promise<RemotePairingInfo>
     revokeDevice: (id: string) => Promise<RemotePairingInfo>
     reportScreen: (screen: string) => void
+    /** Answer to a phone's automatic pairing request (the TV prompt). */
+    respondPair: (id: string, approve: boolean) => Promise<void>
+    onPairRequest: (callback: (request: RemotePairRequest) => void) => () => void
+    getWolStatus: () => Promise<WolStatus>
+    /** One UAC prompt, then applies the Windows-side Wake-on-LAN settings. */
+    runWolSetup: () => Promise<WolSetupResult>
     onNav: (callback: (action: string) => void) => () => void
     onScreen: (callback: (screen: string) => void) => () => void
     onCast: (callback: (payload: RemoteCastPayload) => void) => () => void
