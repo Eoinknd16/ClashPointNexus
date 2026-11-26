@@ -124,6 +124,16 @@ try {
   Note 'Fast Startup turned off (it stops most network cards waking the PC from shutdown)'
 } catch { Note "Couldn't turn off Fast Startup ($($_.Exception.Message))" }
 
+# Let the phone app reach Nexus on every network profile (Windows often
+# files home Wi-Fi as "Public", which silently blocks the phone link).
+foreach ($r in @(@{ Name = 'ClashPoint Nexus phone link'; Proto = 'TCP'; Port = 11480 }, @{ Name = 'ClashPoint Nexus discovery'; Proto = 'UDP'; Port = 11481 })) {
+  try {
+    Get-NetFirewallRule -DisplayName $r.Name -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+    New-NetFirewallRule -DisplayName $r.Name -Direction Inbound -Protocol $r.Proto -LocalPort $r.Port -Action Allow -Profile Any -ErrorAction Stop | Out-Null
+    Note "Firewall: allowed $($r.Proto) $($r.Port) for the phone app"
+  } catch { Note "Couldn't add firewall rule for $($r.Proto) $($r.Port) ($($_.Exception.Message))" }
+}
+
 $log | ConvertTo-Json -Compress | Set-Content -Path $Out -Encoding UTF8
 `
 
