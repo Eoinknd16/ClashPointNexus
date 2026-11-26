@@ -1,6 +1,7 @@
 import { app, type BrowserWindow } from 'electron'
 import { randomBytes, randomInt, randomUUID, timingSafeEqual } from 'crypto'
 import { createSocket, type Socket } from 'dgram'
+import { execFile } from 'child_process'
 import { existsSync } from 'fs'
 import { readFile, writeFile } from 'fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'http'
@@ -305,6 +306,31 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     const action = str((await readJsonBody(req)).action)
     if (!action || !NAV_ACTIONS.has(action)) return sendJson(res, 400, { ok: false, error: 'Unknown action' })
     return sendJson(res, 200, { ok: send('remote:nav', action) })
+  }
+
+  // Power: shutdown/restart give a short countdown (Windows shows its own
+  // notice) so a mis-tap can be cancelled from the phone.
+  if (req.method === 'POST' && path === '/api/power') {
+    const action = str((await readJsonBody(req)).action)
+    const args: Record<string, [string, string[]]> = {
+      shutdown: ['shutdown', ['/s', '/t', '20', '/c', 'Shutting down from your phone (Nexus). Cancel from the phone app.']],
+      restart: ['shutdown', ['/r', '/t', '20', '/c', 'Restarting from your phone (Nexus). Cancel from the phone app.']],
+      cancel: ['shutdown', ['/a']],
+      // Sleep (not hibernate) so Wake-on-LAN can bring it straight back.
+      sleep: ['rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']]
+    }
+    const cmd = action ? args[action] : undefined
+    if (!cmd) return sendJson(res, 400, { ok: false, error: 'Unknown power action' })
+    if (process.platform !== 'win32') return sendJson(res, 200, { ok: false, error: 'Only supported on Windows' })
+    appendLog('info', `[remote] power: ${action} requested from phone`)
+    // Answer first: sleep cuts the network immediately.
+    sendJson(res, 200, { ok: true })
+    setTimeout(() => {
+      execFile(cmd[0], cmd[1], { windowsHide: true }, (error) => {
+        if (error) appendLog('error', `[remote] power ${action} failed: ${error.message}`)
+      })
+    }, action === 'sleep' ? 500 : 0)
+    return
   }
 
   if (req.method === 'POST' && path === '/api/screen') {

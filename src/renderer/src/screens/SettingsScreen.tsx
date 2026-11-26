@@ -578,7 +578,7 @@ export function SettingsScreen(): JSX.Element {
       kind: 'action',
       category: 'phone',
       icon: Zap,
-      label: wolBusy ? 'Setting up... (approve the Windows prompt)' : 'Set Up Wake-on-LAN (one admin prompt)'
+      label: wolBusy ? 'Setting up... (approve the Windows prompt)' : 'Set Up Wake-on-LAN + Phone Connection (one admin prompt)'
     },
     ...wolLog.map((line, i) => ({ id: `wolLog-${i}`, kind: 'info' as const, category: 'phone', label: `• ${line}` })),
     {
