@@ -47,9 +47,11 @@ function cursorTransform(x: number, y: number): string {
  */
 export function BrowseScreen(): JSX.Element {
   const goHome = useNavigationStore((s) => s.goHome)
-  const [zone, setZone] = useState<BrowseZone>('address')
+  // A link shared from the phone opens straight away (read once, on mount).
+  const [startUrl] = useState(() => useNavigationStore.getState().consumePendingUrl() ?? HOME_URL)
+  const [zone, setZone] = useState<BrowseZone>(startUrl === HOME_URL ? 'address' : 'page')
   const [toolbarIndex, setToolbarIndex] = useState(TOOLBAR_ITEMS.length - 1)
-  const [url, setUrl] = useState(HOME_URL)
+  const [url, setUrl] = useState(startUrl)
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
   const [kbRow, setKbRow] = useState(0)
@@ -339,7 +341,7 @@ export function BrowseScreen(): JSX.Element {
 
       <div ref={viewportRef} className="relative flex-1">
         {/* eslint-disable-next-line react/no-unknown-property */}
-        <webview ref={webviewRef} src={HOME_URL} allowpopups className="h-full w-full" />
+        <webview ref={webviewRef} src={startUrl} allowpopups className="h-full w-full" />
         {zone === 'page' && (
           <div
             ref={cursorRef}

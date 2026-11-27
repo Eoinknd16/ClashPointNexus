@@ -192,6 +192,11 @@ const api: LauncherApi = {
       ipcRenderer.on('remote:screen', listener)
       return () => ipcRenderer.removeListener('remote:screen', listener)
     },
+    onOpenUrl: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, url: string): void => callback(url)
+      ipcRenderer.on('remote:openUrl', listener)
+      return () => ipcRenderer.removeListener('remote:openUrl', listener)
+    },
     onCast: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]): void => callback(payload)
       ipcRenderer.on('remote:cast', listener)

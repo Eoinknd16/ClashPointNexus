@@ -333,6 +333,15 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return
   }
 
+  // Shared from the phone ("Play on TV"): open a web link in Nexus's browser.
+  if (req.method === 'POST' && path === '/api/open-url') {
+    const url = str((await readJsonBody(req)).url)
+    if (!url || !/^https?:\/\//i.test(url) || url.length > 4000) return sendJson(res, 400, { ok: false, error: 'Not a web link' })
+    bringToFront()
+    appendLog('info', `[remote] open-url from phone: ${url.slice(0, 120)}`)
+    return sendJson(res, 200, { ok: send('remote:openUrl', url) })
+  }
+
   if (req.method === 'POST' && path === '/api/screen') {
     const screen = str((await readJsonBody(req)).screen)
     if (!screen || !SCREENS.has(screen)) return sendJson(res, 400, { ok: false, error: 'Unknown screen' })

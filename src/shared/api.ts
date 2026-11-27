@@ -308,6 +308,8 @@ export interface LauncherApi {
     runWolSetup: () => Promise<WolSetupResult>
     onNav: (callback: (action: string) => void) => () => void
     onScreen: (callback: (screen: string) => void) => () => void
+    /** A link shared from the phone: open it in the Browse screen. */
+    onOpenUrl: (callback: (url: string) => void) => () => void
     onCast: (callback: (payload: RemoteCastPayload) => void) => () => void
     onDevicesChanged: (callback: () => void) => () => void
   }
