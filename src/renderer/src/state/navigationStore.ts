@@ -32,6 +32,10 @@ interface NavigationState {
    * pendingContinue (a same-screen goTo wouldn't remount anything). */
   remountKey: number
   pendingContinue: PendingContinueAction | null
+  /** A link to open when Browse mounts (shared from the phone). */
+  pendingUrl: string | null
+  openUrl: (url: string) => void
+  consumePendingUrl: () => string | null
   goTo: (screen: ScreenId, pendingContinue?: PendingContinueAction) => void
   goToFresh: (screen: ScreenId, pendingContinue?: PendingContinueAction) => void
   goHome: () => void
@@ -43,6 +47,16 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
   screen: 'home',
   remountKey: 0,
   pendingContinue: null,
+  pendingUrl: null,
+  openUrl: (url) => {
+    stopActivePlayback()
+    set((state) => ({ screen: 'browse', pendingContinue: null, pendingUrl: url, remountKey: state.remountKey + 1 }))
+  },
+  consumePendingUrl: () => {
+    const url = get().pendingUrl
+    if (url) set({ pendingUrl: null })
+    return url
+  },
   goTo: (screen, pendingContinue) => {
     // Stops any TV playback synchronously before the transition even starts
     // — see activePlayback.ts for why that matters (a video still playing

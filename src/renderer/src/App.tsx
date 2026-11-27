@@ -105,6 +105,7 @@ function App(): JSX.Element {
       }),
     []
   )
+  useEffect(() => window.api.remote.onOpenUrl((url) => useNavigationStore.getState().openUrl(url)), [])
   useEffect(
     () =>
       window.api.remote.onCast((cast) =>
